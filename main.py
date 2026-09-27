@@ -196,26 +196,60 @@ def _build_normalized_ledger(case_id, line_items_df):
         return []
     corrections = load_latest_corrections(case_id)
     ledger = []
+    
     for _, row in line_items_df.iterrows():
         row_dict = row.to_dict()
         
-        # Unpack fields_json so the normalizer can read flat keys (date, amount, etc.)
+        # Unpack fields_json into flat keys
         fields_json = row_dict.get("fields_json")
         if fields_json:
             try:
-                fields = json.loads(fields_json)
+                fields = json.loads(fields_json) if isinstance(fields_json, str) else fields_json
                 if isinstance(fields, dict):
                     for k, v in fields.items():
                         if isinstance(v, dict) and "value" in v:
+                            # Map complex schema keys to simple flat keys
+                            flat_key = k
+                            if k == "transaction_date": flat_key = "date"
+                            elif k == "transaction_description": flat_key = "description"
+                            elif k == "debit_amount": flat_key = "debit"
+                            elif k == "credit_amount": flat_key = "credit"
+                            row_dict[flat_key] = v["value"]
                             row_dict[k] = v["value"]
             except Exception:
                 pass
-                
+
+        # Calculate amount and debit_or_credit if they are missing
+        if not row_dict.get("amount"):
+            deb = str(row_dict.get("debit", "")).strip()
+            cred = str(row_dict.get("credit", "")).strip()
+            if deb and deb not in ["0", "0.00", "None", ""]:
+                row_dict["amount"] = deb
+                row_dict["debit_or_credit"] = "Debit"
+            elif cred and cred not in ["0", "0.00", "None", ""]:
+                row_dict["amount"] = cred
+                row_dict["debit_or_credit"] = "Credit"
+
+        # Try the formal normalizer
         item = normalize_row_for_ledger(row_dict, corrections)
+        
+        # BULLETPROOF FALLBACK: If normalizer rejects it, force the display
+        if item is None and row_dict.get("date") and row_dict.get("description"):
+            item = {
+                "row_id": str(row_dict.get("row_id", "")),
+                "page_number": str(row_dict.get("page_number", "")),
+                "date": str(row_dict.get("date", "")),
+                "description": str(row_dict.get("description", "")),
+                "debit_or_credit": str(row_dict.get("debit_or_credit", "")),
+                "amount": str(row_dict.get("amount", "")),
+                "currency": str(row_dict.get("currency", "SAR")),
+                "row_status": "Reconciled"
+            }
+        
         if item is not None:
             ledger.append(item)
+            
     return ledger
-
 
 def _serialise_conflicts(case_id, pages_df=None):
     rows = list_rows_needing_review(case_id) or []
@@ -239,12 +273,24 @@ def _serialise_conflicts(case_id, pages_df=None):
         conflicted_fields = []
         if isinstance(fields, dict):
             for field_name, field_data in fields.items():
-                if isinstance(field_data, dict) and field_data.get("status") == "conflict":
-                    candidates = [
-                        {"value": c.get("value"), "source": c.get("source")}
-                        for c in (field_data.get("candidates") or [])
-                    ]
-                    conflicted_fields.append({"field": field_name, "candidates": candidates})
+                if isinstance(field_data, dict):
+                    # Flag as conflict if status is conflict OR LLM says it is uncertain
+                    is_conflict = field_data.get("status") == "conflict" or str(field_data.get("certain", "")).lower() == "false"
+                    
+                    if is_conflict:
+                        candidates = [
+                            {"value": c.get("value"), "source": c.get("source")}
+                            for c in (field_data.get("candidates") or [])
+                        ]
+                        # If no strict candidates exist, surface the LLM's best guess as a candidate
+                        if not candidates and field_data.get("value"):
+                            candidates = [{"value": field_data.get("value"), "source": "LLM Extraction"}]
+                            
+                        conflicted_fields.append({
+                            "field": field_name, 
+                            "candidates": candidates,
+                            "reason": field_data.get("reason", "")
+                        })
 
         if conflicted_fields:
             out.append({
@@ -255,7 +301,6 @@ def _serialise_conflicts(case_id, pages_df=None):
                 "fields": conflicted_fields,
             })
     return out
-
 
 # =============================================================================
 # CASE DATA LOADING
