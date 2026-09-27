@@ -46,6 +46,7 @@ from legal_platform.financial_fields import effective_value, pending_fields
 from legal_platform.financial_normalizer import build_normalized_ledger, normalize_currency
 from legal_platform.financial_reconciliation import build_rows_from_reconstruction
 from legal_platform import workflow
+from legal_platform.financial_forensics import normalise_claim_evaluation
 from legal_platform.case_register import build_case_register, normalise_text, prioritise_pages_for_summary
 
 failures = []
@@ -354,6 +355,33 @@ result, by_key = overview(
 )
 check("analysis built on an older register -> stale", by_key["analysis"]["status"] == workflow.STALE
       and by_key["analysis"]["stale_because"] == "documents")
+
+# --- claims vs evidence: model output is checked before it is stored -----
+evaluated = normalise_claim_evaluation({
+    "claim": "The customer never received 12,450 SAR",
+    "result": "partially supported",
+    "evidence_record_ids": ["R1", "INVENTED"],
+    "financial_evidence_found": [{"record_id": "R2"}],
+    "missing_evidence": ["Receipt for the transfer", "", "none"],
+    "contradictions": [
+        {"description": "Statement shows the credit on 25 March", "record_ids": ["R1", "FAKE"]},
+        "Balance does not match",
+        {"description": ""},
+    ],
+}, known_ids={"R1", "R2"})
+check("claim gets an id", evaluated["claim_id"] == "CLM_001")
+check("result wording normalised", evaluated["result"] == "PARTIALLY_SUPPORTED")
+check("only ledger records kept as evidence (incl. evidence_found ids)", evaluated["evidence_record_ids"] == ["R1", "R2"])
+check("invented ids set apart", evaluated["unverified_record_ids"] == ["INVENTED", "FAKE"])
+check("missing evidence cleaned to a list of text", evaluated["missing_evidence"] == ["Receipt for the transfer"])
+check("contradictions structured, empty ones dropped",
+      evaluated["contradictions"] == [
+          {"description": "Statement shows the credit on 25 March", "record_ids": ["R1"]},
+          {"description": "Balance does not match", "record_ids": []},
+      ])
+odd = normalise_claim_evaluation({"claim": "x", "result": "probably true"}, known_ids=set(), index=4)
+check("unknown result is not reinterpreted", odd["result"] == "NOT_VERIFIABLE" and odd["result_raw"] == "probably true"
+      and odd["claim_id"] == "CLM_005")
 
 print()
 if failures:

@@ -1083,9 +1083,78 @@ def case_endpoint():
         "run_metadata": data.get("forensic_run_metadata") or {},
         "cross_check_summary": data.get("cross_check_summary") or {},
         "discrepancies": data.get("discrepancies") or [],
-        "findings": data.get("forensic_findings") or {},
+        "findings": _claims_with_evidence(data.get("forensic_findings"), ledger, data),
     }
     return _ok(response)
+
+
+CLAIM_RESULT_ORDER = (
+    "CONTRADICTED", "PARTIALLY_SUPPORTED", "SUPPORTED",
+    "NOT_VERIFIABLE", "NO_FINANCIAL_EVIDENCE", "NOT_FINANCIAL_CLAIM",
+)
+
+
+def _claims_with_evidence(findings, ledger, data):
+    """Claim evaluations with every cited ledger row resolved to its date,
+    amount, reference and source page, so each finding can be checked
+    against the statement it relies on.
+
+    A cited id that is no longer in the ledger (it was cleared or
+    re-extracted after the analysis ran) is listed separately rather
+    than silently dropped."""
+    by_id = {str(entry.get("row_id")): entry for entry in ledger}
+    labels = _page_reference_map(data)
+
+    def resolve(ids):
+        rows, missing = [], []
+        for record_id in ids or []:
+            entry = by_id.get(str(record_id))
+            if entry is None:
+                missing.append(str(record_id))
+                continue
+            rows.append({
+                "row_id": entry.get("row_id"),
+                "date": entry.get("date"),
+                "amount": entry.get("amount"),
+                "currency": entry.get("currency"),
+                "debit_or_credit": entry.get("debit_or_credit"),
+                "reference_number": entry.get("reference_number", ""),
+                "description": entry.get("description", ""),
+                "page_id": entry.get("page_id", ""),
+                "page_label": labels.get(str(entry.get("page_id", "")), ""),
+            })
+        return rows, missing
+
+    evaluations = []
+    counts = {}
+    for raw in (findings or {}).get("claim_evaluations") or []:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        ids = list(item.get("evidence_record_ids") or [])
+        for found in item.get("financial_evidence_found") or []:
+            if isinstance(found, dict) and found.get("record_id") and str(found["record_id"]) not in ids:
+                ids.append(str(found["record_id"]))
+        item["evidence_rows"], stale = resolve(ids)
+        contradictions = []
+        for entry in item.get("contradictions") or []:
+            if isinstance(entry, dict):
+                entry = dict(entry)
+                entry["rows"], more_stale = resolve(entry.get("record_ids"))
+                stale.extend(more_stale)
+                contradictions.append(entry)
+            elif str(entry or "").strip():
+                contradictions.append({"description": str(entry), "record_ids": [], "rows": []})
+        item["contradictions"] = contradictions
+        item["missing_evidence"] = [str(x) for x in (item.get("missing_evidence") or []) if str(x).strip()]
+        item["no_longer_in_ledger"] = list(dict.fromkeys(stale))
+        result = str(item.get("result") or "NOT_VERIFIABLE").upper()
+        counts[result] = counts.get(result, 0) + 1
+        evaluations.append(item)
+
+    rank = {result: position for position, result in enumerate(CLAIM_RESULT_ORDER)}
+    evaluations.sort(key=lambda item: rank.get(str(item.get("result") or "").upper(), len(rank)))
+    return {"claim_evaluations": evaluations, "result_counts": counts}
 
 
 def _classification_counts(classifications):

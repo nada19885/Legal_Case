@@ -1070,6 +1070,16 @@ Object.assign(I18N.en, {
   priority_critical: "Critical",
   priority_medium: "Medium priority",
   priority_low: "Low priority",
+  expected_evidence_label: "Expected evidence",
+  evidence_found_label: "Financial evidence found",
+  missing_evidence_label: "Missing evidence",
+  contradictions_label: "Contradictions and inconsistencies",
+  comparison_label: "Comparison",
+  none_found: "None found in the reviewed ledger.",
+  none_identified: "None identified.",
+  unverified_ids: "Cited by the model but not in the reviewed ledger (ignored): {ids}",
+  stale_ids: "No longer in the ledger (accounting data changed after this analysis — rerun it): {ids}",
+  claims_summary: "{count} claim(s) evaluated",
 });
 Object.assign(I18N.ar, {
   step_accounting: "التحليل المحاسبي",
@@ -1171,6 +1181,16 @@ Object.assign(I18N.ar, {
   priority_critical: "حرجة",
   priority_medium: "أولوية متوسطة",
   priority_low: "أولوية منخفضة",
+  expected_evidence_label: "الأدلة المتوقعة",
+  evidence_found_label: "الأدلة المالية الموجودة",
+  missing_evidence_label: "الأدلة الناقصة",
+  contradictions_label: "التناقضات وعدم الاتساق",
+  comparison_label: "المقارنة",
+  none_found: "لا توجد في السجل المالي المراجَع.",
+  none_identified: "لم يُحدَّد شيء.",
+  unverified_ids: "أشار إليها النموذج لكنها غير موجودة في السجل المراجَع (تم تجاهلها): {ids}",
+  stale_ids: "لم تعد في السجل (تغيّرت البيانات المحاسبية بعد هذا التحليل — أعد تشغيله): {ids}",
+  claims_summary: "تم تقييم {count} مطالبة",
 });
 
 const LANGUAGES = { en: "English", ar: "العربية" };
@@ -2449,20 +2469,69 @@ function renderAccountingFindings(findings, runMeta) {
     instructions: runMeta.instructions || t("no_instructions"),
   }))}</p>` : "";
 
+  const resultBadge = (result) =>
+    badge(t(`claim_result_${String(result || "").toLowerCase()}`), CLAIM_RESULT_BADGE_KIND[result] || "neutral");
+  const counts = (findings && findings.result_counts) || {};
+  const summary = `
+    <div class="bsf-claim-summary">
+      <span class="bsf-caption">${esc(t("claims_summary", { count: evaluations.length }))}</span>
+      ${Object.keys(counts).map((result) => `${resultBadge(result)} <strong>${esc(counts[result])}</strong>`).join(" ")}
+    </div>`;
+
+  const rowsTable = (rows) => rows.length ? `
+    <table class="bsf-table bsf-claim-rows">
+      <thead><tr>
+        <th>${esc(t("column_fin_date"))}</th><th>${esc(t("column_description"))}</th>
+        <th>${esc(t("column_reference"))}</th><th>${esc(t("column_debit_credit"))}</th>
+        <th>${esc(t("column_amount"))}</th><th>${esc(t("column_page"))}</th>
+      </tr></thead>
+      <tbody>${rows.map((row) => `<tr>
+        <td>${esc(row.date || "")}</td><td>${esc(row.description || "")}</td>
+        <td>${esc(row.reference_number || "")}</td><td>${esc(row.debit_or_credit || "")}</td>
+        <td>${esc(row.amount || "")} ${esc(row.currency || "")}</td>
+        <td>${row.page_id ? sourceLinks([row.page_id], [row.page_label || t("source_page")]) : ""}</td>
+      </tr>`).join("")}</tbody>
+    </table>` : "";
+
+  const block = (label, body) => `
+    <div class="bsf-claim-block">
+      <div class="bsf-review-label">${esc(label)}</div>
+      ${body}
+    </div>`;
+
   html(target, `
     <h4 class="bsf-subsection">${esc(t("findings_heading"))}</h4>
     ${meta}
+    ${summary}
     ${evaluations.map((item) => `
-      <div class="bsf-item">
-        <div class="bsf-item-controls" style="justify-content:space-between; margin-top:0;">
-          <strong>${esc(item.claim || "")}</strong>
-          ${badge(t(`claim_result_${String(item.result || "").toLowerCase()}`), CLAIM_RESULT_BADGE_KIND[item.result] || "neutral")}
+      <details class="bsf-expander bsf-claim" open>
+        <summary>
+          ${resultBadge(item.result)}
+          <span class="bsf-claim-title">${esc(item.claim || "")}</span>
+        </summary>
+        <div class="bsf-expander-body">
+          ${item.financial_question ? `<div class="bsf-kv"><strong>${esc(t("financial_question_label"))}:</strong> ${esc(item.financial_question)}</div>` : ""}
+          ${block(t("expected_evidence_label"), `<div>${esc(item.expected_evidence || "—")}</div>`)}
+          ${block(t("evidence_found_label"), (item.evidence_rows || []).length
+            ? rowsTable(item.evidence_rows)
+            : `<p class="bsf-caption">${esc(t("none_found"))}</p>`)}
+          ${block(t("missing_evidence_label"), (item.missing_evidence || []).length
+            ? `<ul class="bsf-claim-list">${item.missing_evidence.map((text) => `<li>${esc(text)}</li>`).join("")}</ul>`
+            : `<p class="bsf-caption">${esc(t("none_identified"))}</p>`)}
+          ${block(t("contradictions_label"), (item.contradictions || []).length
+            ? item.contradictions.map((entry) => `
+                <div class="bsf-claim-contradiction">
+                  <div>${esc(entry.description || "")}</div>
+                  ${rowsTable(entry.rows || [])}
+                </div>`).join("")
+            : `<p class="bsf-caption">${esc(t("none_identified"))}</p>`)}
+          ${item.comparison ? block(t("comparison_label"), `<div>${esc(item.comparison)}</div>`) : ""}
+          ${item.accounting_response ? `<div class="bsf-kv"><strong>${esc(t("accounting_response_label"))}:</strong> ${esc(item.accounting_response)}</div>` : ""}
+          ${item.limitation ? `<p class="bsf-caption">${esc(item.limitation)}</p>` : ""}
+          ${(item.unverified_record_ids || []).length ? alertBox(t("unverified_ids", { ids: item.unverified_record_ids.join(", ") }), "info") : ""}
+          ${(item.no_longer_in_ledger || []).length ? alertBox(t("stale_ids", { ids: item.no_longer_in_ledger.join(", ") }), "warn") : ""}
         </div>
-        ${item.financial_question ? `<div class="bsf-kv"><strong>${esc(t("financial_question_label"))}:</strong> ${esc(item.financial_question)}</div>` : ""}
-        ${item.comparison ? `<div class="bsf-kv">${esc(item.comparison)}</div>` : ""}
-        ${item.accounting_response ? `<div class="bsf-kv"><strong>${esc(t("accounting_response_label"))}:</strong> ${esc(item.accounting_response)}</div>` : ""}
-        ${item.limitation ? `<p class="bsf-caption">${esc(item.limitation)}</p>` : ""}
-      </div>`).join("")}`);
+      </details>`).join("")}`);
 }
 
 /* ============================================================

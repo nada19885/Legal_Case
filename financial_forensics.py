@@ -53,6 +53,8 @@ METHODOLOGY:
 5. Perform the requested accounting analysis using the available evidence.
 6. Compare the claim against the financial evidence.
 7. Clearly identify any discrepancies, missing evidence, unexplained amounts, inconsistencies, or limitations.
+8. In `missing_evidence`, list each record or document that would be needed to answer the claim but is NOT in the ledger (e.g. "Bank statement for April 2024", "Transfer receipt for the 12,450 SAR payment").
+9. In `contradictions`, list each point where the claim and the ledger (or two ledger records) cannot both be true. Cite the ledger record_id(s) involved. A missing record is NOT a contradiction; put it in `missing_evidence` instead.
 
 HOW TO USE THE USER ANALYSIS INSTRUCTIONS:
 - Treat the user's instructions as guidance for what should be investigated.
@@ -87,6 +89,13 @@ RETURN JSON ONLY:
           "type": "...",
           "amount": 0.0,
           "reference": "..."
+        }
+      ],
+      "missing_evidence": ["..."],
+      "contradictions": [
+        {
+          "description": "...",
+          "record_ids": ["..."]
         }
       ],
       "comparison": "...",
@@ -220,15 +229,87 @@ def run_claim_based_accounting_analysis(
         raise RuntimeError(f"The accounting analysis model call failed: {err}") from err
 
     known_ids = {str(r.get("row_id")) for r in normalized_ledger}
-    for evaluation in findings_result.get("claim_evaluations", []) or []:
-        if isinstance(evaluation, dict):
-            cited = [str(x) for x in (evaluation.get("evidence_record_ids") or [])]
-            evaluation["evidence_record_ids"] = [x for x in cited if x in known_ids]
-            evaluation["unverified_record_ids"] = [x for x in cited if x not in known_ids]
+    findings_result["claim_evaluations"] = [
+        normalise_claim_evaluation(evaluation, known_ids, index)
+        for index, evaluation in enumerate(findings_result.get("claim_evaluations") or [])
+        if isinstance(evaluation, dict)
+    ]
 
     findings_result["run_metadata"] = run_metadata
     _persist_forensic_results(case_id, findings_result)
     return findings_result
+
+
+CLAIM_RESULTS = (
+    "SUPPORTED",
+    "PARTIALLY_SUPPORTED",
+    "CONTRADICTED",
+    "NOT_VERIFIABLE",
+    "NO_FINANCIAL_EVIDENCE",
+    "NOT_FINANCIAL_CLAIM",
+)
+
+
+def _as_text_list(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    items = value if isinstance(value, list) else [value]
+    out = []
+    for item in items:
+        if isinstance(item, dict):
+            item = item.get("description") or item.get("item") or item.get("text") or ""
+        text = str(item or "").strip()
+        if text and text.lower() not in {"none", "n/a", "-"}:
+            out.append(text)
+    return out
+
+
+def normalise_claim_evaluation(evaluation: dict, known_ids: set, index: int = 0) -> dict:
+    """Make one LLM claim evaluation safe to store and display.
+
+    * every cited record id is checked against the reviewed ledger: ids
+      the ledger does not contain move to `unverified_record_ids` instead
+      of being shown as evidence;
+    * missing_evidence is a list of strings, contradictions a list of
+      {description, record_ids};
+    * a result outside CLAIM_RESULTS is not reinterpreted: it becomes
+      NOT_VERIFIABLE and the model's wording is kept in result_raw.
+    """
+    item = dict(evaluation)
+    item["claim_id"] = str(item.get("claim_id") or f"CLM_{index + 1:03d}")
+
+    cited = [str(x) for x in (item.get("evidence_record_ids") or []) if str(x).strip()]
+    for found in item.get("financial_evidence_found") or []:
+        if isinstance(found, dict) and str(found.get("record_id") or "").strip():
+            cited.append(str(found["record_id"]))
+    cited = list(dict.fromkeys(cited))
+    item["evidence_record_ids"] = [x for x in cited if x in known_ids]
+    unverified = [x for x in cited if x not in known_ids]
+
+    contradictions = []
+    raw_contradictions = item.get("contradictions") or []
+    if not isinstance(raw_contradictions, list):
+        raw_contradictions = [raw_contradictions]
+    for entry in raw_contradictions:
+        if isinstance(entry, dict):
+            text = str(entry.get("description") or "").strip()
+            ids = [str(x) for x in (entry.get("record_ids") or []) if str(x).strip()]
+        else:
+            text, ids = str(entry or "").strip(), []
+        if not text:
+            continue
+        unverified.extend(x for x in ids if x not in known_ids)
+        contradictions.append({"description": text, "record_ids": [x for x in ids if x in known_ids]})
+    item["contradictions"] = contradictions
+    item["missing_evidence"] = _as_text_list(item.get("missing_evidence"))
+    item["unverified_record_ids"] = list(dict.fromkeys(unverified))
+
+    result = str(item.get("result") or "").strip().upper().replace(" ", "_").replace("-", "_")
+    if result not in CLAIM_RESULTS:
+        item["result_raw"] = item.get("result")
+        result = "NOT_VERIFIABLE"
+    item["result"] = result
+    return item
 
 
 # -----------------------------------------------------------------------------
