@@ -1,0 +1,401 @@
+<!--
+  ============================================================
+  BSF Saudi Legal Case Workbench — Standard WebApp (HTML component)
+
+  This is the markup for the HTML tab of a Dataiku Standard WebApp.
+  Dataiku injects the CSS and JS components itself, so this file
+  deliberately contains no <html>, <head>, <link> or <script> tags —
+  adding them would load style.css twice and execute script.js twice.
+
+  Everything below is static shell: the top bar, the two-column body,
+  the view containers and the tab bars. All data-driven content is
+  rendered by script.js into the elements marked data-region.
+
+  Text nodes carrying data-i18n are filled from the translation
+  catalogue on load and on every language switch, so no user-visible
+  string is hardcoded here.
+  ============================================================
+-->
+
+<div class="bsf-app" id="bsf-app" dir="ltr">
+
+  <!-- ============================================================
+       Top bar: logo (start), title (centre), language switch (end).
+       These three keep their positions in both LTR and RTL.
+       ============================================================ -->
+  <header class="bsf-topbar">
+    <div class="bsf-brand">
+      <img class="bsf-logo" id="app-logo" alt="" hidden>
+      <div class="bsf-brand-text">
+        <h1 class="bsf-app-title" data-i18n="app_title"></h1>
+        <p class="bsf-app-caption" data-i18n="app_caption"></p>
+      </div>
+    </div>
+
+    <div class="bsf-lang-switch">
+      <!-- The visible "Language" label is intentionally omitted; the two
+           buttons are self-explanatory. The group keeps its aria-label so
+           screen readers still announce what the control does. -->
+      <div class="bsf-segmented" role="group" aria-label="Language">
+        <button type="button" class="bsf-seg-btn" data-lang="en">English</button>
+        <button type="button" class="bsf-seg-btn" data-lang="ar">العربية</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="bsf-body">
+
+    <!-- ============================================================
+         Sidebar: workspace switch, open-matter chip, library search,
+         case list and the create-matter form. Rendered by script.js.
+         ============================================================ -->
+    <aside class="bsf-sidebar">
+      <h2 class="bsf-sidebar-heading" data-i18n="workspace"></h2>
+
+      <div class="bsf-workspace-switch" data-region="workspace-switch">
+        <button type="button" class="bsf-workspace-btn" data-workspace="litigation"
+                data-i18n="workspace_litigation"></button>
+        <button type="button" class="bsf-workspace-btn" data-workspace="agreement_review"
+                data-i18n="workspace_agreements"></button>
+      </div>
+
+      <!-- Only present while a matter is open -->
+      <div data-region="open-matter" hidden>
+        <div class="bsf-case-chip">
+          <div class="bsf-case-chip-title" data-region="chip-title"></div>
+          <div class="bsf-case-chip-ref" data-region="chip-ref"></div>
+          <button type="button" class="bsf-linkbtn" data-action="back-to-library"
+                  data-i18n="back_to_case_library"></button>
+        </div>
+      </div>
+
+      <details class="bsf-expander" data-region="create-expander" open>
+        <summary data-region="create-summary"></summary>
+        <div class="bsf-expander-body">
+          <form data-form="create-case">
+            <label class="bsf-field">
+              <span data-region="create-name-label"></span>
+              <input type="text" class="bsf-input" name="case_name" required>
+            </label>
+            <label class="bsf-field">
+              <span data-i18n="preferred_language"></span>
+              <select class="bsf-input" name="language">
+                <option value="ar">العربية</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <button type="submit" class="bsf-btn bsf-btn-primary bsf-btn-block"
+                    data-region="create-submit"></button>
+          </form>
+        </div>
+      </details>
+    </aside>
+
+    <!-- ============================================================
+         Main area. Exactly one of the three views is visible at a
+         time; script.js toggles the is-active class.
+         ============================================================ -->
+    <main class="bsf-main">
+
+      <!-- ---------- View 1: case library ---------- -->
+      <section class="bsf-panel" data-view="library">
+        <h2 class="bsf-view-title" data-region="library-title"></h2>
+        <p class="bsf-view-caption" data-region="library-caption"></p>
+
+        <input type="search" class="bsf-input bsf-input-lg" id="library-search" autocomplete="off">
+
+        <div class="bsf-card-grid" data-region="library-grid"></div>
+      </section>
+
+      <!-- ---------- View 2: litigation matter ---------- -->
+      <section class="bsf-panel" data-view="case">
+        <div class="bsf-matter-head">
+          <h2 class="bsf-view-title" data-region="case-title"></h2>
+          <span class="bsf-matter-ref" data-region="case-ref"></span>
+        </div>
+
+        <div class="bsf-alert bsf-alert-warn" data-region="case-dirty" hidden></div>
+
+        <nav class="bsf-tabs" data-tabset="case">
+          <button type="button" class="bsf-tab" data-tab="home" data-i18n="tab_home"></button>
+          <button type="button" class="bsf-tab" data-tab="documents" data-i18n="tab_documents"></button>
+          <button type="button" class="bsf-tab" data-tab="accounting" data-i18n="tab_accounting"></button>
+          <button type="button" class="bsf-tab" data-tab="review" data-i18n="tab_attorney_review"></button>
+          <button type="button" class="bsf-tab" data-tab="analysis" data-i18n="tab_legal_analysis"></button>
+          <button type="button" class="bsf-tab" data-tab="pleading" data-i18n="tab_written_pleading"></button>
+          <button type="button" class="bsf-tab" data-tab="discussion" data-i18n="tab_case_discussion"></button>
+        </nav>
+
+        <div class="bsf-panel" data-panel="home">
+          <input type="search" class="bsf-input bsf-input-lg" id="case-search" autocomplete="off">
+          <div data-region="case-search-results"></div>
+          <div data-region="case-status"></div>
+          <div data-region="unresolved-tracker"></div>
+        </div>
+
+        <div class="bsf-panel" data-panel="documents">
+          <h3 class="bsf-section-title" data-i18n="documents_and_evidence"></h3>
+          <p class="bsf-caption" data-i18n="documents_caption"></p>
+          <div class="bsf-alert bsf-alert-ok" data-region="documents-stored" hidden></div>
+
+          <h4 class="bsf-subsection" data-i18n="add_documents_or_evidence"></h4>
+          <form data-form="upload-documents">
+            <label class="bsf-field">
+              <span data-i18n="file_purpose"></span>
+              <select class="bsf-input" name="file_purpose" data-region="file-purpose"></select>
+            </label>
+            <label class="bsf-field">
+              <span data-i18n="select_pdfs"></span>
+              <input type="file" class="bsf-input" name="files" accept="application/pdf" multiple>
+            </label>
+            <div class="bsf-filelist" data-region="upload-file-list"></div>
+            <button type="submit" class="bsf-btn bsf-btn-primary" data-i18n="process_uploaded_pdfs"></button>
+          </form>
+          <div data-region="upload-job"></div>
+
+          <hr class="bsf-divider">
+
+          <details class="bsf-expander">
+            <summary data-i18n="facts_evidence_register"></summary>
+            <div class="bsf-expander-body">
+              <p class="bsf-caption" data-i18n="facts_register_caption"></p>
+              <input type="search" class="bsf-input" id="facts-filter" autocomplete="off">
+              <div data-region="facts-register"></div>
+            </div>
+          </details>
+
+          <h3 class="bsf-section-title" data-i18n="completeness_review"></h3>
+          <button type="button" class="bsf-btn" data-action="review-completeness"
+                  data-i18n="review_completeness"></button>
+          <div data-region="completeness-result"></div>
+        </div>
+
+        <div class="bsf-panel" data-panel="accounting">
+          <h3 class="bsf-section-title" data-i18n="accounting_analysis"></h3>
+          <p class="bsf-caption" data-i18n="accounting_analysis_caption"></p>
+
+          <details class="bsf-expander" data-region="accounting-config-expander">
+            <summary data-i18n="pipeline_configuration"></summary>
+            <div class="bsf-expander-body">
+              <div class="bsf-btn-row">
+                <button type="button" class="bsf-btn" data-action="accounting-clear"
+                        data-i18n="clear_accounting_data"></button>
+              </div>
+            </div>
+          </details>
+
+          <h4 class="bsf-subsection" data-i18n="documents_in_scope"></h4>
+          <div data-region="accounting-doc-picker"></div>
+          <div class="bsf-btn-row">
+            <button type="button" class="bsf-btn bsf-btn-primary" data-action="accounting-run-pipeline"
+                    data-i18n="run_extraction_reconciliation"></button>
+          </div>
+          <div data-region="accounting-auto-job"></div>
+
+          <hr class="bsf-divider">
+
+          <div data-region="accounting-conflicts"></div>
+
+          <hr class="bsf-divider">
+
+          <h4 class="bsf-subsection" data-i18n="normalized_ledger"></h4>
+          <div data-region="accounting-ledger"></div>
+
+          <h4 class="bsf-subsection" data-i18n="forensic_timeline_discrepancy"></h4>
+          <p class="bsf-caption" data-i18n="forensic_timeline_caption"></p>
+          <label class="bsf-field">
+            <span data-i18n="accounting_instructions_label"></span>
+            <textarea class="bsf-input" id="accounting-instructions" rows="2"></textarea>
+          </label>
+          <div class="bsf-btn-row">
+            <button type="button" class="bsf-btn bsf-btn-primary" data-action="accounting-synthesize"
+                    data-i18n="synthesize_timeline_findings"></button>
+          </div>
+          <div data-region="accounting-synthesize-job"></div>
+
+          <div data-region="accounting-crosscheck"></div>
+          <div data-region="accounting-discrepancies"></div>
+          <div data-region="accounting-findings"></div>
+        </div>
+
+        <div class="bsf-panel" data-panel="review">
+          <h3 class="bsf-section-title" data-i18n="consolidated_attorney_review"></h3>
+          <div data-region="review-state"></div>
+          <p class="bsf-caption" data-i18n="summary_check_caption"></p>
+          <button type="button" class="bsf-btn bsf-btn-primary" data-action="prepare-summary"
+                  data-i18n="prepare_refresh_summary"></button>
+          <div data-region="summary-job"></div>
+          <div data-region="summary-body"></div>
+        </div>
+
+        <div class="bsf-panel" data-panel="analysis">
+          <h3 class="bsf-section-title" data-i18n="applicable_law_research"></h3>
+          <div class="bsf-alert bsf-alert-info" data-i18n="kb_only_notice"></div>
+          <button type="button" class="bsf-btn bsf-btn-primary" data-action="run-analysis"
+                  data-i18n="run_legal_analysis"></button>
+          <div data-region="analysis-job"></div>
+          <div data-region="analysis-body"></div>
+          <div data-region="strategy-body"></div>
+        </div>
+
+        <div class="bsf-panel" data-panel="pleading">
+          <h3 class="bsf-section-title" data-i18n="written_pleading"></h3>
+          <div data-region="pleading-state"></div>
+          <p class="bsf-caption" data-i18n="pleading_caption"></p>
+          <label class="bsf-field">
+            <span data-i18n="pleading_instructions"></span>
+            <textarea class="bsf-input" id="pleading-instructions" rows="3"></textarea>
+          </label>
+          <button type="button" class="bsf-btn bsf-btn-primary" data-action="generate-pleading"
+                  data-i18n="generate_pleading"></button>
+          <div data-region="pleading-locked"></div>
+          <div data-region="pleading-job"></div>
+          <div data-region="pleading-body"></div>
+        </div>
+
+        <div class="bsf-panel" data-panel="discussion">
+          <h3 class="bsf-section-title" data-i18n="discuss_this_case"></h3>
+          <div class="bsf-alert bsf-alert-info" data-i18n="discussion_intro"></div>
+          <p class="bsf-caption" data-i18n="discussion_caption"></p>
+          <div class="bsf-chat" data-region="chat"></div>
+          <label class="bsf-checkbox">
+            <input type="checkbox" id="add-to-record">
+            <span data-i18n="add_to_case_record"></span>
+          </label>
+          <form class="bsf-chat-form" data-form="ask">
+            <input type="text" class="bsf-input" name="question" autocomplete="off" required>
+            <button type="submit" class="bsf-btn bsf-btn-primary" data-region="ask-submit"></button>
+          </form>
+          <div data-region="discussion-job"></div>
+        </div>
+      </section>
+
+      <!-- ---------- View 3: agreement review matter ---------- -->
+      <section class="bsf-panel" data-view="agreement">
+        <div class="bsf-matter-head">
+          <h2 class="bsf-view-title" data-region="agreement-title"></h2>
+          <span class="bsf-matter-ref" data-region="agreement-ref"></span>
+        </div>
+        <p class="bsf-view-caption" data-i18n="agreement_review_workflow"></p>
+
+        <div class="bsf-stepper" data-region="agreement-stepper"></div>
+
+        <nav class="bsf-tabs" data-tabset="agreement">
+          <button type="button" class="bsf-tab" data-tab="package" data-i18n="agreement_tab_package"></button>
+          <button type="button" class="bsf-tab" data-tab="classification" data-i18n="agreement_tab_classification"></button>
+          <button type="button" class="bsf-tab" data-tab="clauses" data-i18n="agreement_tab_clause_map"></button>
+          <button type="button" class="bsf-tab" data-tab="agreementreview" data-i18n="agreement_tab_review"></button>
+          <button type="button" class="bsf-tab" data-tab="agreementdiscussion" data-i18n="agreement_tab_discussion"></button>
+        </nav>
+
+        <div class="bsf-panel" data-panel="package">
+          <h3 class="bsf-section-title" data-i18n="agreement_package"></h3>
+          <p class="bsf-caption" data-i18n="agreement_upload_caption"></p>
+          <form data-form="upload-agreement">
+            <label class="bsf-field">
+              <span data-i18n="select_pdfs"></span>
+              <input type="file" class="bsf-input" name="files" accept="application/pdf" multiple>
+            </label>
+            <div class="bsf-filelist" data-region="agreement-file-list"></div>
+            <label class="bsf-field">
+              <span data-i18n="page_rendering_quality"></span>
+              <input type="range" name="zoom" min="1" max="3" step="0.1" value="1.6">
+            </label>
+            <button type="submit" class="bsf-btn bsf-btn-primary" data-i18n="process_agreement_documents"></button>
+          </form>
+          <div data-region="agreement-upload-job"></div>
+        </div>
+
+        <div class="bsf-panel" data-panel="classification">
+          <h3 class="bsf-section-title" data-i18n="automatic_classification"></h3>
+          <p class="bsf-caption" data-i18n="classification_caption"></p>
+          <button type="button" class="bsf-btn bsf-btn-primary" data-action="classify-agreement"
+                  data-i18n="detect_type_and_relationship"></button>
+          <div data-region="classify-job"></div>
+          <div data-region="classification-detected"></div>
+
+          <form data-form="confirm-classification">
+            <label class="bsf-field">
+              <span data-i18n="agreement_type"></span>
+              <select class="bsf-input" name="agreement_type" data-region="agreement-types"></select>
+            </label>
+            <label class="bsf-field">
+              <span data-i18n="relationship_type"></span>
+              <select class="bsf-input" name="relationship_type" data-region="relationship-types"></select>
+            </label>
+            <label class="bsf-field">
+              <span data-i18n="party_represented_by_us"></span>
+              <input type="text" class="bsf-input" name="represented_party" required>
+            </label>
+            <label class="bsf-field">
+              <span data-i18n="counterparty"></span>
+              <input type="text" class="bsf-input" name="counterparty">
+            </label>
+            <label class="bsf-field">
+              <span data-i18n="review_objective"></span>
+              <textarea class="bsf-input" name="review_objective" rows="2"></textarea>
+            </label>
+            <button type="submit" class="bsf-btn bsf-btn-primary" data-i18n="confirm_classification"></button>
+          </form>
+        </div>
+
+        <div class="bsf-panel" data-panel="clauses">
+          <h3 class="bsf-section-title" data-i18n="clause_map"></h3>
+          <div data-region="clauses-locked"></div>
+          <button type="button" class="bsf-btn bsf-btn-primary" data-action="extract-clauses"
+                  data-i18n="extract_clauses"></button>
+          <div data-region="clauses-job"></div>
+          <div data-region="clause-alerts"></div>
+          <h4 class="bsf-subsection" data-i18n="clauses"></h4>
+          <input type="search" class="bsf-input" id="clause-filter" autocomplete="off">
+          <div data-region="clause-list"></div>
+        </div>
+
+        <div class="bsf-panel" data-panel="agreementreview">
+          <h3 class="bsf-section-title" data-i18n="review_from_our_side"></h3>
+          <p class="bsf-caption" data-i18n="review_from_our_side_caption"></p>
+          <div data-region="review-locked"></div>
+          <label class="bsf-field">
+            <span data-i18n="additional_instructions"></span>
+            <textarea class="bsf-input" id="agreement-instructions" rows="2"></textarea>
+          </label>
+          <button type="button" class="bsf-btn bsf-btn-primary" data-action="run-agreement-review"
+                  data-i18n="retrieve_laws_and_review"></button>
+          <div data-region="agreement-review-job"></div>
+          <div data-region="agreement-review-body"></div>
+        </div>
+
+        <div class="bsf-panel" data-panel="agreementdiscussion">
+          <h3 class="bsf-section-title" data-i18n="agreement_discussion"></h3>
+          <div class="bsf-alert bsf-alert-info" data-i18n="agreement_discussion_info"></div>
+          <div data-region="agreement-discussion-locked"></div>
+          <div class="bsf-chat" data-region="agreement-chat"></div>
+          <form class="bsf-chat-form" data-form="agreement-ask">
+            <input type="text" class="bsf-input" name="question" autocomplete="off" required>
+            <button type="submit" class="bsf-btn bsf-btn-primary" data-region="agreement-ask-submit"></button>
+          </form>
+          <div data-region="agreement-discussion-job"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- Source-page viewer (click-to-source from facts, chronology, evidence) -->
+<!-- style="display:none" is required as well as [hidden]: .bsf-modal sets
+     display:flex in the author stylesheet, which outranks the browser's
+     built-in [hidden] { display: none } rule. -->
+<div class="bsf-modal" id="source-modal" hidden style="display:none">
+  <div class="bsf-modal-backdrop" data-action="close-modal"></div>
+  <div class="bsf-modal-card" role="dialog" aria-modal="true">
+    <div class="bsf-modal-head">
+      <span data-region="modal-title"></span>
+      <button type="button" class="bsf-iconbtn" data-action="close-modal" aria-label="Close">&times;</button>
+    </div>
+    <div class="bsf-modal-body" data-region="modal-body"></div>
+  </div>
+</div>
+
+
+
