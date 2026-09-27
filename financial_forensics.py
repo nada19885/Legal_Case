@@ -20,9 +20,9 @@ from .config import (
     FINANCIAL_LINE_ITEMS_DATASET,
 )
 
-from .storage import case_rows
+from .storage import case_rows, replace_case_rows
 from .financial_corrections import load_latest_corrections
-from .financial_normalizer import normalize_row_for_ledger
+from .financial_normalizer import build_normalized_ledger
 from .ids import random_id
 from .llm import parse_json_object, strip_think
 
@@ -132,8 +132,8 @@ def build_full_normalized_ledger(case_id: str) -> list[dict]:
         return []
 
     corrections = load_latest_corrections(case_id)
-    rows = rows_df.to_dict(orient="records")
-    return [normalize_row_for_ledger(row, corrections) for row in rows]
+    ledger, _withheld = build_normalized_ledger(rows_df.to_dict(orient="records"), corrections)
+    return ledger
 
 
 def build_and_save_financial_timeline(case_id: str, normalized_ledger: list[dict]) -> pd.DataFrame:
@@ -147,19 +147,11 @@ def build_and_save_financial_timeline(case_id: str, normalized_ledger: list[dict
 
     df["case_id"] = str(case_id)
     df["timeline_id"] = [random_id("TIMELINE") for _ in range(len(df))]
+    if "corrected_fields" in df.columns:
+        df["corrected_fields"] = df["corrected_fields"].apply(lambda v: json.dumps(v or [], ensure_ascii=False))
 
     try:
-        ds = dataiku.Dataset(FINANCIAL_TIMELINE_DATASET)
-        try:
-            ex = ds.get_dataframe()
-            if not ex.empty and "case_id" in ex.columns:
-                ex = ex[ex["case_id"].astype(str) != str(case_id)].copy()
-                final_df = pd.concat([ex, df], ignore_index=True)
-            else:
-                final_df = df
-        except Exception:
-            final_df = df
-        ds.write_with_schema(final_df)
+        replace_case_rows(FINANCIAL_TIMELINE_DATASET, case_id, df.to_dict(orient="records"))
         logger.info(f"Persisted {len(df)} transactions to {FINANCIAL_TIMELINE_DATASET}")
     except Exception as e:
         logger.warning(f"Could not persist timeline dataset: {e}")
@@ -170,20 +162,48 @@ def build_and_save_financial_timeline(case_id: str, normalized_ledger: list[dict
 # -----------------------------------------------------------------------------
 # CLAIM-BASED SYNTHESIS
 # -----------------------------------------------------------------------------
-def run_claim_based_accounting_analysis(case_id: str, normalized_ledger: list[dict], customer_claims: list[dict], instructions: str = "") -> dict:
+def run_claim_based_accounting_analysis(
+    case_id: str,
+    normalized_ledger: list[dict],
+    customer_claims: list[dict],
+    instructions: str = "",
+    claims_source: str = "",
+) -> dict:
+    """Evaluate each financial claim against the reviewed ledger.
+
+    The user's instructions steer the scope and method of the analysis
+    only; they are passed to the LLM as guidance and never modify the
+    ledger. The instructions and claims used are stored with the result
+    so every finding can be traced back to the run that produced it.
+    An LLM failure raises, so the stage reports an error instead of
+    saving an empty "complete" result.
+    """
     if not normalized_ledger:
         raise ValueError("No normalized transactions available for forensic analysis.")
-    if not customer_claims:
-        return {"claim_evaluations": []}
 
-    # Format the ledger to preserve token context
+    run_metadata = {
+        "instructions": instructions or "",
+        "claims_source": claims_source,
+        "claims_count": len(customer_claims or []),
+        "ledger_rows": len(normalized_ledger),
+        "run_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    if not customer_claims:
+        result = {"claim_evaluations": [], "run_metadata": run_metadata}
+        _persist_forensic_results(case_id, result)
+        return result
+
     compact_ledger = [
         {
             "record_id": r.get("row_id"),
+            "page_number": r.get("page_number"),
             "date": r.get("date"),
             "type": r.get("debit_or_credit"),
             "amount": r.get("amount"),
-            "description": str(r.get("description", ""))[:50]
+            "currency": r.get("currency"),
+            "reference": r.get("reference_number", ""),
+            "description": str(r.get("description", ""))[:120],
         }
         for r in normalized_ledger
     ]
@@ -192,13 +212,21 @@ def run_claim_based_accounting_analysis(case_id: str, normalized_ledger: list[di
                                           .replace("{ledger_json}", json.dumps(compact_ledger, ensure_ascii=False)) \
                                           .replace("{instructions}", instructions or "None provided.")
 
+    print("[forensic synthesis] Evaluating customer claims against financial ledger...", flush=True)
     try:
-        print("[forensic synthesis] Evaluating customer claims against financial ledger...", flush=True)
         findings_result = _call_text_llm(prompt)
     except Exception as err:
         logger.warning(f"Accounting analysis failed: {err!r}")
-        findings_result = {"claim_evaluations": []}
+        raise RuntimeError(f"The accounting analysis model call failed: {err}") from err
 
+    known_ids = {str(r.get("row_id")) for r in normalized_ledger}
+    for evaluation in findings_result.get("claim_evaluations", []) or []:
+        if isinstance(evaluation, dict):
+            cited = [str(x) for x in (evaluation.get("evidence_record_ids") or [])]
+            evaluation["evidence_record_ids"] = [x for x in cited if x in known_ids]
+            evaluation["unverified_record_ids"] = [x for x in cited if x not in known_ids]
+
+    findings_result["run_metadata"] = run_metadata
     _persist_forensic_results(case_id, findings_result)
     return findings_result
 
@@ -304,17 +332,11 @@ def _persist_forensic_results(case_id: str, results: dict):
         "accounting_findings_json": json.dumps(results, ensure_ascii=False),
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    ds = dataiku.Dataset(FINANCIAL_FINDINGS_DATASET)
     try:
-        ex_f = ds.get_dataframe()
-        if not ex_f.empty and "case_id" in ex_f.columns:
-            ex_f = ex_f[ex_f["case_id"].astype(str) != str(case_id)].copy()
-            final_f = pd.concat([ex_f, pd.DataFrame([row])], ignore_index=True)
-        else:
-            final_f = pd.DataFrame([row])
-        ds.write_with_schema(final_f)
+        replace_case_rows(FINANCIAL_FINDINGS_DATASET, case_id, [row])
     except Exception as e:
         logger.warning(f"Could not persist findings dataset: {e}")
+        raise
 
 
 def load_saved_forensic_results(case_id: str) -> dict:
@@ -325,27 +347,25 @@ def load_saved_forensic_results(case_id: str) -> dict:
         "discrepancies": [],
         "cross_check_summary": {},
         "accounting_findings": {},
+        "run_metadata": {},
     }
     try:
-        ds_t = dataiku.Dataset(FINANCIAL_TIMELINE_DATASET)
-        df_t = ds_t.get_dataframe()
-        if not df_t.empty and "case_id" in df_t.columns:
-            out["timeline"] = df_t[df_t["case_id"].astype(str) == str(case_id)].to_dict(orient="records")
+        df_t = case_rows(FINANCIAL_TIMELINE_DATASET, case_id)
+        if not df_t.empty:
+            out["timeline"] = df_t.to_dict(orient="records")
     except Exception:
         pass
 
     try:
-        ds_f = dataiku.Dataset(FINANCIAL_FINDINGS_DATASET)
-        df_f = ds_f.get_dataframe()
-        if not df_f.empty and "case_id" in df_f.columns:
-            matches = df_f[df_f["case_id"].astype(str) == str(case_id)]
-            if not matches.empty:
-                latest = matches.iloc[-1].to_dict()
-                parsed_findings = json.loads(latest.get("accounting_findings_json", "{}") or "{}")
-                out["claim_evaluations"] = parsed_findings.get("claim_evaluations", [])
-                out["discrepancies"] = parsed_findings.get("discrepancies", [])
-                out["cross_check_summary"] = parsed_findings.get("cross_check_summary", {})
-                out["accounting_findings"] = parsed_findings.get("accounting_findings", {})
+        matches = case_rows(FINANCIAL_FINDINGS_DATASET, case_id)
+        if not matches.empty:
+            latest = matches.iloc[-1].to_dict()
+            parsed_findings = json.loads(latest.get("accounting_findings_json", "{}") or "{}")
+            out["claim_evaluations"] = parsed_findings.get("claim_evaluations", [])
+            out["discrepancies"] = parsed_findings.get("discrepancies", [])
+            out["cross_check_summary"] = parsed_findings.get("cross_check_summary", {})
+            out["accounting_findings"] = parsed_findings.get("accounting_findings", {})
+            out["run_metadata"] = parsed_findings.get("run_metadata", {})
     except Exception:
         pass
 

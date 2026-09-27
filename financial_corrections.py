@@ -9,48 +9,118 @@ from .config import (
     FINANCIAL_LINE_ITEM_CORRECTIONS_DATASET,
     FINANCIAL_LINE_ITEMS_DATASET,
 )
+from .financial_fields import (
+    FIELD_NAMES,
+    ISSUE_MISSING,
+    effective_value,
+    field_issue,
+    parse_fields,
+    pending_fields,
+)
 from .ids import random_id
 from .storage import append_rows, case_rows
 
 
 def list_rows_needing_review(case_id: str) -> list[dict]:
-    """Rows (or specific fields within a row) still awaiting a human read of
-    the source page image. A row drops off this list once every one of its
-    conflicting fields has a correction on file.
+    """Rows with at least one field still awaiting a human answer (an
+    uncertain value or a missing required one). A row drops off this list
+    once every such field has a correction on file.
     """
     rows_df = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
     if rows_df.empty:
         return []
-
-    corrected_fields_by_row = _corrected_fields_by_row(case_id)
-    pending_rows = rows_df[rows_df["row_status"] == "needs_review"]
-
-    result = []
-    for row in pending_rows.to_dict(orient="records"):
-        row_id = str(row.get("row_id", ""))
-        already_corrected = corrected_fields_by_row.get(row_id, set())
-        if _has_uncorrected_conflict(row, already_corrected):
-            result.append(row)
-    return result
+    corrections = load_latest_corrections(case_id)
+    return [
+        row for row in rows_df.to_dict(orient="records")
+        if pending_fields(row, corrections)
+    ]
 
 
-def _corrected_fields_by_row(case_id: str) -> dict[str, set]:
-    corrections_df = case_rows(FINANCIAL_LINE_ITEM_CORRECTIONS_DATASET, case_id)
-    if corrections_df.empty:
-        return {}
-    result: dict[str, set] = {}
-    for row in corrections_df.to_dict(orient="records"):
-        result.setdefault(str(row.get("row_id", "")), set()).add(str(row.get("field_name", "")))
-    return result
+def _page_excerpt(page_text: str, needles: list[str], width: int = 260) -> str:
+    """The part of the page around the row being reviewed, so the user sees
+    the evidence without opening the whole page."""
+    text = str(page_text or "")
+    if not text:
+        return ""
+    for needle in needles:
+        needle = str(needle or "").strip()
+        if len(needle) < 3:
+            continue
+        position = text.find(needle)
+        if position >= 0:
+            start = max(0, position - width)
+            end = min(len(text), position + len(needle) + width)
+            return ("…" if start else "") + text[start:end].strip() + ("…" if end < len(text) else "")
+    return text[: width * 2].strip() + ("…" if len(text) > width * 2 else "")
 
 
-def _has_uncorrected_conflict(row: dict, corrected_fields: set) -> bool:
+def build_review_items(rows: list[dict], corrections: dict, pages_by_id: dict) -> list[dict]:
+    """One pending-review item per row with open fields.
+
+    Each item carries what the user needs to answer without guessing:
+    the transaction as currently understood, the LLM's suggestion and
+    reasoning for every open field, the row as printed on the page, and an
+    excerpt of the page text around it. pages_by_id maps page_id to
+    {"page_text", "label"}.
+    """
+    items = []
+    for row in rows:
+        open_fields = pending_fields(row, corrections)
+        if not open_fields:
+            continue
+        fields = parse_fields(row)
+        page_id = str(row.get("page_id", ""))
+        page = pages_by_id.get(page_id) or {}
+
+        transaction = {}
+        for name in FIELD_NAMES:
+            effective = effective_value(row, name, corrections)
+            info = fields.get(name) or {}
+            transaction[name] = {
+                "value": effective["value"] if effective["value"] is not None else str(info.get("value", "") or ""),
+                "pending": name in open_fields,
+                "source": effective.get("source") or "suggestion",
+            }
+
+        source_text = str((fields.get("_row") or {}).get("source_text", "") or "")
+        open_items = []
+        for name in open_fields:
+            info = fields.get(name) or {}
+            suggested = str(info.get("value", "") or "").strip()
+            open_items.append({
+                "field": name,
+                "issue": field_issue(name, info) or ISSUE_MISSING,
+                "suggested_value": suggested,
+                "reason": str(info.get("reason", "") or ""),
+                "candidates": [
+                    {"value": c.get("value"), "source": c.get("source")}
+                    for c in (info.get("candidates") or [])
+                    if isinstance(c, dict) and str(c.get("value", "") or "").strip()
+                ] or ([{"value": suggested, "source": "AI Suggested"}] if suggested else []),
+            })
+
+        amount_text = str((fields.get("amount") or {}).get("value", "") or "")
+        reference = str((fields.get("reference_number") or {}).get("value", "") or "")
+        items.append({
+            "row_id": str(row.get("row_id", "")),
+            "page_id": page_id,
+            "page_number": row.get("page_number"),
+            "page_label": page.get("label", ""),
+            "transaction": transaction,
+            "source_text": source_text,
+            "page_excerpt": _page_excerpt(page.get("page_text", ""), [source_text[:60], reference, amount_text]),
+            "fields": open_items,
+        })
+
+    items.sort(key=lambda item: (str(item.get("page_label", "")), _as_int(item.get("page_number")), item["row_id"]))
+    return items
+
+
+def _as_int(value) -> int:
     try:
-        fields = json.loads(row.get("fields_json", "{}") or "{}")
-    except (TypeError, json.JSONDecodeError):
-        return True
-    conflicting_fields = {name for name, info in fields.items() if info.get("status") == "conflict"}
-    return bool(conflicting_fields - corrected_fields)
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 def submit_correction(
@@ -116,23 +186,7 @@ def effective_field_value(
     corrections_by_row: dict[str, dict[str, dict]],
 ) -> dict:
     """The value stage 4+ should actually use for this field: a human
-    correction if one exists, otherwise the reconciled value UNLESS its
-    status is still "conflict" (in which case it stays unusable — never
-    silently pick one of the disagreeing candidates).
+    correction if one exists, otherwise the extracted value only when it
+    has no open issue (see financial_fields.effective_value).
     """
-    row_id = str(row.get("row_id", ""))
-    corrections = corrections_by_row.get(row_id, {})
-    if field_name in corrections:
-        correction = corrections[field_name]
-        return {"value": correction["corrected_value"], "status": "verified_human", "source": "human"}
-
-    try:
-        fields = json.loads(row.get("fields_json", "{}") or "{}")
-    except (TypeError, json.JSONDecodeError):
-        return {"value": None, "status": "pending_review", "source": None}
-
-    info = fields.get(field_name, {})
-    if info.get("status") == "conflict":
-        return {"value": None, "status": "pending_review", "source": None}
-
-    return {"value": info.get("value", ""), "status": info.get("status", "missing"), "source": "extraction"}
+    return effective_value(row, field_name, corrections_by_row)

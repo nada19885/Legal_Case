@@ -969,6 +969,210 @@ Object.assign(I18N.ar, {
   extraction_reason: "السبب: {reason}",
 });
 
+/* Stage statuses, phases and the accounting review queue. */
+Object.assign(I18N.en, {
+  step_accounting: "Accounting analysis",
+  step_discussion: "Case chatbot",
+  status_not_started: "Not started",
+  status_blocked: "Waiting on earlier steps",
+  status_running: "Processing",
+  status_waiting_for_user: "Waiting for you",
+  status_ready: "Ready to continue",
+  status_completed: "Completed",
+  status_stale: "Needs refresh",
+  status_error: "Error",
+  phase_extracting_pages: "Extracting pages",
+  phase_building_case_register: "Building the case register",
+  phase_preparing_summary: "Preparing the attorney review",
+  phase_classifying_pages: "Classifying pages",
+  phase_extracting_financial_data: "Extracting financial data",
+  phase_checking_review_items: "Checking values that need review",
+  phase_building_timeline: "Building the financial timeline",
+  phase_analysing_claims: "Comparing claims with the evidence",
+  phase_researching_law: "Researching the applicable law",
+  phase_planning_defence: "Preparing the defence plan",
+  phase_generating_pleading: "Generating the written pleading",
+  phase_revising_pleading: "Revising the written pleading",
+  phase_answering: "Answering",
+  detail_review_items: "{count} value(s) need your confirmation before the accounting analysis can continue.",
+  detail_ready_for_analysis: "All extracted values are confirmed. Run the claims-vs-evidence analysis to continue.",
+  detail_pages_classified: "Pages are classified. Run the extraction to continue.",
+  detail_approve_summary: "The attorney review is prepared and waits for your approval.",
+  detail_approved: "Attorney review approved.",
+  detail_forensic_complete: "Financial claims compared with the reviewed ledger.",
+  detail_complete_no_transactions: "No financial transactions were found in the selected documents.",
+  detail_analysis: "Legal analysis ready.",
+  detail_analysis_and_defence_plan: "Legal analysis and defence plan ready.",
+  detail_draft: "Draft pleading ready.",
+  detail_final: "Pleading marked final.",
+  detail_inputs_missing: "Its inputs were changed or cleared. Regenerate it before relying on it.",
+  detail_blocked_by: "Needs: {stages}",
+  detail_stale_because: "Out of date: {stage} changed after this was produced.",
+  attention_title: "Waiting for you",
+  attention_error_title: "A step needs attention",
+  attention_open: "Open {tab}",
+  next_accounting: "Run the accounting extraction and confirm any flagged values",
+  next_discussion: "Ask the case chatbot about the stored case record",
+  next_waiting: "{stage} is waiting for you",
+  next_error: "Retry the failed step: {stage}",
+  clear_accounting_explainer: "Deletes this case's page classifications, extracted line items, your corrections, the normalized ledger, the financial timeline and the claim findings. Documents, the case register, the attorney review and the legal analysis are kept. A pleading built on this accounting is marked out of date.",
+  review_items_heading: "Values waiting for your confirmation",
+  review_item_title: "{page} — transaction row",
+  review_issue_uncertain: "Uncertain reading",
+  review_issue_missing: "Not found on the page",
+  review_suggestion: "System's current interpretation",
+  review_no_suggestion: "No value could be read",
+  review_reasoning: "Why it needs you",
+  review_row_as_printed: "Row as printed",
+  review_page_excerpt: "Page context",
+  review_transaction: "Transaction as understood so far",
+  review_answer_placeholder: "Correct value for {field}",
+  review_use_suggestion: "Confirm suggestion",
+  review_save_answer: "Save answer",
+  review_pending_marker: "awaiting you",
+  field_date: "Date",
+  field_amount: "Amount",
+  field_currency: "Currency",
+  field_debit_or_credit: "Debit / credit",
+  field_description: "Description",
+  field_reference_number: "Reference",
+  field_party_source: "Party",
+  field_running_balance: "Running balance",
+  accounting_continue_auto: "All values confirmed — continuing the accounting analysis…",
+  report_line: "{financial} of {scope} page(s) are financial · {rows} new row(s) extracted · {pending} value(s) awaiting you",
+  report_failures: "{count} page(s) could not be processed. Run the extraction again to retry them.",
+  report_discarded: "{count} zero-amount line(s) were ignored as balance or heading rows.",
+  ledger_withheld: "{count} row(s) are withheld from the ledger until you confirm their values.",
+  column_reference: "Reference",
+  findings_run_meta: "Last run {at} · {claims} claim(s) from {source} · instructions: {instructions}",
+  claims_source_attorney_review: "the attorney review",
+  claims_source_case_register: "the case register",
+  no_instructions: "none",
+  case_register_heading: "Case register",
+  case_register_caption: "The system's current understanding of the case, consolidated across every processed document. The attorney review, legal analysis, accounting claims and chatbot all read from it.",
+  register_empty: "Nothing has been extracted yet. Process the case documents to build the register.",
+  register_sources: "Built from {documents} document(s), {usable} of {pages} page(s) readable.",
+  register_parties: "Parties",
+  register_events: "Chronology",
+  register_facts: "Facts",
+  register_allegations: "Allegations",
+  register_issues: "Issues",
+  register_evidence_requests: "Evidence requests",
+  register_contradictions: "Contradictions",
+  register_none: "None recorded.",
+  register_merged: "found in {count} places",
+  register_clarify: "Needs clarification: {text}",
+  register_questions: "Questions",
+  fact_status_stated: "Stated",
+  fact_status_alleged: "Alleged",
+  fact_status_unclassified: "Unclassified",
+  priority_high: "High priority",
+  priority_critical: "Critical",
+  priority_medium: "Medium priority",
+  priority_low: "Low priority",
+});
+Object.assign(I18N.ar, {
+  step_accounting: "التحليل المحاسبي",
+  step_discussion: "مساعد القضية",
+  status_not_started: "لم تبدأ",
+  status_blocked: "بانتظار الخطوات السابقة",
+  status_running: "قيد المعالجة",
+  status_waiting_for_user: "بانتظارك",
+  status_ready: "جاهزة للمتابعة",
+  status_completed: "مكتملة",
+  status_stale: "تحتاج إلى تحديث",
+  status_error: "خطأ",
+  phase_extracting_pages: "استخراج الصفحات",
+  phase_building_case_register: "بناء سجل القضية",
+  phase_preparing_summary: "إعداد مراجعة المحامي",
+  phase_classifying_pages: "تصنيف الصفحات",
+  phase_extracting_financial_data: "استخراج البيانات المالية",
+  phase_checking_review_items: "فحص القيم التي تحتاج إلى مراجعة",
+  phase_building_timeline: "بناء التسلسل الزمني المالي",
+  phase_analysing_claims: "مقارنة المطالبات بالأدلة",
+  phase_researching_law: "البحث في الأنظمة المنطبقة",
+  phase_planning_defence: "إعداد خطة الدفاع",
+  phase_generating_pleading: "إعداد المذكرة المكتوبة",
+  phase_revising_pleading: "تعديل المذكرة المكتوبة",
+  phase_answering: "إعداد الإجابة",
+  detail_review_items: "{count} قيمة تحتاج إلى تأكيدك قبل متابعة التحليل المحاسبي.",
+  detail_ready_for_analysis: "تم تأكيد جميع القيم المستخرجة. شغّل تحليل المطالبات مقابل الأدلة للمتابعة.",
+  detail_pages_classified: "تم تصنيف الصفحات. شغّل الاستخراج للمتابعة.",
+  detail_approve_summary: "مراجعة المحامي جاهزة وبانتظار اعتمادك.",
+  detail_approved: "تم اعتماد مراجعة المحامي.",
+  detail_forensic_complete: "تمت مقارنة المطالبات المالية بالسجل المالي المراجَع.",
+  detail_complete_no_transactions: "لم يُعثر على معاملات مالية في المستندات المختارة.",
+  detail_analysis: "التحليل القانوني جاهز.",
+  detail_analysis_and_defence_plan: "التحليل القانوني وخطة الدفاع جاهزان.",
+  detail_draft: "مسودة المذكرة جاهزة.",
+  detail_final: "تم اعتماد المذكرة نهائياً.",
+  detail_inputs_missing: "تغيّرت مدخلاتها أو حُذفت. أعد إنشاءها قبل الاعتماد عليها.",
+  detail_blocked_by: "تتطلب: {stages}",
+  detail_stale_because: "غير محدّثة: تغيّرت {stage} بعد إعدادها.",
+  attention_title: "بانتظارك",
+  attention_error_title: "خطوة تحتاج إلى متابعة",
+  attention_open: "افتح {tab}",
+  next_accounting: "شغّل الاستخراج المحاسبي وأكّد القيم المعلَّمة",
+  next_discussion: "اسأل مساعد القضية عن سجل القضية المحفوظ",
+  next_waiting: "{stage} بانتظارك",
+  next_error: "أعد تشغيل الخطوة المتعثرة: {stage}",
+  clear_accounting_explainer: "يحذف تصنيفات الصفحات والبنود المستخرجة وتصحيحاتك والسجل المالي الموحد والتسلسل الزمني ونتائج المطالبات لهذه القضية. تبقى المستندات وسجل القضية ومراجعة المحامي والتحليل القانوني كما هي، وتُعلَّم المذكرة المبنية على هذا التحليل بأنها غير محدّثة.",
+  review_items_heading: "قيم بانتظار تأكيدك",
+  review_item_title: "{page} — بند معاملة",
+  review_issue_uncertain: "قراءة غير مؤكدة",
+  review_issue_missing: "غير موجودة في الصفحة",
+  review_suggestion: "التفسير الحالي للنظام",
+  review_no_suggestion: "تعذّرت قراءة أي قيمة",
+  review_reasoning: "سبب الحاجة إلى تأكيدك",
+  review_row_as_printed: "البند كما ورد",
+  review_page_excerpt: "سياق الصفحة",
+  review_transaction: "المعاملة كما فُهمت حتى الآن",
+  review_answer_placeholder: "القيمة الصحيحة لـ {field}",
+  review_use_suggestion: "تأكيد الاقتراح",
+  review_save_answer: "حفظ الإجابة",
+  review_pending_marker: "بانتظارك",
+  field_date: "التاريخ",
+  field_amount: "المبلغ",
+  field_currency: "العملة",
+  field_debit_or_credit: "مدين / دائن",
+  field_description: "الوصف",
+  field_reference_number: "المرجع",
+  field_party_source: "الطرف",
+  field_running_balance: "الرصيد الجاري",
+  accounting_continue_auto: "تم تأكيد جميع القيم — جارٍ متابعة التحليل المحاسبي…",
+  report_line: "{financial} من {scope} صفحة مالية · {rows} بند جديد مستخرج · {pending} قيمة بانتظارك",
+  report_failures: "تعذّرت معالجة {count} صفحة. شغّل الاستخراج مرة أخرى لإعادة المحاولة.",
+  report_discarded: "تم تجاهل {count} سطر بمبلغ صفري باعتبارها أرصدة أو عناوين.",
+  ledger_withheld: "{count} بند محجوب عن السجل المالي حتى تؤكد قيمه.",
+  column_reference: "المرجع",
+  findings_run_meta: "آخر تشغيل {at} · {claims} مطالبة من {source} · التعليمات: {instructions}",
+  claims_source_attorney_review: "مراجعة المحامي",
+  claims_source_case_register: "سجل القضية",
+  no_instructions: "لا يوجد",
+  case_register_heading: "سجل القضية",
+  case_register_caption: "الفهم الحالي للقضية، موحداً من جميع المستندات المعالجة. تعتمد عليه مراجعة المحامي والتحليل القانوني والمطالبات المحاسبية ومساعد القضية.",
+  register_empty: "لم يُستخرج شيء بعد. عالج مستندات القضية لبناء السجل.",
+  register_sources: "مبني على {documents} مستند، {usable} من {pages} صفحة مقروءة.",
+  register_parties: "الأطراف",
+  register_events: "التسلسل الزمني",
+  register_facts: "الوقائع",
+  register_allegations: "الادعاءات",
+  register_issues: "المسائل",
+  register_evidence_requests: "الأدلة المطلوبة",
+  register_contradictions: "التناقضات",
+  register_none: "لا يوجد.",
+  register_merged: "ورد في {count} مواضع",
+  register_clarify: "يحتاج إلى توضيح: {text}",
+  register_questions: "الأسئلة",
+  fact_status_stated: "واقعة مذكورة",
+  fact_status_alleged: "ادعاء",
+  fact_status_unclassified: "غير مصنفة",
+  priority_high: "أولوية عالية",
+  priority_critical: "حرجة",
+  priority_medium: "أولوية متوسطة",
+  priority_low: "أولوية منخفضة",
+});
+
 const LANGUAGES = { en: "English", ar: "العربية" };
 
 /// Added by Youssif for Monitoring Purposes ///
@@ -1253,6 +1457,37 @@ function jobMarkup(progress) {
     </div>`;
 }
 
+/* Poll one job until it ends. onProgress(status) runs on every running
+   tick. Resolves with the job result, rejects with its error. */
+function pollJob(jobId, onProgress) {
+  return new Promise((resolve, reject) => {
+    const poll = async () => {
+      try {
+        const status = await apiGet("/job_status", { job_id: jobId });
+        if (status.status === "running") {
+          if (onProgress) onProgress(status);
+          setTimeout(poll, 1200);
+          return;
+        }
+        if (status.status === "error") reject(new Error(status.error || "job failed"));
+        else resolve(status.result || {});
+      } catch (error) {
+        reject(error);
+      }
+    };
+    setTimeout(poll, 400);
+  });
+}
+
+// Job ids this page is already polling, so a job started here is not
+// polled twice when the case snapshot also reports it as running.
+const FOLLOWED_JOBS = new Set();
+
+function showStageProgress(stageKey, progress) {
+  if (!stageKey) return;
+  html(region(`stage-strip-${stageKey}`), stageRunningMarkup(stageKey, progress));
+}
+
 async function runJob(startPromise, regionName) {
   const target = region(regionName);
   html(target, jobMarkup({ detail: t("working") }));
@@ -1264,24 +1499,32 @@ async function runJob(startPromise, regionName) {
     html(target, "");
     throw error;
   }
-  return new Promise((resolve, reject) => {
-    const poll = async () => {
-      try {
-        const status = await apiGet("/job_status", { job_id: jobId });
-        if (status.status === "running") {
-          html(target, jobMarkup(status.progress));
-          setTimeout(poll, 1200);
-          return;
-        }
-        html(target, "");
-        if (status.status === "error") reject(new Error(status.error || "job failed"));
-        else resolve(status.result || {});
-      } catch (error) {
-        html(target, "");
-        reject(error);
-      }
-    };
-    setTimeout(poll, 400);
+  FOLLOWED_JOBS.add(jobId);
+  try {
+    return await pollJob(jobId, (status) => {
+      html(target, jobMarkup(status.progress));
+      showStageProgress(status.stage, status.progress);
+    });
+  } finally {
+    FOLLOWED_JOBS.delete(jobId);
+    html(target, "");
+  }
+}
+
+/* A job may have been started from another tab or before a reload. The
+   case snapshot lists running stages with their job id; follow them so
+   the status strips stay live, then refresh when they finish. */
+function followRunningJobs() {
+  const caseId = S.caseId;
+  ((S.snapshot && S.snapshot.stages) || []).forEach((stage) => {
+    if (stage.status !== "running" || !stage.job_id || FOLLOWED_JOBS.has(stage.job_id)) return;
+    FOLLOWED_JOBS.add(stage.job_id);
+    pollJob(stage.job_id, (status) => showStageProgress(stage.key, status.progress))
+      .catch(() => {})
+      .finally(() => {
+        FOLLOWED_JOBS.delete(stage.job_id);
+        if (S.caseId === caseId) refreshCase();
+      });
   });
 }
 
@@ -1289,7 +1532,13 @@ async function runJob(startPromise, regionName) {
    Toasts
    ============================================================ */
 function toast(message, kind) {
-  const host = document.getElementById("toasts");
+  let host = document.getElementById("toasts");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "toasts";
+    host.className = "bsf-toasts";
+    (document.getElementById("bsf-app") || document.body).appendChild(host);
+  }
   const node = document.createElement("div");
   node.className = "bsf-toast" + (kind ? ` ${kind}` : "");
   node.textContent = message;
@@ -1453,18 +1702,110 @@ function backToLibrary() {
 /* ============================================================
    Litigation matter — shared header + Home
    ============================================================ */
-const STEP_LABEL_KEYS = {
-  documents: "step_documents", summary: "step_attorney_review", analysis: "step_legal_analysis",
-  pleading: "step_written_pleading", final: "step_final_approval",
+const STAGE_LABEL_KEYS = {
+  documents: "step_documents", review: "step_attorney_review", accounting: "step_accounting",
+  analysis: "step_legal_analysis", pleading: "step_written_pleading", discussion: "step_discussion",
+};
+const STAGE_TAB_KEYS = {
+  documents: "tab_documents", review: "tab_attorney_review", accounting: "tab_accounting",
+  analysis: "tab_legal_analysis", pleading: "tab_written_pleading", discussion: "tab_case_discussion",
 };
 const NEXT_ACTION_KEYS = {
-  documents: "next_documents", summary: "next_summary", analysis: "next_analysis",
-  pleading: "next_pleading", final: "next_final",
+  documents: "next_documents", review: "next_summary", accounting: "next_accounting",
+  analysis: "next_analysis", pleading: "next_pleading", discussion: "next_discussion",
 };
-const NEXT_DESTINATION_KEYS = {
-  documents: "tab_documents", summary: "tab_attorney_review", analysis: "tab_legal_analysis",
-  pleading: "tab_written_pleading", final: "tab_written_pleading",
+const STAGE_STATUS_KIND = {
+  not_started: "neutral", blocked: "neutral", running: "ai", waiting_for_user: "review",
+  ready: "provisional", completed: "verified", stale: "review", error: "flagged",
 };
+const STAGE_ICONS = {
+  completed: "\u2713", running: "\u21BB", waiting_for_user: "!", error: "\u2715",
+  stale: "\u21BA", ready: "\u25CF", not_started: "\u25CB", blocked: "\u25CB",
+};
+
+function stageLabel(key) { return t(STAGE_LABEL_KEYS[key] || key); }
+
+function stageByKey(key) {
+  return ((S.snapshot && S.snapshot.stages) || []).find((stage) => stage.key === key);
+}
+
+function stageDetailText(stage) {
+  if (stage.status === "error") return stage.error || "";
+  if (stage.status === "waiting_for_user" && stage.detail === "review_items") {
+    const acc = (S.snapshot && S.snapshot.accounting) || {};
+    return t("detail_review_items", { count: acc.pending_field_count || acc.pending_count || 0 });
+  }
+  if (stage.status === "stale" && stage.stale_because) {
+    return t("detail_stale_because", { stage: stageLabel(stage.stale_because) });
+  }
+  if (stage.status === "blocked" && (stage.blocked_by || []).length) {
+    return t("detail_blocked_by", { stages: stage.blocked_by.map(stageLabel).join(", ") });
+  }
+  if (stage.detail) {
+    const key = `detail_${stage.detail}`;
+    const text = t(key);
+    return text !== key ? text : stage.detail;
+  }
+  return "";
+}
+
+function stageRunningMarkup(stageKey, progress) {
+  const phase = progress && progress.phase ? t(`phase_${progress.phase}`) : t("status_running");
+  return `
+    <div class="bsf-stage-strip status-running">
+      <div class="bsf-stage-strip-head">${badge(t("status_running"), "ai")}<strong>${esc(phase)}</strong></div>
+      ${jobMarkup(progress)}
+    </div>`;
+}
+
+function stageStripMarkup(stage) {
+  if (!stage) return "";
+  if (stage.status === "running") {
+    return stageRunningMarkup(stage.key, stage.progress || { phase: stage.phase, detail: stage.detail });
+  }
+  const detail = stageDetailText(stage);
+  return `
+    <div class="bsf-stage-strip status-${esc(stage.status)}">
+      <div class="bsf-stage-strip-head">
+        ${badge(t(`status_${stage.status}`), STAGE_STATUS_KIND[stage.status])}
+        <strong>${esc(stageLabel(stage.key))}</strong>
+      </div>
+      ${detail ? `<div class="bsf-stage-strip-detail">${esc(detail)}</div>` : ""}
+    </div>`;
+}
+
+function renderStageStrips() {
+  Object.keys(STAGE_LABEL_KEYS).forEach((key) => {
+    html(region(`stage-strip-${key}`), stageStripMarkup(stageByKey(key)));
+  });
+}
+
+/* Case-wide banner above the tabs: anything waiting for the user, and any
+   failed step, is visible from every tab. */
+function renderAttention() {
+  const snap = S.snapshot;
+  const stages = snap.stages || [];
+  const line = (stage) => `
+    <li>
+      <span><strong>${esc(stageLabel(stage.key))}</strong> — ${esc(stageDetailText(stage) || t(`status_${stage.status}`))}</span>
+      <button type="button" class="bsf-btn" data-action="goto-stage" data-stage="${esc(stage.key)}">
+        ${esc(t("attention_open", { tab: t(STAGE_TAB_KEYS[stage.key]) }))}
+      </button>
+    </li>`;
+  const waiting = stages.filter((stage) => stage.status === "waiting_for_user");
+  const errors = stages.filter((stage) => stage.status === "error");
+  html(region("case-attention"), `
+    ${waiting.length ? `
+      <div class="bsf-attention" role="alert">
+        <div class="bsf-attention-title">${esc(t("attention_title"))}</div>
+        <ul>${waiting.map(line).join("")}</ul>
+      </div>` : ""}
+    ${errors.length ? `
+      <div class="bsf-attention is-error" role="alert">
+        <div class="bsf-attention-title">${esc(t("attention_error_title"))}</div>
+        <ul>${errors.map(line).join("")}</ul>
+      </div>` : ""}`);
+}
 
 function renderCase() {
   const snap = S.snapshot;
@@ -1481,34 +1822,42 @@ function renderCase() {
     show(dirty, false);
   }
 
+  renderAttention();
+  renderStageStrips();
   renderCaseStatus();
   renderUnresolved();
   renderCaseSearch();
   renderDocumentsTab();
+  renderCaseRegister();
   renderAccountingTab();
   renderReviewTab();
   renderAnalysisTab();
   renderPleadingTab();
   renderDiscussionTab();
+  followRunningJobs();
 }
 
 function renderCaseStatus() {
   const snap = S.snapshot;
-  const steps = snap.steps || [];
-  const done = steps.filter((s) => s.done).length;
-  const percent = steps.length ? Math.round((done / steps.length) * 100) : 0;
+  const stages = snap.stages || [];
+  const done = stages.filter((stage) => stage.status === "completed").length;
+  const percent = stages.length ? Math.round((done / stages.length) * 100) : 0;
 
-  const nextKey = snap.next_action_key;
-  const state = snap.workflow_state || {};
-  const nextText = state.case_dirty ? t("next_review_new_material") : t(NEXT_ACTION_KEYS[nextKey] || "next_documents");
-  const destination = state.case_dirty ? t("tab_attorney_review") : t(NEXT_DESTINATION_KEYS[nextKey] || "tab_documents");
+  const nextKey = snap.next_stage || "documents";
+  const nextStage = stageByKey(nextKey) || { status: "" };
+  let nextText;
+  if (nextStage.status === "waiting_for_user") nextText = t("next_waiting", { stage: stageLabel(nextKey) });
+  else if (nextStage.status === "error") nextText = t("next_error", { stage: stageLabel(nextKey) });
+  else nextText = t(NEXT_ACTION_KEYS[nextKey] || "next_documents");
+  const destination = t(STAGE_TAB_KEYS[nextKey] || "tab_documents");
 
-  const icons = { complete: "\u2713", current: "\u25CF", upcoming: "\u25CB" };
-  const stepCards = steps.map((step) => `
-    <div class="step-card ${step.state}">
-      <div class="step-icon">${icons[step.state] || ""}</div>
-      <div class="step-label">${esc(t(STEP_LABEL_KEYS[step.key] || step.key))}</div>
-    </div>`).join("");
+  const stepCards = stages.map((stage) => `
+    <button type="button" class="step-card ${stage.state} status-${esc(stage.status)}"
+            data-action="goto-stage" data-stage="${esc(stage.key)}">
+      <div class="step-icon">${STAGE_ICONS[stage.status] || ""}</div>
+      <div class="step-label">${esc(stageLabel(stage.key))}</div>
+      <div class="step-status">${esc(stage.status === "running" && stage.phase ? t(`phase_${stage.phase}`) : t(`status_${stage.status}`))}</div>
+    </button>`).join("");
 
   const counts = snap.counts || {};
   const metric = (key, value) => `
@@ -1705,6 +2054,74 @@ function renderDocumentsTab() {
   renderFactsRegister();
 }
 
+/* The unified case register (backend: case_register.py). One expander per
+   category; every item links to the pages it was extracted from. */
+function renderCaseRegister() {
+  const target = region("case-register");
+  if (!target) return;
+  const reg = (S.snapshot && S.snapshot.case_register) || null;
+  const counts = (reg && reg.counts) || {};
+  const total = ["parties", "events", "facts", "issues"].reduce((sum, key) => sum + (counts[key] || 0), 0);
+  if (!reg || !total) { html(target, `<p class="bsf-caption">${esc(t("register_empty"))}</p>`); return; }
+
+  const merged = (item) => item.merged_count > 1
+    ? ` ${badge(t("register_merged", { count: item.merged_count }), "neutral")}` : "";
+  const sources = (item) => sourceLinks(item.source_page_ids || [], item.page_labels || []);
+  const priority = (value) => badge(t(`priority_${value || "medium"}`),
+    value === "high" || value === "critical" ? "flagged" : "neutral");
+  const factStatus = (value) => badge(t(`fact_status_${value}`),
+    value === "alleged" ? "review" : value === "stated" ? "verified" : "neutral");
+
+  const sections = [
+    ["parties", (p) => `
+      <div class="bsf-item"><strong>${esc(p.name)}</strong>
+        ${p.role ? badge(p.role, "ai") : ""} ${p.party_type ? `<span class="bsf-caption">${esc(p.party_type)}</span>` : ""}${merged(p)}
+        ${sources(p)}</div>`],
+    ["events", (e) => `
+      <div class="bsf-item"><strong>${esc(e.date || "—")}</strong> ${e.event_type ? badge(e.event_type, "neutral") : ""}${merged(e)}
+        <div>${esc(e.description)}</div>${sources(e)}</div>`],
+    ["allegations", (f) => `
+      <div class="bsf-item">${factStatus(f.status)} ${f.party ? `<strong>${esc(f.party)}:</strong>` : ""}
+        ${esc(f.fact_text)}${merged(f)}${sources(f)}</div>`],
+    ["issues", (i) => `
+      <div class="bsf-item"><strong>${esc(i.issue_title)}</strong> ${priority(i.priority)}${merged(i)}
+        ${i.issue_description ? `<div>${esc(i.issue_description)}</div>` : ""}
+        ${(i.targeted_questions || []).length ? `<div class="bsf-caption">${esc(t("register_questions"))}: ${esc(i.targeted_questions.join(" · "))}</div>` : ""}
+        ${sources(i)}</div>`],
+    ["evidence_requests", (e) => `
+      <div class="bsf-item"><strong>${esc(e.title)}</strong> ${priority(e.priority)}${merged(e)}
+        ${e.description ? `<div>${esc(e.description)}</div>` : ""}
+        ${e.purpose ? `<div class="bsf-caption">${esc(e.purpose)}</div>` : ""}</div>`],
+    ["contradictions", (c) => `
+      <div class="bsf-item">${esc(c.description)}
+        ${c.clarification_required ? `<div class="bsf-caption">${esc(t("register_clarify", { text: c.clarification_required }))}</div>` : ""}
+        ${sources(c)}</div>`],
+  ];
+
+  const metric = (key) => `
+    <div class="bsf-metric">
+      <span class="m-value">${esc(counts[key] || 0)}</span>
+      <span class="m-label">${esc(t(`register_${key}`))}</span>
+    </div>`;
+  const src = reg.sources || {};
+
+  html(target, `
+    <div class="bsf-status-meta bsf-register-metrics">
+      ${["parties", "events", "facts", "allegations", "issues", "evidence_requests", "contradictions"].map(metric).join("")}
+    </div>
+    <p class="bsf-caption">${esc(t("register_sources", { documents: src.documents || 0, usable: src.usable_pages || 0, pages: src.pages || 0 }))}</p>
+    ${sections.map(([key, render]) => {
+      const items = reg[key] || [];
+      return `
+        <details class="bsf-expander">
+          <summary>${esc(t(`register_${key}`))} (${items.length})</summary>
+          <div class="bsf-expander-body">
+            ${items.length ? items.map(render).join("") : `<p class="bsf-caption">${esc(t("register_none"))}</p>`}
+          </div>
+        </details>`;
+    }).join("")}`);
+}
+
 function renderFactsRegister() {
   const rows = (S.snapshot && S.snapshot.facts_register) || [];
   const target = region("facts-register");
@@ -1773,82 +2190,40 @@ function flagControls(entityType, entityId) {
 function renderAccountingTab() {
   const snap = S.snapshot;
   if (!snap) return;
+
   const acc = snap.accounting || {};
 
+  // Show the instructions the last analysis ran with, unless the user is
+  // already typing new ones.
+  const instructions = $("#accounting-instructions");
+  if (instructions && !instructions.value && acc.instructions) instructions.value = acc.instructions;
+
   renderAccountingDocPicker(acc.documents || []);
-  renderAccountingConflicts(acc.pending_conflicts || []);
-  // CHANGE: Added acc.has_pending_review as the 3rd argument
-  renderAccountingLedger(acc.normalized_ledger || [], acc.has_line_items, acc.has_pending_review);
+  renderAccountingReport(acc.last_run_report || {});
+  renderAccountingConflicts(acc.review_items || acc.pending_conflicts || []);
+  renderAccountingLedger(acc.normalized_ledger || [], acc.has_line_items, acc.has_pending_review, acc.withheld_rows || 0);
   renderAccountingCrossCheck(acc.cross_check_summary || {});
   renderAccountingDiscrepancies(acc.discrepancies || []);
-  renderAccountingFindings(acc.findings || {});
+  renderAccountingFindings(acc.findings || {}, acc.run_metadata || {});
 }
 
-function renderAccountingConflicts(conflicts) {
-  const target = region("accounting-conflicts");
+function renderAccountingReport(report) {
+  const target = region("accounting-report");
   if (!target) return;
-  if (!conflicts.length) {
-    html(target, alertBox(t("all_reconciled"), "ok"));
-    return;
-  }
-  html(target, `
-    ${alertBox(t("conflicts_require_review", { count: conflicts.length }), "warn")}
-    ${conflicts.map((row) => `
-      <details class="bsf-expander" open>
-        <summary>${esc(t("review_conflict_on_page", { page: row.page_number || "—", row: String(row.row_id || "").slice(0, 8) }))}</summary>
-        <div class="bsf-expander-body">
-          
-          <!-- DISPLAY THE PAGE IMAGE -->
-          ${row.page_image_url ? `
-            <div style="margin-bottom: 1.2rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #f9f9f9; text-align: center; padding: 0.5rem;">
-               <img src="${esc(row.page_image_url)}" style="max-height: 250px; max-width: 100%; object-fit: contain; border-radius: 4px;" alt="Source Document Page" />
-            </div>
-          ` : ""}
-          
-          ${row.fields.map((field) => `
-            <div class="bsf-conflict-field" data-row-id="${esc(row.row_id)}" data-field-name="${esc(field.field)}">
-              <div class="bsf-conflict-field-name">${esc(t("select_reading_for", { field: field.field }))}</div>
-              
-              <!-- THIS DISPLAYS THE AI REASONING -->
-              ${field.reason ? `<div class="bsf-caption" style="margin-bottom:.6rem; color: var(--bsf-green-700);"><strong>AI Reasoning:</strong> ${esc(field.reason)}</div>` : ""}
-              
-              <div class="bsf-conflict-candidates">
-                ${field.candidates.map((candidate, index) => `
-                  <label class="bsf-conflict-candidate">
-                    <input type="radio" name="conflict-${esc(row.row_id)}-${esc(field.field)}"
-                           value="${esc(candidate.value)}" ${index === 0 ? "checked" : ""}>
-                    <span>${esc(candidate.value)} (${esc(candidate.source || "")})</span>
-                  </label>`).join("")}
-              </div>
-              <div class="bsf-conflict-custom">
-                <input type="text" class="bsf-input" placeholder="${esc(t("or_confirmed_value", { field: field.field }))}">
-                <button type="button" class="bsf-btn bsf-btn-primary" data-action="accounting-confirm-field"
-                        data-row-id="${esc(row.row_id)}" data-field-name="${esc(field.field)}">
-                  ${esc(t("confirm_field", { field: field.field }))}
-                </button>
-              </div>
-            </div>`).join("")}
-        </div>
-      </details>`).join("")}`);
+  if (!report || report.pages_in_scope === undefined) { html(target, ""); return; }
+  const lines = [t("report_line", {
+    financial: report.financial_pages || 0,
+    scope: report.pages_in_scope || 0,
+    rows: report.rows_added || 0,
+    pending: report.pending_review_items || 0,
+  })];
+  const failures = (report.extraction_failures || 0) + (report.classification_failures || 0);
+  const notes = [];
+  if (failures) notes.push(alertBox(t("report_failures", { count: failures }), "warn"));
+  if (report.rows_discarded) notes.push(`<p class="bsf-caption">${esc(t("report_discarded", { count: report.rows_discarded }))}</p>`);
+  html(target, `<p class="bsf-caption">${esc(lines[0])}</p>${notes.join("")}`);
 }
 
-function renderAccountingTab() {
-  const snap = S.snapshot;
-  if (!snap) return;
-
-  const acc = snap.accounting || {};
-
-  renderAccountingDocPicker(acc.documents || []);
-  renderAccountingConflicts(acc.pending_conflicts || []);
-  renderAccountingLedger(
-    acc.normalized_ledger || [],
-    acc.has_line_items,
-    acc.has_pending_review
-  );
-  renderAccountingCrossCheck(acc.cross_check_summary || {});
-  renderAccountingDiscrepancies(acc.discrepancies || []);
-  renderAccountingFindings(acc.findings || {});
-}
 function renderAccountingDocPicker(documents) {
   const target = region("accounting-doc-picker");
   if (!target) return;
@@ -1876,82 +2251,112 @@ function renderAccountingDocPicker(documents) {
     </div>`);
 }
 
-function renderAccountingConflicts(conflicts) {
+const REVIEW_FIELD_ORDER = [
+  "date", "amount", "currency", "debit_or_credit", "description", "reference_number", "party_source", "running_balance",
+];
+
+/* Pending accounting review items. Each shows the transaction as currently
+   understood, the system's interpretation and reasoning for every open
+   field, the row as printed and the surrounding page text, and a place to
+   give the correct answer. Nothing enters the ledger until answered. */
+function renderAccountingConflicts(items) {
   const target = region("accounting-conflicts");
   if (!target) return;
-  if (!conflicts.length) {
-    html(target, alertBox(t("all_reconciled"), "ok"));
+  if (!items.length) {
+    const acc = (S.snapshot && S.snapshot.accounting) || {};
+    html(target, acc.has_line_items ? alertBox(t("all_reconciled"), "ok") : "");
     return;
   }
+
+  const transactionMarkup = (transaction) => `
+    <table class="bsf-table bsf-review-transaction">
+      <tbody>
+        ${REVIEW_FIELD_ORDER.filter((name) => transaction[name]).map((name) => {
+          const cell = transaction[name];
+          return `<tr class="${cell.pending ? "is-pending" : ""}">
+            <th>${esc(t(`field_${name}`))}</th>
+            <td>${esc(cell.value || "—")}${cell.pending ? ` ${badge(t("review_pending_marker"), "review")}` : ""}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>`;
+
+  const fieldMarkup = (item, field) => `
+    <div class="bsf-conflict-field" data-row-id="${esc(item.row_id)}" data-field-name="${esc(field.field)}">
+      <div class="bsf-conflict-field-name">
+        ${esc(t(`field_${field.field}`))}
+        ${badge(t(field.issue === "missing" ? "review_issue_missing" : "review_issue_uncertain"), field.issue === "missing" ? "flagged" : "review")}
+      </div>
+      <div class="bsf-kv"><strong>${esc(t("review_suggestion"))}:</strong>
+        ${field.suggested_value ? esc(field.suggested_value) : `<em>${esc(t("review_no_suggestion"))}</em>`}</div>
+      ${field.reason ? `<div class="bsf-kv"><strong>${esc(t("review_reasoning"))}:</strong> ${esc(field.reason)}</div>` : ""}
+      <div class="bsf-conflict-custom">
+        <input type="text" class="bsf-input" placeholder="${esc(t("review_answer_placeholder", { field: t(`field_${field.field}`) }))}">
+        ${field.suggested_value ? `
+          <button type="button" class="bsf-btn" data-action="accounting-confirm-field" data-use-suggestion="1"
+                  data-value="${esc(field.suggested_value)}"
+                  data-row-id="${esc(item.row_id)}" data-field-name="${esc(field.field)}">
+            ${esc(t("review_use_suggestion"))}
+          </button>` : ""}
+        <button type="button" class="bsf-btn bsf-btn-primary" data-action="accounting-confirm-field"
+                data-row-id="${esc(item.row_id)}" data-field-name="${esc(field.field)}">
+          ${esc(t("review_save_answer"))}
+        </button>
+      </div>
+    </div>`;
+
   html(target, `
-    ${alertBox(t("conflicts_require_review", { count: conflicts.length }), "warn")}
-    ${conflicts.map((row) => `
-      <details class="bsf-expander" open>
-        <summary>${esc(t("review_conflict_on_page", { page: row.page_number || "—", row: String(row.row_id || "").slice(0, 8) }))}</summary>
+    <h4 class="bsf-subsection">${esc(t("review_items_heading"))}</h4>
+    ${alertBox(t("detail_review_items", { count: items.reduce((total, item) => total + (item.fields || []).length, 0) }), "warn")}
+    ${items.map((item) => `
+      <details class="bsf-expander bsf-review-item" open>
+        <summary>${esc(t("review_item_title", { page: item.page_label || `${t("page_label")} ${item.page_number || "—"}` }))}</summary>
         <div class="bsf-expander-body">
-          
-          <!-- DISPLAY THE PAGE IMAGE -->
-          ${row.page_image_url ? `
-            <div style="margin-bottom: 1.2rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #f9f9f9; text-align: center; padding: 0.5rem;">
-               <img src="${esc(row.page_image_url)}" style="max-height: 250px; max-width: 100%; object-fit: contain; border-radius: 4px;" alt="Source Document Page" />
+          <div class="bsf-review-grid">
+            <div>
+              <div class="bsf-review-label">${esc(t("review_transaction"))}</div>
+              ${transactionMarkup(item.transaction || {})}
+              ${item.source_text ? `
+                <div class="bsf-review-label">${esc(t("review_row_as_printed"))}</div>
+                <pre class="bsf-source-text">${esc(item.source_text)}</pre>` : ""}
+              ${item.page_excerpt ? `
+                <div class="bsf-review-label">${esc(t("review_page_excerpt"))}</div>
+                <pre class="bsf-source-text">${esc(item.page_excerpt)}</pre>` : ""}
             </div>
-          ` : ""}
-          
-          ${row.fields.map((field) => `
-            <div class="bsf-conflict-field" data-row-id="${esc(row.row_id)}" data-field-name="${esc(field.field)}">
-              <div class="bsf-conflict-field-name">${esc(t("select_reading_for", { field: field.field }))}</div>
-              
-              <!-- THIS DISPLAYS THE AI REASONING -->
-              ${field.reason ? `<div class="bsf-caption" style="margin-bottom:.6rem; color: var(--bsf-green-700);"><strong>AI Reasoning:</strong> ${esc(field.reason)}</div>` : ""}
-              
-              <div class="bsf-conflict-candidates">
-                ${field.candidates.map((candidate, index) => `
-                  <label class="bsf-conflict-candidate">
-                    <input type="radio" name="conflict-${esc(row.row_id)}-${esc(field.field)}"
-                           value="${esc(candidate.value)}" ${index === 0 ? "checked" : ""}>
-                    <span>${esc(candidate.value)} (${esc(candidate.source || "")})</span>
-                  </label>`).join("")}
-              </div>
-              <div class="bsf-conflict-custom">
-                <input type="text" class="bsf-input" placeholder="${esc(t("or_confirmed_value", { field: field.field }))}">
-                <button type="button" class="bsf-btn bsf-btn-primary" data-action="accounting-confirm-field"
-                        data-row-id="${esc(row.row_id)}" data-field-name="${esc(field.field)}">
-                  ${esc(t("confirm_field", { field: field.field }))}
-                </button>
-              </div>
-            </div>`).join("")}
+            <div>
+              ${item.page_image_url ? `
+                <button type="button" class="bsf-review-image" data-action="view-page" data-page-id="${esc(item.page_id)}">
+                  <img src="${esc(backendUrl(item.page_image_url))}" alt="${esc(item.page_label || "")}" loading="lazy">
+                </button>` : ""}
+            </div>
+          </div>
+          ${(item.fields || []).map((field) => fieldMarkup(item, field)).join("")}
         </div>
       </details>`).join("")}`);
 }
-function renderAccountingLedger(ledger, hasLineItems, hasPendingReview) {
+
+function renderAccountingLedger(ledger, hasLineItems, hasPendingReview, withheld) {
   const target = region("accounting-ledger");
   if (!target) return;
 
-  if (hasPendingReview) {
-    html(
-      target,
-      `<div class="bsf-alert bsf-alert-info">
-        Resolve the flagged conflicts above to generate the finalized ledger.
-      </div>`
-    );
-    return;
-  }
+  // The ledger only ever holds reviewed rows, so it is safe to show while
+  // other rows still wait for the user; those are counted, not shown.
+  const withheldNote = withheld ? alertBox(t("ledger_withheld", { count: withheld }), "info") : "";
 
   if (!hasLineItems || !ledger.length) {
-    html(
-      target,
-      `<p class="bsf-caption">${esc(t("no_line_items"))}</p>`
-    );
+    html(target, withheldNote || `<p class="bsf-caption">${esc(t("no_line_items"))}</p>`);
     return;
   }
 
   html(target, `
+    ${withheldNote}
     <table class="bsf-table">
       <thead>
         <tr>
           <th>${esc(t("column_page"))}</th>
           <th>${esc(t("column_fin_date"))}</th>
           <th>${esc(t("column_description"))}</th>
+          <th>${esc(t("column_reference"))}</th>
           <th>${esc(t("column_debit_credit"))}</th>
           <th>${esc(t("column_amount"))}</th>
           <th>${esc(t("column_currency"))}</th>
@@ -1964,10 +2369,13 @@ function renderAccountingLedger(ledger, hasLineItems, hasPendingReview) {
             <td>${esc(item.page_number)}</td>
             <td>${esc(item.date)}</td>
             <td>${esc(item.description)}</td>
+            <td>${esc(item.reference_number || "")}</td>
             <td>${esc(item.debit_or_credit)}</td>
             <td>${esc(item.amount)}</td>
             <td>${esc(item.currency)}</td>
-            <td>${esc(item.row_status)}</td>
+            <td>${item.row_status === "verified_with_corrections"
+              ? badge((item.corrected_fields || []).map((name) => t(`field_${name}`)).join(", "), "provisional")
+              : badge(item.row_status, "verified")}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -2028,14 +2436,22 @@ const CLAIM_RESULT_BADGE_KIND = {
   NOT_FINANCIAL_CLAIM: "neutral",
 };
 
-function renderAccountingFindings(findings) {
+function renderAccountingFindings(findings, runMeta) {
   const target = region("accounting-findings");
   if (!target) return;
   const evaluations = (findings && findings.claim_evaluations) || [];
   if (!evaluations.length) { html(target, ""); return; }
 
+  const meta = runMeta && runMeta.run_at ? `<p class="bsf-caption">${esc(t("findings_run_meta", {
+    at: runMeta.run_at,
+    claims: runMeta.claims_count || 0,
+    source: t(`claims_source_${runMeta.claims_source || "attorney_review"}`),
+    instructions: runMeta.instructions || t("no_instructions"),
+  }))}</p>` : "";
+
   html(target, `
     <h4 class="bsf-subsection">${esc(t("findings_heading"))}</h4>
+    ${meta}
     ${evaluations.map((item) => `
       <div class="bsf-item">
         <div class="bsf-item-controls" style="justify-content:space-between; margin-top:0;">
@@ -2984,6 +3400,7 @@ const ACTIONS = {
       await runJob(apiPost("/summary/prepare", { case_id: S.caseId }), "summary-job");
       await refreshCase();
     } catch (error) {
+      await refreshCase();
       html(region("summary-body"), alertBox(t("summary_generation_failed", { error: error.message }), "flag"));
     }
   },
@@ -2993,6 +3410,7 @@ const ACTIONS = {
       await runJob(apiPost("/analysis/run", { case_id: S.caseId }), "analysis-job");
       await refreshCase();
     } catch (error) {
+      await refreshCase();
       html(region("analysis-body"), alertBox(t("legal_analysis_failed", { error: error.message }), "flag"));
     }
   },
@@ -3002,6 +3420,7 @@ const ACTIONS = {
       await runJob(apiPost("/analysis/defence_plan", { case_id: S.caseId }), "analysis-job");
       await refreshCase();
     } catch (error) {
+      await refreshCase();
       html(region("strategy-body"), alertBox(t("defence_planning_failed", { error: error.message }), "flag"));
     }
   },
@@ -3012,6 +3431,7 @@ const ACTIONS = {
       await runJob(apiPost("/pleading/generate", { case_id: S.caseId, instructions }), "pleading-job");
       await refreshCase();
     } catch (error) {
+      await refreshCase();
       html(region("pleading-body"), alertBox(t("pleading_generation_failed", { error: error.message }), "flag"));
     }
   },
@@ -3071,21 +3491,20 @@ const ACTIONS = {
   },
 
   "accounting-run-pipeline": async () => {
-      try {
-        const result = await runJob(
-          apiPost("/accounting/run_auto_pipeline", { case_id: S.caseId }),
-          "accounting-auto-job" 
-        );
-        toast(t("extraction_completed", { count: result.rows_persisted || 0 }), "ok");
-        
-        // CHANGE: Wait 1.5 seconds for the backend to save the database
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        await refreshCase();
-      } catch (error) { fail(error); }
-    },
+    const documentIds = S.accountingSelectedDocs ? Array.from(S.accountingSelectedDocs) : [];
+    if (S.accountingSelectedDocs && !documentIds.length) { toast(t("no_value_selected"), "warn"); return; }
+    try {
+      const result = await runJob(
+        apiPost("/accounting/run_auto_pipeline", { case_id: S.caseId, document_ids: documentIds }),
+        "accounting-auto-job",
+      );
+      toast(t("extraction_completed", { count: result.rows_added || 0 }), "ok");
+    } catch (error) { fail(error); }
+    await refreshCase();
+  },
 
   "accounting-clear": async () => {
+    if (!window.confirm(t("clear_accounting_explainer"))) return;
     try {
       await apiPost("/accounting/clear", { case_id: S.caseId });
       S.accountingSelectedDocs = null;
@@ -3098,35 +3517,49 @@ const ACTIONS = {
     const rowId = el.dataset.rowId;
     const fieldName = el.dataset.fieldName;
     const wrap = el.closest(".bsf-conflict-field");
-    const checkedRadio = wrap ? wrap.querySelector('input[type="radio"]:checked') : null;
     const customInput = wrap ? wrap.querySelector('input[type="text"]') : null;
     const customValue = customInput ? customInput.value.trim() : "";
-    const value = customValue || (checkedRadio ? checkedRadio.value : "");
+    const value = el.dataset.useSuggestion ? (el.dataset.value || "") : customValue;
     if (!value) { toast(t("no_value_selected"), "warn"); return; }
+    let saved;
     try {
-      await apiPost("/accounting/correction", {
+      saved = await apiPost("/accounting/correction", {
         case_id: S.caseId, row_id: rowId, field_name: fieldName, value, corrected_by: "attorney",
       });
       toast(t("correction_saved"), "ok");
-      
-      // 1-second delay so the database has time to save
-      await new Promise(resolve => setTimeout(resolve, 1000)); 
-      
+    } catch (error) { fail(error); return; }
+
+    // Last pending value answered: continue the accounting analysis from
+    // where it stopped, with the instructions on screen (or last used).
+    if (saved.ready_for_analysis) {
+      const box = $("#accounting-instructions");
+      const instructions = (box && box.value.trim()) || saved.instructions || "";
+      toast(t("accounting_continue_auto"), "ok");
       await refreshCase();
-    } catch (error) { fail(error); }
+      await ACTIONS["accounting-synthesize"](null, instructions);
+      return;
+    }
+    await refreshCase();
   },
 
-  "accounting-synthesize": async () => {
-    const instructions = ($("#accounting-instructions") || {}).value || "";
+  "accounting-synthesize": async (el, presetInstructions) => {
+    const instructions = presetInstructions !== undefined
+      ? presetInstructions
+      : (($("#accounting-instructions") || {}).value || "");
     try {
       await runJob(
         apiPost("/accounting/synthesize", { case_id: S.caseId, instructions }),
         "accounting-synthesize-job",
       );
-      await refreshCase();
     } catch (error) {
       html(region("accounting-findings"), alertBox(error.message || String(error), "flag"));
     }
+    await refreshCase();
+  },
+
+  "goto-stage": (el) => {
+    S.tab = el.dataset.stage;
+    showTab("case", S.tab);
   },
 };
 
@@ -3201,6 +3634,7 @@ const FORMS = {
       form.reset();
       await refreshCase();
     } catch (error) {
+      await refreshCase();
       html(region("pleading-body"), alertBox(t("pleading_revision_failed", { error: error.message }), "flag"));
     }
   },

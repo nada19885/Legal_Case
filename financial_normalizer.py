@@ -5,9 +5,10 @@ Location: lib/python/legal_platform/financial_normalizer.py
 
 from __future__ import annotations
 
-import json
 import re
 from decimal import Decimal, InvalidOperation
+
+from .financial_fields import FIELD_NAMES, effective_value, pending_fields
 
 ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
@@ -99,17 +100,29 @@ def normalize_date(raw_date: str) -> str:
 
 
 def normalize_currency(raw_currency: str, description_hint: str = "") -> str:
-    """Standardizes currency labels to ISO 4217 codes."""
-    combined = f"{raw_currency} {description_hint}".upper()
-    if any(k in combined for k in ["USDT", "TETHER"]):
-        return "USDT"
-    if any(k in combined for k in ["USD", "$", "دولار", "DOLLAR"]):
-        return "USD"
-    if any(k in combined for k in ["EUR", "€", "يورو"]):
-        return "EUR"
-    if any(k in combined for k in ["SAR", "ر.س", "ريال", "ريالا", "SR", "SAUDI RIYAL"]):
-        return "SAR"
-    return "SAR"
+    """Standardizes a currency label to its ISO 4217 code.
+
+    Only the confirmed currency value is interpreted. The description hint
+    is consulted solely when no currency value exists at all, and an
+    unrecognised label is returned as written rather than replaced by a
+    default: assuming SAR would be a silent guess.
+    """
+    def _code(text: str) -> str:
+        upper = f" {text.upper()} "
+        if any(k in upper for k in ["USDT", "TETHER"]):
+            return "USDT"
+        if any(k in upper for k in ["USD", "$", "دولار", "DOLLAR"]):
+            return "USD"
+        if any(k in upper for k in ["EUR", "€", "يورو"]):
+            return "EUR"
+        if any(k in upper for k in ["SAR", "ر.س", "ريال", "ريالا", " SR ", "SAUDI RIYAL"]):
+            return "SAR"
+        return ""
+
+    raw = str(raw_currency or "").strip()
+    if raw and raw != "—":
+        return _code(raw) or raw.upper()
+    return _code(str(description_hint or ""))
 
 
 def normalize_debit_credit(raw_dc: str, description: str = "") -> str:
@@ -127,37 +140,57 @@ def normalize_debit_credit(raw_dc: str, description: str = "") -> str:
     return "unclear"
 
 
-def normalize_row_for_ledger(row_dict: dict, corrections: dict) -> dict:
-    """Applies human corrections first, then normalizes all financial fields."""
-    try:
-        fields_dict = json.loads(row_dict.get("fields_json", "{}") or "{}")
-    except Exception:
-        fields_dict = {}
+def normalize_row_for_ledger(row_dict: dict, corrections: dict) -> dict | None:
+    """One ledger entry from a fin_line_items row, or None if the row is
+    not ready.
 
-    row_id = str(row_dict.get("row_id", ""))
-    row_corrections = corrections.get(row_id, {})
+    Values come from financial_fields.effective_value: a human correction
+    first, otherwise the extracted value only when it has no open issue.
+    A row with any pending field is withheld from the ledger entirely, so
+    the ledger only ever contains reviewed information.
+    """
+    if pending_fields(row_dict, corrections):
+        return None
+
+    values = {name: effective_value(row_dict, name, corrections) for name in FIELD_NAMES}
 
     def _val(field: str, fallback: str = "—") -> str:
-        if field in row_corrections:
-            return str(row_corrections[field].get("corrected_value", fallback))
-        return str(fields_dict.get(field, {}).get("value", fallback) or fallback)
+        value = values[field]["value"]
+        return str(value) if value not in (None, "") else fallback
 
     raw_desc = _val("description", "—")
-    raw_date = _val("date", "—")
-    raw_amount = _val("amount", "—")
-    raw_dc = _val("debit_or_credit", "unclear")
-    raw_curr = _val("currency", "SAR")
-
-    # Clean description artifacts
     clean_desc = raw_desc.replace("|", " ").replace("<br>", " ").replace("####", " ").replace("---", " ").strip()
     clean_desc = re.sub(r"\s+", " ", clean_desc)
 
+    corrected = sorted(name for name, value in values.items() if value.get("source") == "human")
+    running_balance = _val("running_balance", "")
+
     return {
+        "row_id": str(row_dict.get("row_id", "")),
+        "page_id": str(row_dict.get("page_id", "")),
+        "case_document_id": str(row_dict.get("case_document_id", "")),
         "page_number": row_dict.get("page_number", ""),
-        "date": normalize_date(raw_date),
+        "date": normalize_date(_val("date")),
         "description": clean_desc,
-        "debit_or_credit": normalize_debit_credit(raw_dc, clean_desc),
-        "amount": normalize_amount(raw_amount),
-        "currency": normalize_currency(raw_curr, clean_desc),
-        "row_status": row_dict.get("row_status", ""),
+        "debit_or_credit": normalize_debit_credit(_val("debit_or_credit", ""), _val("debit_or_credit", "")),
+        "amount": normalize_amount(_val("amount")),
+        "currency": normalize_currency(_val("currency", "")),
+        "reference_number": _val("reference_number", ""),
+        "party_source": _val("party_source", ""),
+        "running_balance": normalize_amount(running_balance) if running_balance else "",
+        "row_status": "verified_with_corrections" if corrected else "verified",
+        "corrected_fields": corrected,
     }
+
+
+def build_normalized_ledger(rows: list[dict], corrections: dict) -> tuple[list[dict], int]:
+    """(ledger entries, number of rows withheld because they await review)."""
+    ledger = []
+    withheld = 0
+    for row in rows:
+        entry = normalize_row_for_ledger(row, corrections)
+        if entry is None:
+            withheld += 1
+        else:
+            ledger.append(entry)
+    return ledger, withheld

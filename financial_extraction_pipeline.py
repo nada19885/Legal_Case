@@ -14,12 +14,12 @@ a financial-specific re-read would use.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import json
 import re
 from typing import Callable, Optional
 from .storage import case_rows
 
 from .config import FINANCIAL_PAGE_MAX_WORKERS, FINANCIAL_LINE_ITEMS_DATASET
+from .financial_fields import parse_fields
 from .financial_structural_extraction import extract_page_structure
 from .financial_page_sources import (
     FinancialPageSource,
@@ -34,6 +34,8 @@ from .financial_reconciliation import (
 
 ProgressCallback = Callable[[int, int, str], None]
 
+_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩٫٬", "0123456789.,")
+
 
 def _already_extracted_page_ids(case_id: str) -> set[str]:              
     df = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
@@ -42,38 +44,36 @@ def _already_extracted_page_ids(case_id: str) -> set[str]:
     return set(df["page_id"].astype(str).tolist())
 
 
-def sanitize_extracted_line_items(raw_items: list[dict]) -> list[dict]:
-    """Filters out empty or invalid rows before writing to the database."""
+def sanitize_extracted_line_items(raw_items: list[dict]) -> tuple[list[dict], int]:
+    """Drop rows that are noise, keep everything that needs a human.
+
+    A row is discarded only when its amount was read with certainty and is
+    exactly zero (balance/heading lines). A row with a missing or uncertain
+    amount is KEPT: it becomes a pending review item instead of silently
+    disappearing. Returns (kept_rows, discarded_count).
+    """
     clean_items = []
+    discarded = 0
     for item in raw_items:
-        try:
-            fields = json.loads(item.get("fields_json", "{}") or "{}")
-            raw_amt = str(fields.get("amount", {}).get("value", "")).strip()
-        except Exception:
-            raw_amt = ""
-
-        if not raw_amt:
-            continue
-
-        numeric_amt = re.sub(r"[^\d.]", "", raw_amt)
-        if not numeric_amt:
-            continue
-
-        try:
-            val = float(numeric_amt)
-            if val <= 0:
-                continue
-            clean_items.append(item)
-        except (ValueError, TypeError):
-            continue
-
-    return clean_items
+        fields = parse_fields(item)
+        amount = fields.get("amount") or {}
+        raw_amt = str(amount.get("value", "") or "").strip()
+        if raw_amt and amount.get("status") == "verified":
+            numeric_amt = re.sub(r"[^\d.]", "", raw_amt.translate(_ARABIC_DIGITS))
+            try:
+                if numeric_amt and float(numeric_amt) == 0:
+                    discarded += 1
+                    continue
+            except ValueError:
+                pass
+        clean_items.append(item)
+    return clean_items, discarded
 
 
 def _process_page(
     page: FinancialPageSource,
     pdf_bytes_by_document: dict[str, Optional[bytes]],
-) -> tuple[list[dict], list[str]]:
+) -> tuple[list[dict], list[str], int]:
     failures: list[str] = []
     pdf_bytes = pdf_bytes_by_document.get(page.case_document_id)
 
@@ -103,8 +103,8 @@ def _process_page(
         page.page_id, page.case_document_id, page.page_number, reconstruction,
     )
 
-    cleaned_rows = sanitize_extracted_line_items(rows)
-    return cleaned_rows, failures
+    cleaned_rows, discarded = sanitize_extracted_line_items(rows)
+    return cleaned_rows, failures, discarded
 
 
 def run_financial_extraction(
@@ -139,6 +139,7 @@ def run_financial_extraction(
             "needs_review": sum(1 for r in existing if r.get("row_status") == "needs_review"),
             "page_failures": [],
             "new_rows_appended": 0,
+            "rows_discarded": 0,
         }
         
 
@@ -149,6 +150,7 @@ def run_financial_extraction(
 
     all_rows: list[dict] = []
     page_failures: list[dict] = []
+    discarded_total = 0
     completed = 0
     worker_count = max(1, min(int(FINANCIAL_PAGE_MAX_WORKERS), len(pages)))
 
@@ -160,11 +162,12 @@ def run_financial_extraction(
         for future in as_completed(future_to_page):
             page = future_to_page[future]
             try:
-                rows, failures = future.result()
+                rows, failures, discarded = future.result()
             except Exception as error:
-                rows, failures = [], [f"Page worker failed: {error!r}"]
+                rows, failures, discarded = [], [f"Page worker failed: {error!r}"], 0
 
             all_rows.extend(rows)
+            discarded_total += discarded
             if failures:
                 page_failures.append({
                     "page_id": page.page_id,
@@ -188,5 +191,6 @@ def run_financial_extraction(
         "needs_review": needs_review_count,
         "page_failures": page_failures,
         "new_rows_appended": len(all_rows),
+        "rows_discarded": discarded_total,
     }
 
