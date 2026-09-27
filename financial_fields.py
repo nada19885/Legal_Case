@@ -41,16 +41,69 @@ ISSUE_MISSING = "missing"
 
 DIRECTION_VALUES = {"debit", "credit"}
 
+# Other extraction schemas name the same fields differently. They are read
+# as the canonical field when the canonical one has no value.
+FIELD_ALIASES = {
+    "date": ("transaction_date", "value_date", "posting_date"),
+    "description": ("transaction_description", "narrative", "details"),
+    "reference_number": ("reference", "ref_number"),
+    "running_balance": ("balance",),
+}
+DEBIT_COLUMNS = ("debit_amount", "debit")
+CREDIT_COLUMNS = ("credit_amount", "credit")
+_ZERO = {"0", "0.0", "0.00", "-", "—", "none", "nan"}
+
+
+def _has_value(info: Any) -> bool:
+    return isinstance(info, dict) and str(info.get("value", "") or "").strip() != ""
+
+
+def _nonzero(info: Any) -> bool:
+    return _has_value(info) and str(info.get("value")).strip().lower() not in _ZERO
+
+
+def _canonical(fields: dict) -> dict:
+    """Map alias names onto the canonical fields.
+
+    Separate debit/credit amount columns are read as the statement shows
+    them: a value in exactly one of the two columns gives the amount and
+    its direction. A row with values in both columns (or neither) is left
+    without an amount, so it goes to the user instead of being guessed.
+    """
+    out = dict(fields)
+    for canonical, aliases in FIELD_ALIASES.items():
+        if not _has_value(out.get(canonical)):
+            for alias in aliases:
+                if _has_value(fields.get(alias)):
+                    out[canonical] = fields[alias]
+                    break
+
+    if not _has_value(out.get("amount")):
+        debit = next((fields[c] for c in DEBIT_COLUMNS if _nonzero(fields.get(c))), None)
+        credit = next((fields[c] for c in CREDIT_COLUMNS if _nonzero(fields.get(c))), None)
+        if (debit is None) != (credit is None):
+            source, direction = (debit, "debit") if debit is not None else (credit, "credit")
+            out["amount"] = source
+            if not _has_value(out.get("debit_or_credit")):
+                out["debit_or_credit"] = {
+                    "value": direction,
+                    "status": source.get("status", "verified"),
+                    "certain": source.get("certain", True),
+                    "reason": f"Taken from the {direction} column of the statement.",
+                }
+    return out
+
 
 def parse_fields(row: dict) -> dict:
     raw = row.get("fields_json", "{}") if isinstance(row, dict) else "{}"
     if isinstance(raw, dict):
-        return raw
-    try:
-        parsed = json.loads(raw or "{}")
-    except (TypeError, ValueError):
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
+        parsed = raw
+    else:
+        try:
+            parsed = json.loads(raw or "{}")
+        except (TypeError, ValueError):
+            return {}
+    return _canonical(parsed) if isinstance(parsed, dict) else {}
 
 
 def field_issue(field_name: str, info: Any) -> str:
@@ -59,7 +112,7 @@ def field_issue(field_name: str, info: Any) -> str:
     value = str(info.get("value", "") or "").strip()
     status = str(info.get("status", "") or "")
 
-    if status == "conflict":
+    if status == "conflict" or str(info.get("certain", "")).strip().lower() == "false":
         return ISSUE_UNCERTAIN
     if not value:
         return ISSUE_MISSING if (field_name in REQUIRED_FIELDS or status == "missing_required") else ""

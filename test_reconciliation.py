@@ -178,6 +178,33 @@ legacy = {"row_id": "L1", "page_id": "P1", "fields_json": json.dumps({
 })}
 check("legacy row missing a required field is pending", pending_fields(legacy, {}) == ["amount"])
 
+# --- other extraction schemas (transaction_date, debit/credit columns) -----
+alt_row = {"row_id": "ALT1", "page_id": "P1", "fields_json": json.dumps({
+    "transaction_date": {"value": "2024-04-02", "certain": True},
+    "transaction_description": {"value": "POS purchase", "certain": True},
+    "debit_amount": {"value": "250.00", "certain": True},
+    "credit_amount": {"value": "0.00", "certain": True},
+    "currency": {"value": "SAR", "certain": True},
+})}
+check("alias fields satisfy the required fields", pending_fields(alt_row, {}) == [])
+alt_ledger, alt_withheld = build_normalized_ledger([alt_row], {})
+check("debit column gives amount and direction in the ledger",
+      alt_withheld == 0 and alt_ledger[0]["amount"] == "250.00" and alt_ledger[0]["debit_or_credit"] == "debit"
+      and alt_ledger[0]["date"] == "2024-04-02" and alt_ledger[0]["description"] == "POS purchase")
+both_columns = {"row_id": "ALT2", "page_id": "P1", "fields_json": json.dumps({
+    "transaction_date": {"value": "2024-04-03", "certain": True},
+    "debit_amount": {"value": "10.00", "certain": True},
+    "credit_amount": {"value": "20.00", "certain": True},
+    "currency": {"value": "SAR", "certain": True},
+})}
+check("values in both debit and credit columns go to the user",
+      set(pending_fields(both_columns, {})) == {"amount", "debit_or_credit"})
+uncertain_flag = {"row_id": "ALT3", "page_id": "P1", "fields_json": json.dumps({
+    "date": {"value": "2024-04-04"}, "amount": {"value": "99.00", "certain": False, "reason": "smudged"},
+    "currency": {"value": "SAR"}, "debit_or_credit": {"value": "credit"},
+})}
+check("certain: false is treated as uncertain", pending_fields(uncertain_flag, {}) == ["amount"])
+
 # --- review items carry the evidence the user needs -------------------------
 pages = {"P1": {"label": "statement.pdf — page 1",
                 "page_text": "Header\n25/03/2024 Transfer to ABC Trading 12,450.00 SAR\n26/03/2024 Deposit 17,500.00\nFooter"}}
