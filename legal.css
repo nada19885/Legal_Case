@@ -1,0 +1,563 @@
+/* ============================================================
+   BSF Saudi Legal Case Workbench — Standard WebApp (CSS component)
+
+   Design direction: institutional legal / private-banking. Restrained,
+   document-first, and precise. BSF teal anchors the brand, mint carries
+   the light accent surfaces, and everything else is neutral grey on
+   white. Typography is DIN Next: the Pro cut for Latin, the Arabic cut for
+   Arabic, selected automatically from [dir]. Full RTL is handled with
+   logical properties + [dir="rtl"].
+
+   NOTE: DIN Next LT Pro and DIN Next LT Arabic are licensed faces and are
+   not served from any public CDN. They are listed first and must be
+   installed on the client or self-hosted via @font-face. The Cairo /
+   Tajawal webfonts imported below are the Arabic fallback; the system UI
+   stack is the Latin fallback.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Tajawal:wght@400;500;700&display=swap');
+
+:root {
+  /* ---- BSF palette ---- */
+  --primary: #006B6B;           /* Primary brand */
+  --primary-dark: #004E50;      /* Hover / pressed / active */
+  --mint: #D8F3EC;              /* Secondary accent */
+  --mint-light: #EEF9F6;        /* Secondary accent, lighter */
+  --primary-light: #2FA79F;     /* Gradient endpoint (derived) */
+  --background: #FFFFFF;        /* Main page background */
+  --text-primary: #1F2937;
+  --text-secondary: #6B7280;
+  --border: #E5E7EB;
+
+  /* ---- Neutrals (legacy names, pointed at the palette) ---- */
+  --ink: var(--text-primary);
+  --ink-soft: var(--text-secondary);
+  --ink-faint: #9CA3AF;         /* Muted text, lighter (derived) */
+  --paper: var(--background);   /* Page stays pure white */
+  --surface: #FFFFFF;           /* Cards */
+  --surface-2: #F8FAFA;         /* Section / inset backgrounds */
+  --line: var(--border);
+  --line-strong: #D1D5DB;       /* Border, emphasised (derived) */
+
+  /* ---- Legacy token names ----
+     The rules below already reference these. Re-pointing them here
+     re-skins the whole application without editing a single selector. */
+  --bsf-green: var(--primary);
+  --bsf-green-600: var(--primary-dark);
+  --bsf-green-700: var(--primary-dark);
+  --bsf-gold: var(--primary);        /* accent rules, underlines, markers */
+  --bsf-gold-soft: var(--mint);      /* light accent surfaces */
+  --bsf-sand: var(--primary);
+  --bsf-sand-soft: var(--mint);
+
+  /* ---- State tints ---- */
+  --success: #16A34A;
+  --warning: #F59E0B;
+  --danger: #DC2626;            /* Errors / flags (derived — no palette entry) */
+
+  --ok: var(--success);
+  --ok-bg: #F0FDF4;
+  --ok-line: #BBF7D0;
+  --warn: #B45309;              /* --warning darkened for text contrast */
+  --warn-bg: #FFFBEB;
+  --warn-line: #FDE68A;
+  --flag: var(--danger);
+  --flag-bg: #FEF2F2;
+  --flag-line: #FECACA;
+  --info-bg: var(--mint-light);
+  --info-line: var(--mint);
+
+  /* ---- Text on coloured ground ---- */
+  --on-brand: #FFFFFF;
+  --on-brand-soft: var(--mint);
+  --on-accent: #FFFFFF;
+
+  --radius: 10px;
+  --radius-sm: 7px;
+  --shadow-1: 0 1px 2px rgba(0, 107, 107, .06), 0 2px 8px rgba(0, 107, 107, .05);
+  --shadow-2: 0 8px 30px rgba(0, 107, 107, .14);
+
+  /* ---- Typography ----
+     --font-sans / --font-serif are the legacy names used throughout; both
+     resolve to the active language's face, so headings and body share one
+     family. [dir="rtl"] re-points them to the Arabic cut. */
+  --font-latin: "DIN Next LT Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-arabic: "DIN Next LT Arabic", "Cairo", "Tajawal", "SST Arabic", "Tahoma", sans-serif;
+  --font-sans: var(--font-latin);
+  --font-serif: var(--font-latin);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bsf-app { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ---------------- Top bar ---------------- */
+.bsf-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .9rem 1.5rem;
+  background: linear-gradient(90deg, var(--bsf-green-700), var(--bsf-green));
+  color: var(--on-brand);
+  border-bottom: 3px solid var(--mint);
+}
+.bsf-brand { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+/* The asset is already transparent, so it sits directly on the navy. */
+.bsf-logo { height: 76px; width: auto; display: block; flex-shrink: 0; object-fit: contain; }
+.bsf-brand-text { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.bsf-app-title {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: .2px;
+  line-height: 1.2;
+}
+.bsf-app-caption {
+  margin: .15rem 0 0;
+  font-size: .82rem;
+  color: var(--on-brand-soft);
+  white-space: nowrap;
+}
+.bsf-lang-switch { display: flex; align-items: center; gap: .6rem; flex-shrink: 0; }
+.bsf-segmented {
+  display: inline-flex;
+  background: rgba(255, 255, 255, .12);
+  border-radius: 999px;
+  padding: 3px;
+}
+.bsf-seg-btn {
+  border: 0;
+  background: transparent;
+  color: var(--on-brand);
+  padding: .3rem .9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .85rem;
+}
+.bsf-seg-btn.is-active { background: var(--bsf-gold); color: var(--on-accent); font-weight: 600; }
+
+/* ---------------- Body layout ---------------- */
+.bsf-body { flex: 1; display: flex; align-items: stretch; }
+
+.bsf-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-inline-end: 1px solid var(--line);
+  padding: 1.2rem 1.1rem;
+}
+.bsf-sidebar-heading {
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--ink-faint);
+  margin: 0 0 .7rem;
+}
+.bsf-workspace-switch { display: flex; flex-direction: column; gap: .4rem; margin-bottom: 1.1rem; }
+.bsf-workspace-btn {
+  text-align: start;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+  padding: .6rem .8rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .92rem;
+  transition: all .15s ease;
+}
+.bsf-workspace-btn:hover { border-color: var(--line-strong); }
+.bsf-workspace-btn.is-active {
+  background: var(--bsf-green);
+  border-color: var(--bsf-green);
+  color: var(--on-brand);
+  font-weight: 600;
+}
+
+.bsf-case-chip {
+  background: var(--bsf-green-700);
+  color: var(--on-brand);
+  border-radius: var(--radius);
+  padding: .8rem .9rem;
+  margin-bottom: 1rem;
+}
+.bsf-case-chip-title { font-weight: 600; font-size: .95rem; }
+.bsf-case-chip-ref { font-size: .78rem; color: var(--bsf-gold-soft); font-family: var(--font-serif); margin-top: .1rem; }
+.bsf-linkbtn {
+  margin-top: .6rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, .3);
+  color: var(--on-brand);
+  padding: .35rem .7rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .82rem;
+  width: 100%;
+}
+.bsf-linkbtn:hover { background: rgba(255, 255, 255, .1); }
+
+.bsf-sidebar-subheading { font-size: .95rem; margin: .2rem 0 .6rem; color: var(--ink); }
+.bsf-sidebar-cases { display: flex; flex-direction: column; gap: .5rem; margin: .7rem 0 1rem; }
+
+/* ---------------- Main ---------------- */
+.bsf-main { flex: 1; min-width: 0; padding: 1.6rem 2rem; }
+.bsf-view-title { font-family: var(--font-serif); font-size: 1.5rem; margin: 0 0 .3rem; color: var(--bsf-green-700); }
+.bsf-view-caption { color: var(--ink-soft); margin: 0 0 1.1rem; white-space: nowrap; }
+
+.bsf-matter-head { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; }
+.bsf-matter-ref { font-family: var(--font-serif); color: var(--bsf-gold); font-size: 1rem; }
+
+/* Inputs */
+.bsf-input {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: .55rem .7rem;
+  font-family: inherit;
+  font-size: .92rem;
+}
+.bsf-input:focus { outline: 2px solid var(--bsf-green-600); outline-offset: 1px; border-color: var(--bsf-green-600); }
+.bsf-input-lg { padding: .7rem .9rem; font-size: 1rem; margin-bottom: 1rem; }
+textarea.bsf-input { resize: vertical; line-height: 1.5; }
+.bsf-field { display: flex; flex-direction: column; gap: .3rem; margin-bottom: .8rem; }
+.bsf-field > span { font-size: .82rem; color: var(--ink-soft); font-weight: 500; }
+.bsf-field-grow { flex: 1; }
+
+/* Buttons */
+.bsf-btn {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  padding: .55rem 1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .9rem;
+  font-weight: 500;
+  transition: all .15s ease;
+}
+.bsf-btn:hover:not(:disabled) { border-color: var(--bsf-green); color: var(--bsf-green); }
+.bsf-btn:disabled { opacity: .5; cursor: not-allowed; }
+.bsf-btn-primary { background: var(--bsf-green); border-color: var(--bsf-green); color: var(--on-brand); }
+.bsf-btn-primary:hover:not(:disabled) { background: var(--bsf-green-600); border-color: var(--bsf-green-600); color: var(--on-brand); }
+.bsf-btn-block { width: 100%; }
+.bsf-btn-row { display: flex; gap: .6rem; flex-wrap: wrap; margin: .6rem 0; }
+
+/* Sections + typography */
+.bsf-section-title { font-family: var(--font-serif); font-size: 1.2rem; color: var(--bsf-green-700); margin: 1.2rem 0 .5rem; }
+.bsf-subsection { font-size: 1rem; margin: 1rem 0 .5rem; color: var(--ink); }
+.bsf-caption { color: var(--ink-faint); font-size: .84rem; margin: .2rem 0 .8rem; max-width: 74ch; }
+/* Queued uploads, listed under the file picker. */
+.bsf-filelist { margin: .4rem 0 .9rem; }
+.bsf-fileitem {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .4rem .6rem; margin-bottom: .35rem;
+  background: var(--mint-light); border: 1px solid var(--border);
+  border-radius: 8px; font-size: .86rem;
+}
+.bsf-filename { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.bsf-divider { border: 0; border-top: 1px solid var(--line); margin: 1.3rem 0; }
+
+/* ---------------- Tabs ---------------- */
+.bsf-tabs {
+  display: flex;
+  gap: .2rem;
+  border-bottom: 1px solid var(--line);
+  margin: 1rem 0 1.3rem;
+  flex-wrap: wrap;
+}
+.bsf-tab {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: .6rem .9rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .9rem;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.bsf-tab:hover { color: var(--bsf-green); }
+.bsf-tab.is-active { color: var(--bsf-green-700); font-weight: 600; border-bottom-color: var(--bsf-gold); }
+.bsf-panel { display: none; }
+.bsf-panel.is-active { display: block; animation: bsf-fade .2s ease; }
+@keyframes bsf-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ---------------- Cards ---------------- */
+.bsf-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; }
+.case-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem .9rem;
+  box-shadow: var(--shadow-1);
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+.case-card-title { font-family: var(--font-serif); font-weight: 700; font-size: 1.05rem; color: var(--bsf-green-700); }
+.case-card-ref { font-size: .78rem; color: var(--bsf-gold); font-family: var(--font-serif); }
+.case-card-meta { font-size: .82rem; color: var(--ink-soft); line-height: 1.6; margin-top: .2rem; }
+.status-pill {
+  align-self: flex-start;
+  margin-top: .5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: .15rem .7rem;
+  font-size: .75rem;
+}
+.case-card .bsf-btn { margin-top: .7rem; }
+
+.bsf-sidebar-cases .case-card { padding: .7rem .8rem; }
+.bsf-sidebar-cases .case-card-title { font-size: .92rem; }
+
+/* ---------------- Status / stepper ---------------- */
+.bsf-status { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1.2rem; box-shadow: var(--shadow-1); }
+.bsf-status-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.bsf-status-head h4 { font-family: var(--font-serif); margin: 0; color: var(--bsf-green-700); font-size: 1.1rem; }
+.bsf-progressbar { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin: .7rem 0 1rem; }
+.bsf-progressbar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    var(--primary-dark) 0%,
+    var(--primary) 55%,
+    var(--primary-light) 100%);
+  box-shadow: 0 0 6px rgba(0, 107, 107, .25);
+  transition: width .35s ease;
+}
+/* The bar fills from the right in Arabic, so the ramp is mirrored. */
+[dir="rtl"] .bsf-progressbar > span {
+  background: linear-gradient(270deg,
+    var(--primary-dark) 0%,
+    var(--primary) 55%,
+    var(--primary-light) 100%);
+}
+
+.bsf-steps { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: .6rem; }
+.step-card {
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: .6rem .4rem;
+  background: var(--surface);
+}
+.step-card .step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-faint);
+  font-weight: 700;
+  margin-bottom: .3rem;
+}
+.step-card .step-label { font-size: .78rem; color: var(--ink-soft); line-height: 1.3; }
+.step-card.complete { border-color: var(--ok); background: var(--ok-bg); }
+.step-card.complete .step-icon { background: var(--ok); color: var(--on-brand); }
+.step-card.current { border-color: var(--bsf-gold); box-shadow: 0 0 0 2px var(--bsf-gold-soft); }
+.step-card.current .step-icon { background: var(--bsf-gold); color: var(--on-accent); }
+.step-card.upcoming { opacity: .8; }
+
+.bsf-status-meta { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 1rem; }
+.bsf-metric { display: flex; flex-direction: column; }
+.bsf-metric .m-value { font-family: var(--font-serif); font-size: 1.4rem; color: var(--bsf-green-700); font-weight: 700; }
+.bsf-metric .m-label { font-size: .74rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; }
+.bsf-next { flex: 1 1 260px; }
+.bsf-next strong { color: var(--bsf-green-700); }
+.bsf-next em { color: var(--ink-soft); font-style: normal; display: block; font-size: .85rem; }
+
+/* Agreement 4-step tracker */
+.bsf-stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; margin: 1rem 0 1.3rem; }
+
+/* ---------------- Alerts / toasts ---------------- */
+.bsf-alert { border-radius: var(--radius-sm); padding: .7rem .9rem; margin: .7rem 0; font-size: .88rem; border: 1px solid var(--line); background: var(--surface-2); }
+.bsf-alert-ok { background: var(--ok-bg); border-color: var(--ok-line); color: var(--ok); }
+.bsf-alert-warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn); }
+.bsf-alert-info { background: var(--info-bg); border-color: var(--info-line); color: var(--bsf-green-700); }
+.bsf-alert-flag { background: var(--flag-bg); border-color: var(--flag-line); color: var(--flag); }
+.bsf-alert:empty { display: none; }
+
+.bsf-toasts { position: fixed; inset-block-end: 1.2rem; inset-inline-end: 1.2rem; display: flex; flex-direction: column; gap: .6rem; z-index: 60; }
+.bsf-toast { background: var(--ink); color: var(--on-brand); padding: .7rem 1rem; border-radius: var(--radius-sm); box-shadow: var(--shadow-2); font-size: .88rem; max-width: 340px; animation: bsf-fade .2s ease; }
+.bsf-toast.err { background: var(--flag); }
+.bsf-toast.ok { background: var(--ok); }
+
+/* ---------------- Badges ---------------- */
+.bsf-badge { display: inline-block; padding: .12rem .55rem; border-radius: 999px; font-size: .74rem; font-weight: 600; line-height: 1.6; border: 1px solid transparent; }
+.bsf-badge-neutral { background: var(--surface-2); color: var(--ink-soft); border-color: var(--line); }
+.bsf-badge-verified { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-line); }
+.bsf-badge-ai { background: var(--info-bg); color: var(--bsf-green-700); border-color: var(--info-line); }
+.bsf-badge-review { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line); }
+.bsf-badge-flagged { background: var(--flag-bg); color: var(--flag); border-color: var(--flag-line); }
+.bsf-badge-final { background: var(--bsf-green); color: var(--on-brand); }
+.bsf-badge-provisional { background: var(--mint); color: var(--primary-dark); border-color: var(--primary); }
+
+/* ---------------- Expanders / panels ---------------- */
+.bsf-expander, .bsf-create { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin: .7rem 0; overflow: hidden; }
+.bsf-expander > summary, .bsf-create > summary {
+  cursor: pointer; padding: .7rem .9rem; font-weight: 600; color: var(--bsf-green-700);
+  list-style: none; font-size: .92rem;
+}
+.bsf-expander > summary::-webkit-details-marker, .bsf-create > summary::-webkit-details-marker { display: none; }
+.bsf-expander > summary::before, .bsf-create > summary::before { content: '▸'; margin-inline-end: .5rem; color: var(--bsf-gold); }
+.bsf-expander[open] > summary::before, .bsf-create[open] > summary::before { content: '▾'; }
+.bsf-expander-body, .bsf-create-body { padding: .3rem .9rem 1rem; }
+
+.bilingual-panel { background: var(--mint-light); border: 1px solid var(--line); border-inline-start: 3px solid var(--bsf-gold); border-radius: var(--radius-sm); padding: .8rem 1rem; margin: .5rem 0; }
+.arabic-block { font-family: var(--font-serif); font-size: 1.05rem; line-height: 1.9; }
+.english-block { line-height: 1.65; }
+.bsf-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 900px) { .bsf-cols { grid-template-columns: 1fr; } }
+
+/* Data tables (parties, chronology, evidence) */
+/* Data tables (parties, chronology, evidence) */
+.bsf-table { width: 100%; border-collapse: collapse; margin: .5rem 0; font-size: .86rem; }
+.bsf-table th, .bsf-table td { text-align: start; padding: .5rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.bsf-table th { background: var(--surface-2); color: var(--ink-soft); font-weight: 600; }
+
+/* Allow text to wrap gracefully */
+.bsf-table td {
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+/* Give the description column enough width so it doesn't get squeezed */
+.bsf-table td:nth-child(3) {
+  min-width: 250px;
+}
+
+/* Register / list items */
+.bsf-item { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .8rem .9rem; margin: .5rem 0; background: var(--surface); }
+.bsf-item-controls { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .5rem; align-items: center; }
+.bsf-item-controls .bsf-btn { padding: .3rem .7rem; font-size: .8rem; }
+
+/* Source-page link buttons */
+.bsf-source-links { display: flex; gap: .4rem; flex-wrap: wrap; margin: .4rem 0; }
+.bsf-source-link { font-size: .8rem; padding: .3rem .6rem; }
+
+/* ---------------- Analysis / clause issue panels ---------------- */
+.bsf-issue { border: 1px solid var(--line); border-radius: var(--radius); padding: .9rem 1rem; margin: .7rem 0; background: var(--surface); box-shadow: var(--shadow-1); }
+.bsf-issue h4 { font-family: var(--font-serif); margin: 0 0 .5rem; color: var(--bsf-green-700); }
+.bsf-issue code { background: var(--surface-2); padding: .05rem .35rem; border-radius: 4px; font-size: .82rem; }
+
+/* ---------------- Accounting / forensic analysis ---------------- */
+.bsf-doc-picker { display: flex; flex-direction: column; gap: .35rem; margin: .5rem 0 .9rem; }
+.bsf-doc-picker-item {
+  display: flex; align-items: center; gap: .55rem;
+  padding: .45rem .6rem; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); font-size: .88rem;
+}
+.bsf-doc-picker-item input { accent-color: var(--bsf-green); }
+.bsf-conflict-field { margin: .5rem 0; padding: .5rem .6rem; background: var(--surface-2); border-radius: var(--radius-sm); }
+.bsf-conflict-field-name { font-weight: 600; font-size: .84rem; color: var(--ink); margin-bottom: .3rem; }
+.bsf-conflict-candidates { display: flex; flex-direction: column; gap: .3rem; }
+.bsf-conflict-candidate { display: flex; align-items: center; gap: .5rem; font-size: .85rem; }
+.bsf-conflict-candidate input[type="radio"] { accent-color: var(--bsf-green); }
+.bsf-conflict-custom { display: flex; gap: .5rem; margin-top: .4rem; align-items: center; }
+.bsf-conflict-custom .bsf-input { flex: 1; }
+.bsf-kv { margin: .3rem 0; }
+.bsf-kv strong { color: var(--ink); }
+.bsf-metric-row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin: .6rem 0 1rem; }
+
+/* ---------------- Chat ---------------- */
+.bsf-chat { display: flex; flex-direction: column; gap: .8rem; margin: 1rem 0; max-height: 55vh; overflow-y: auto; padding: .3rem; }
+.bsf-chat, .bsf-modal-body { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.bsf-chat::-webkit-scrollbar, .bsf-modal-body::-webkit-scrollbar { width: 8px; }
+.bsf-chat::-webkit-scrollbar-thumb, .bsf-modal-body::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; }
+.bsf-chat::-webkit-scrollbar-track, .bsf-modal-body::-webkit-scrollbar-track { background: transparent; }
+.bsf-msg { max-width: 88%; padding: .7rem .9rem; border-radius: var(--radius); font-size: .9rem; }
+.bsf-msg-user { align-self: flex-end; background: var(--bsf-green); color: var(--on-brand); border-end-end-radius: 3px; }
+.bsf-msg-assistant { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-end-start-radius: 3px; }
+.bsf-chat-form { display: flex; gap: .5rem; margin-top: .5rem; }
+.bsf-chat-form .bsf-input { flex: 1; }
+.bsf-chat-form .bsf-btn { flex-shrink: 0; }
+.bsf-checkbox { display: flex; align-items: center; gap: .5rem; font-size: .86rem; color: var(--ink-soft); margin: .5rem 0; }
+
+/* ---------------- Redline diff ---------------- */
+.bsf-diff { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 1rem 1.1rem; line-height: 1.9; margin: .7rem 0; }
+.bsf-diff-add { background: #DCFCE7; color: #166534; border-radius: 3px; padding: 0 2px; }
+.bsf-diff-del { background: #FEE2E2; color: #991B1B; text-decoration: line-through; border-radius: 3px; padding: 0 2px; }
+
+/* Version history */
+.bsf-version-history { margin: .8rem 0; }
+.bsf-version-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+
+/* Pleading body */
+.bsf-pleading-body { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.4rem 1.6rem; box-shadow: var(--shadow-1); margin: .8rem 0; }
+.bsf-pleading-body h2 { font-family: var(--font-serif); color: var(--bsf-green-700); }
+.bsf-pleading-body h3, .bsf-pleading-body h4 { font-family: var(--font-serif); color: var(--bsf-green); }
+
+/* Job / progress */
+.bsf-job { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .8rem 1rem; margin: .7rem 0; }
+.bsf-job-detail { font-size: .84rem; color: var(--ink-soft); margin-bottom: .5rem; }
+.bsf-job-bar { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.bsf-job-bar > span { display: block; height: 100%; background: var(--bsf-gold); transition: width .3s ease; }
+.bsf-job-bar.indet > span { width: 35% !important; animation: bsf-indet 1.1s infinite ease-in-out; }
+@keyframes bsf-indet { 0% { margin-inline-start: -35%; } 100% { margin-inline-start: 100%; } }
+
+/* ---------------- Modal ---------------- */
+.bsf-modal { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; }
+.bsf-modal-backdrop { position: absolute; inset: 0; background: rgba(31, 41, 55, .55); }
+.bsf-modal-card { position: relative; background: var(--surface); border-radius: var(--radius); max-width: min(880px, 92vw); max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-2); }
+.bsf-modal-head { display: flex; align-items: center; justify-content: space-between; padding: .8rem 1.1rem; border-bottom: 1px solid var(--line); background: var(--surface-2); font-weight: 600; color: var(--bsf-green-700); }
+.bsf-modal-body { padding: 1rem; overflow: auto; }
+.bsf-modal-body img { max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.bsf-modal-body pre { white-space: pre-wrap; font-family: var(--font-sans); background: var(--surface-2); padding: .8rem; border-radius: var(--radius-sm); font-size: .82rem; }
+.bsf-iconbtn { border: 0; background: transparent; font-size: 1.4rem; line-height: 1; cursor: pointer; color: var(--ink-soft); }
+
+/* ---------------- RTL ---------------- */
+[dir="rtl"] {
+  direction: rtl;
+  --font-sans: var(--font-arabic);
+  --font-serif: var(--font-arabic);
+}
+/* Arabic content inside an otherwise-LTR page, and vice versa. */
+.arabic-block, [lang="ar"] { font-family: var(--font-arabic); }
+.english-block, [lang="en"] { font-family: var(--font-latin); }
+[dir="rtl"] body, [dir="rtl"] .bsf-app { text-align: right; }
+[dir="rtl"] .bsf-app-caption, [dir="rtl"] .bsf-view-caption, [dir="rtl"] .bsf-caption { text-align: right; }
+[dir="rtl"] .bsf-msg-user { align-self: flex-start; }
+[dir="rtl"] .bsf-msg-assistant { align-self: flex-end; }
+/* Logical properties above handle most flips automatically. */
+
+/* ---------------- Responsive ---------------- */
+/* Below this width the single-line captions would overflow, so let them wrap. */
+@media (max-width: 1180px) {
+  .bsf-app-caption, .bsf-view-caption { white-space: normal; }
+}
+
+@media (max-width: 860px) {
+  .bsf-logo { height: 56px; }
+  .bsf-body { flex-direction: column; }
+  .bsf-sidebar { width: 100%; border-inline-end: 0; border-bottom: 1px solid var(--line); }
+  .bsf-main { padding: 1.2rem; }
+  .bsf-steps { grid-auto-flow: row; grid-template-columns: repeat(2, 1fr); }
+  .bsf-stepper { grid-template-columns: repeat(2, 1fr); }
+  .bsf-topbar { flex-direction: column; align-items: flex-start; gap: .6rem; }
+}
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
