@@ -1,0 +1,125 @@
+from __future__ import annotations
+
+import json
+import re
+from typing import Any
+
+import dataiku
+
+from .config import TEXT_STRUCTURING_LLM_ID
+
+_JSON_BLOCK = re.compile(r"\{.*\}", flags=re.DOTALL)
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", flags=re.DOTALL | re.IGNORECASE)
+
+
+def _extract_text(response: Any) -> str:
+    value = getattr(response, "text", None)
+    if isinstance(value, str):
+        return value
+    if isinstance(response, dict):
+        value = response.get("text")
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def strip_think(text: str) -> str:
+    return _THINK_BLOCK.sub("", str(text or "")).strip()
+
+
+def _strip_markdown_fence(text: str) -> str:
+    text = strip_think(text)
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
+
+def parse_json_object(text: str) -> dict:
+    cleaned = _strip_markdown_fence(text)
+    try:
+        parsed = json.loads(cleaned, strict=False)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    match = _JSON_BLOCK.search(cleaned)
+    if not match:
+        raise ValueError("The LLM did not return a JSON object.")
+
+    try:
+        parsed = json.loads(match.group(0), strict=False)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "The LLM returned malformed JSON: {}".format(error)
+        ) from error
+
+    if not isinstance(parsed, dict):
+        raise ValueError("The LLM response was not a JSON object.")
+    return parsed
+
+def complete_json(
+    system_prompt: str,
+    user_payload: dict,
+    llm_id: str = TEXT_STRUCTURING_LLM_ID,
+    temperature: float = 0.0,
+) -> dict:
+    # Guard against accidentally routing text-only JSON to the OCR models.
+    #if "qwen36-35b-a3b-fp8-1" in str(llm_id) or "qwen3-vl32b" in str(llm_id):
+    #    raise RuntimeError(
+    #        "Text-only complete_json was configured with a vision OCR model: "
+    #        + str(llm_id)
+    #    )
+#
+    project = dataiku.api_client().get_default_project()
+    llm = project.get_llm(llm_id)
+    completion = llm.new_completion()
+
+    try:
+        completion.settings["temperature"] = float(temperature)
+    except Exception:
+        pass
+
+    completion.with_message(system_prompt, role="system")
+    payload_text = json.dumps(
+        user_payload,
+        ensure_ascii=False,
+        default=str,
+        separators=(",", ":"),
+    )
+    completion.with_message(payload_text, role="user")
+
+    print(
+        "[complete_json request] llm_id={} payload_chars={}".format(
+            llm_id,
+            len(payload_text),
+        )
+    )
+
+    response = completion.execute()
+    success = getattr(response, "success", True)
+    if not success:
+        error_message = (
+            getattr(response, "error_message", None)
+            or getattr(response, "error", None)
+            or "The LLM request failed."
+        )
+        print(
+            "[complete_json failure] llm_id={} success={} "
+            "error_message={!r} response_type={}".format(
+                llm_id,
+                success,
+                error_message,
+                type(response).__name__,
+            )
+        )
+        raise RuntimeError(str(error_message))
+
+    text = strip_think(_extract_text(response))
+    if not text:
+        raise RuntimeError(
+            "The completion succeeded but response.text was empty. "
+            "llm_id={}".format(llm_id)
+        )
+
+    return parse_json_object(text)
