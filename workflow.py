@@ -336,7 +336,8 @@ def build_stage_overview(facts: dict) -> dict:
     facts keys: has_documents, has_summary, gate_passed, case_dirty,
     has_analysis, has_memo, pleading_status, accounting{status,
     pending_count, has_line_items, dirty}, stages (persisted records),
-    active_jobs {stage_key: {job_id, progress}}.
+    active_jobs {stage_key: {job_id, progress}}, register_fingerprint
+    (the current case register; a stage built on another one is stale).
     """
     persisted = facts.get("stages") or {}
     active = facts.get("active_jobs") or {}
@@ -372,8 +373,13 @@ def build_stage_overview(facts: dict) -> dict:
         elif record.get("status") == ERROR:
             entry.update({"status": ERROR, "error": record.get("error", ""), "phase": record.get("phase", "")})
         elif entry["status"] == COMPLETED:
+            used = record.get("register_fingerprint")
+            current = facts.get("register_fingerprint")
+            if used and current and used != current:
+                entry["status"] = STALE
+                entry["stale_because"] = "documents"
             own = record.get("finished_at", "")
-            for dependency in STAGE_DEPENDENCIES.get(key, ()):
+            for dependency in (STAGE_DEPENDENCIES.get(key, ()) if entry["status"] == COMPLETED else ()):
                 upstream = (persisted.get(dependency) or {}).get("finished_at", "")
                 if own and upstream and upstream > own:
                     entry["status"] = STALE

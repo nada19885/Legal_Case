@@ -610,3 +610,4 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-review-image img { display: block; max-width: 100%; max-height: 320px; margin: 0 auto; object-fit: contain; }
 .bsf-conflict-field-name { display: flex; align-items: center; gap: .5rem; }
 .bsf-conflict-custom { flex-wrap: wrap; }
+.bsf-register-metrics { margin: .2rem 0 .4rem; }

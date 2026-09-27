@@ -67,6 +67,7 @@ from legal_platform.files import save_upload
 from legal_platform.extraction import extract_pdf_page_by_page
 from legal_platform.case_mapping import build_case_map
 from legal_platform.case_map_storage import persist_case_map
+from legal_platform.case_register import build_case_register, prioritise_pages_for_summary
 from legal_platform.facts import add_fact_candidate
 from legal_platform.chat_orchestrator import assess_next_step, run_legal_analysis, run_defence_plan
 from legal_platform.interview_state import persist_interview_state
@@ -368,10 +369,12 @@ def accounting_state(data, state, review_items=None):
     }
 
 
-def stage_overview(case_id, state, data, accounting=None):
+def stage_overview(case_id, state, data, accounting=None, register=None):
     """What every stage is doing: stored results + stage records + live jobs."""
     if accounting is None:
         accounting = accounting_state(data, state)
+    if register is None:
+        register = case_register(data)
     return build_stage_overview({
         "has_documents": not data["documents"].empty and not data["pages"].empty,
         "has_summary": state.get("attorney_summary") is not None,
@@ -383,6 +386,7 @@ def stage_overview(case_id, state, data, accounting=None):
         "accounting": accounting,
         "stages": state.get("stages") or {},
         "active_jobs": _active_jobs(case_id),
+        "register_fingerprint": register.get("fingerprint"),
     })
 
 
@@ -453,6 +457,13 @@ def _page_labels(source_ids, data):
         if label not in labels:
             labels.append(label)
     return labels
+
+
+def case_register(data):
+    """The unified case register (see legal_platform.case_register): one
+    consolidated view of parties, events, facts, issues, evidence requests
+    and contradictions across every processed document."""
+    return build_case_register(data, _page_reference_map(data))
 
 
 def short_case_reference(case_id):
@@ -1024,7 +1035,8 @@ def case_endpoint():
     corrections = load_latest_corrections(case_id)
     review_items = _review_items(case_id, data, corrections)
     accounting_meta = accounting_state(data, state, review_items)
-    overview = stage_overview(case_id, state, data, accounting_meta)
+    register = case_register(data)
+    overview = stage_overview(case_id, state, data, accounting_meta, register)
 
     response["workflow_state"] = state
     response["stages"] = overview["stages"]
@@ -1037,6 +1049,7 @@ def case_endpoint():
     response["next_action_key"] = overview["next_stage"]
 
     response["chat_messages"] = serialise_chat_messages(data)
+    response["case_register"] = register
     response["facts_register"] = serialise_facts_register(data)
     response["summary_support"] = serialise_summary_support(state.get("attorney_summary") or {}, data)
 
@@ -1535,18 +1548,14 @@ def _financial_claims(state, data):
     if allegations:
         return allegations, "attorney_review"
 
-    claims = []
-    frame = data.get("fact_candidates")
-    if isinstance(frame, pd.DataFrame) and not frame.empty:
-        for row in frame.fillna("").to_dict(orient="records"):
-            status = str(row.get("candidate_status", "") or row.get("status", "")).lower()
-            text = str(row.get("fact_text", "") or "").strip()
-            if status == "alleged" and text:
-                claims.append({
-                    "allegation_text": text,
-                    "made_by": str(row.get("party", "") or ""),
-                    "source_page_ids": row.get("source_page_ids_json", ""),
-                })
+    claims = [
+        {
+            "allegation_text": fact["fact_text"],
+            "made_by": fact.get("party", ""),
+            "source_page_ids": fact.get("source_page_ids", []),
+        }
+        for fact in case_register(data)["allegations"]
+    ]
     return claims, "case_register"
 
 
@@ -1633,24 +1642,15 @@ def summary_prepare():
         data = load_case_data(case_id)
         _set_phase(job_id, "preparing_summary", "Preparing consolidated attorney review…")
 
-        # Get classifications to find claim/mixed pages
-        classifications = _latest_classifications_by_page(data)
-        claim_page_ids = [
-            pid for pid, cls in classifications.items()
-            if cls.get("page_type") in ["claim", "mixed"]
-        ]
-
-        # Filter pages: if we found claim pages, use them. If none found, fallback to all pages.
-        if claim_page_ids and not data["pages"].empty:
-            id_col = _page_id_column(data["pages"])
-            filtered_pages = data["pages"][data["pages"][id_col].astype(str).isin(claim_page_ids)]
-        else:
-            filtered_pages = data["pages"]
-
+        # Reads the case register and the documents stage's own page
+        # extraction only (pages that recorded claims first), never the
+        # accounting classification: the legal track must not depend on
+        # whether accounting has run.
+        register = case_register(data)
         summary = generate_case_summary(
             case_record=data["case"],
-            pages=filtered_pages,
-            facts=best(data, "facts", "fact_candidates"),
+            pages=prioritise_pages_for_summary(data["pages"]),
+            facts=register["facts"],
             evidence=data["evidence"],
             parties=data["parties"],
             events=data["events"],
@@ -1665,7 +1665,8 @@ def summary_prepare():
             case_id,
             changes={"attorney_summary": summary, "summary_approved": False, "summary_approved_by": ""},
             stages={"review": stage_patch(WAITING if REQUIRE_APPROVED_SUMMARY else COMPLETED,
-                                          detail="approve_summary" if REQUIRE_APPROVED_SUMMARY else "")},
+                                          detail="approve_summary" if REQUIRE_APPROVED_SUMMARY else "",
+                                          register_fingerprint=register["fingerprint"])},
             action="summary_prepared",
         )
         response_summary = dict(summary)
@@ -1716,19 +1717,21 @@ def analysis_run():
         state = restore_workflow_state(data)
         if not approval_gate_passed(state):
             raise ValueError(_gate_error())
-        facts = best(data, "facts", "fact_candidates")
-        issues = best(data, "issues", "issue_candidates")
-        if facts.empty or issues.empty:
-            raise ValueError("Extracted facts and issues are required.")
+        register = case_register(data)
+        facts = register["facts"]
+        issues = register["issues"]
+        if not facts or not issues:
+            raise ValueError("The case register has no facts or issues yet. Process the case documents first.")
         _set_phase(job_id, "researching_law", "Retrieving SAMA authorities and evaluating legal defenses…")
-        result = run_legal_analysis(data["case"], facts, issues, data["evidence"])
+        result = run_legal_analysis(data["case"], facts, issues, register["evidence_requests"])
         if session_id:
             increment_usage(session_id, "llm_request_count", 1)
             increment_usage(session_id, "message_count", 1)
         update_workflow_state(
             case_id,
             changes={"research": result["research"], "analysis": result["analysis"]},
-            stages={"analysis": stage_patch(COMPLETED, detail="analysis")},
+            stages={"analysis": stage_patch(COMPLETED, detail="analysis",
+                                            register_fingerprint=register["fingerprint"])},
             action="analysis_prepared",
         )
         return {"research": result["research"], "analysis": result["analysis"]}
@@ -1752,9 +1755,10 @@ def analysis_defence_plan():
         if not state.get("analysis") or not state.get("research"):
             raise ValueError("Run the legal analysis before preparing the defence plan.")
         _set_phase(job_id, "planning_defence", "Developing defence plan…")
+        register = case_register(data)
         strategy = run_defence_plan(
-            data["case"], state["analysis"], best(data, "facts", "fact_candidates"),
-            data["evidence"], (state.get("research") or {}).get("authority_nodes", []),
+            data["case"], state["analysis"], register["facts"],
+            register["evidence_requests"], (state.get("research") or {}).get("authority_nodes", []),
         )
         if session_id:
             increment_usage(session_id, "llm_request_count", 1)

@@ -1048,6 +1048,28 @@ Object.assign(I18N.en, {
   claims_source_attorney_review: "the attorney review",
   claims_source_case_register: "the case register",
   no_instructions: "none",
+  case_register_heading: "Case register",
+  case_register_caption: "The system's current understanding of the case, consolidated across every processed document. The attorney review, legal analysis, accounting claims and chatbot all read from it.",
+  register_empty: "Nothing has been extracted yet. Process the case documents to build the register.",
+  register_sources: "Built from {documents} document(s), {usable} of {pages} page(s) readable.",
+  register_parties: "Parties",
+  register_events: "Chronology",
+  register_facts: "Facts",
+  register_allegations: "Allegations",
+  register_issues: "Issues",
+  register_evidence_requests: "Evidence requests",
+  register_contradictions: "Contradictions",
+  register_none: "None recorded.",
+  register_merged: "found in {count} places",
+  register_clarify: "Needs clarification: {text}",
+  register_questions: "Questions",
+  fact_status_stated: "Stated",
+  fact_status_alleged: "Alleged",
+  fact_status_unclassified: "Unclassified",
+  priority_high: "High priority",
+  priority_critical: "Critical",
+  priority_medium: "Medium priority",
+  priority_low: "Low priority",
 });
 Object.assign(I18N.ar, {
   step_accounting: "التحليل المحاسبي",
@@ -1127,6 +1149,28 @@ Object.assign(I18N.ar, {
   claims_source_attorney_review: "مراجعة المحامي",
   claims_source_case_register: "سجل القضية",
   no_instructions: "لا يوجد",
+  case_register_heading: "سجل القضية",
+  case_register_caption: "الفهم الحالي للقضية، موحداً من جميع المستندات المعالجة. تعتمد عليه مراجعة المحامي والتحليل القانوني والمطالبات المحاسبية ومساعد القضية.",
+  register_empty: "لم يُستخرج شيء بعد. عالج مستندات القضية لبناء السجل.",
+  register_sources: "مبني على {documents} مستند، {usable} من {pages} صفحة مقروءة.",
+  register_parties: "الأطراف",
+  register_events: "التسلسل الزمني",
+  register_facts: "الوقائع",
+  register_allegations: "الادعاءات",
+  register_issues: "المسائل",
+  register_evidence_requests: "الأدلة المطلوبة",
+  register_contradictions: "التناقضات",
+  register_none: "لا يوجد.",
+  register_merged: "ورد في {count} مواضع",
+  register_clarify: "يحتاج إلى توضيح: {text}",
+  register_questions: "الأسئلة",
+  fact_status_stated: "واقعة مذكورة",
+  fact_status_alleged: "ادعاء",
+  fact_status_unclassified: "غير مصنفة",
+  priority_high: "أولوية عالية",
+  priority_critical: "حرجة",
+  priority_medium: "أولوية متوسطة",
+  priority_low: "أولوية منخفضة",
 });
 
 const LANGUAGES = { en: "English", ar: "العربية" };
@@ -1784,6 +1828,7 @@ function renderCase() {
   renderUnresolved();
   renderCaseSearch();
   renderDocumentsTab();
+  renderCaseRegister();
   renderAccountingTab();
   renderReviewTab();
   renderAnalysisTab();
@@ -2007,6 +2052,74 @@ function renderDocumentsTab() {
   }
 
   renderFactsRegister();
+}
+
+/* The unified case register (backend: case_register.py). One expander per
+   category; every item links to the pages it was extracted from. */
+function renderCaseRegister() {
+  const target = region("case-register");
+  if (!target) return;
+  const reg = (S.snapshot && S.snapshot.case_register) || null;
+  const counts = (reg && reg.counts) || {};
+  const total = ["parties", "events", "facts", "issues"].reduce((sum, key) => sum + (counts[key] || 0), 0);
+  if (!reg || !total) { html(target, `<p class="bsf-caption">${esc(t("register_empty"))}</p>`); return; }
+
+  const merged = (item) => item.merged_count > 1
+    ? ` ${badge(t("register_merged", { count: item.merged_count }), "neutral")}` : "";
+  const sources = (item) => sourceLinks(item.source_page_ids || [], item.page_labels || []);
+  const priority = (value) => badge(t(`priority_${value || "medium"}`),
+    value === "high" || value === "critical" ? "flagged" : "neutral");
+  const factStatus = (value) => badge(t(`fact_status_${value}`),
+    value === "alleged" ? "review" : value === "stated" ? "verified" : "neutral");
+
+  const sections = [
+    ["parties", (p) => `
+      <div class="bsf-item"><strong>${esc(p.name)}</strong>
+        ${p.role ? badge(p.role, "ai") : ""} ${p.party_type ? `<span class="bsf-caption">${esc(p.party_type)}</span>` : ""}${merged(p)}
+        ${sources(p)}</div>`],
+    ["events", (e) => `
+      <div class="bsf-item"><strong>${esc(e.date || "—")}</strong> ${e.event_type ? badge(e.event_type, "neutral") : ""}${merged(e)}
+        <div>${esc(e.description)}</div>${sources(e)}</div>`],
+    ["allegations", (f) => `
+      <div class="bsf-item">${factStatus(f.status)} ${f.party ? `<strong>${esc(f.party)}:</strong>` : ""}
+        ${esc(f.fact_text)}${merged(f)}${sources(f)}</div>`],
+    ["issues", (i) => `
+      <div class="bsf-item"><strong>${esc(i.issue_title)}</strong> ${priority(i.priority)}${merged(i)}
+        ${i.issue_description ? `<div>${esc(i.issue_description)}</div>` : ""}
+        ${(i.targeted_questions || []).length ? `<div class="bsf-caption">${esc(t("register_questions"))}: ${esc(i.targeted_questions.join(" · "))}</div>` : ""}
+        ${sources(i)}</div>`],
+    ["evidence_requests", (e) => `
+      <div class="bsf-item"><strong>${esc(e.title)}</strong> ${priority(e.priority)}${merged(e)}
+        ${e.description ? `<div>${esc(e.description)}</div>` : ""}
+        ${e.purpose ? `<div class="bsf-caption">${esc(e.purpose)}</div>` : ""}</div>`],
+    ["contradictions", (c) => `
+      <div class="bsf-item">${esc(c.description)}
+        ${c.clarification_required ? `<div class="bsf-caption">${esc(t("register_clarify", { text: c.clarification_required }))}</div>` : ""}
+        ${sources(c)}</div>`],
+  ];
+
+  const metric = (key) => `
+    <div class="bsf-metric">
+      <span class="m-value">${esc(counts[key] || 0)}</span>
+      <span class="m-label">${esc(t(`register_${key}`))}</span>
+    </div>`;
+  const src = reg.sources || {};
+
+  html(target, `
+    <div class="bsf-status-meta bsf-register-metrics">
+      ${["parties", "events", "facts", "allegations", "issues", "evidence_requests", "contradictions"].map(metric).join("")}
+    </div>
+    <p class="bsf-caption">${esc(t("register_sources", { documents: src.documents || 0, usable: src.usable_pages || 0, pages: src.pages || 0 }))}</p>
+    ${sections.map(([key, render]) => {
+      const items = reg[key] || [];
+      return `
+        <details class="bsf-expander">
+          <summary>${esc(t(`register_${key}`))} (${items.length})</summary>
+          <div class="bsf-expander-body">
+            ${items.length ? items.map(render).join("") : `<p class="bsf-caption">${esc(t("register_none"))}</p>`}
+          </div>
+        </details>`;
+    }).join("")}`);
 }
 
 function renderFactsRegister() {

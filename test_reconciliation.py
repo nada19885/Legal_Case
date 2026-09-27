@@ -46,6 +46,7 @@ from legal_platform.financial_fields import effective_value, pending_fields
 from legal_platform.financial_normalizer import build_normalized_ledger, normalize_currency
 from legal_platform.financial_reconciliation import build_rows_from_reconstruction
 from legal_platform import workflow
+from legal_platform.case_register import build_case_register, normalise_text, prioritise_pages_for_summary
 
 failures = []
 
@@ -252,6 +253,80 @@ check("pleading older than the accounting analysis -> stale", by_key["pleading"]
 
 result, by_key = overview(has_memo=True, has_analysis=True, accounting={"status": "not_started"})
 check("pleading whose accounting was cleared -> stale", by_key["pleading"]["status"] == workflow.STALE)
+
+# --- case register: one consolidated view across documents ---------------
+check("normalisation ignores case, punctuation and Arabic diacritics",
+      normalise_text("The Bank froze the account.") == normalise_text("the bank FROZE the account")
+      and normalise_text("أُجْرِيَ التحويل") == normalise_text("اجري التحويل"))
+
+register = build_case_register({
+    "parties": [
+        {"party_name": "Banque Saudi Fransi", "role_in_case": "Respondent", "party_type": "bank"},
+        {"party_name": "Ahmed Ali", "role_in_case": "Claimant", "party_type": "individual"},
+        {"party_name": "banque saudi fransi", "role_in_case": "Respondent", "party_type": "bank"},  # from doc 2
+    ],
+    "events": [
+        {"event_date": "2024-05-01", "event_description": "Account frozen", "source_id": json.dumps(["P2"])},
+        {"event_date": "2024-03-25", "event_description": "Transfer of 12,450 SAR", "source_id": json.dumps(["P1"])},
+        {"event_date": "", "event_description": "Complaint filed"},
+        {"event_date": "2024-05-01", "event_description": "Account frozen.", "source_id": json.dumps(["P7"])},
+    ],
+    "facts": [{"fact_id": "F-APPROVED", "fact_text": "The transfer was executed on 25 March 2024."}],
+    "fact_candidates": [
+        {"fact_candidate_id": "C1", "fact_text": "The transfer was executed on 25 March 2024",
+         "candidate_status": "stated", "source_page_ids_json": json.dumps(["P1"])},
+        {"fact_candidate_id": "C2", "fact_text": "The customer never authorised the transfer",
+         "candidate_status": "alleged", "party": "Ahmed Ali", "source_page_ids_json": json.dumps(["P3"])},
+        {"fact_candidate_id": "C3", "fact_text": "The customer never authorised the transfer!",
+         "candidate_status": "alleged", "source_page_ids_json": json.dumps(["P9"])},
+    ],
+    "issue_candidates": [
+        {"issue_candidate_id": "I1", "issue_title": "Unauthorised transfer liability", "priority": "high"},
+        {"issue_candidate_id": "I2", "issue_title": "Limitation period", "priority": "low"},
+    ],
+    "evidence": [{"evidence_id": "E1", "evidence_title": "Bank statement", "description": "March statement"}],
+    "contradictions": [{"description": "Two different transfer dates", "clarification_required": "Which date?"}],
+    "documents": [{"case_document_id": "D1"}, {"case_document_id": "D2"}],
+    "pages": [{"page_id": "P1", "page_text": "x"}, {"page_id": "P2", "page_text": ""}],
+}, page_labels={"P1": "stmt.pdf — page 1", "P3": "claim.pdf — page 1"})
+
+check("duplicate parties from two documents merged", register["counts"]["parties"] == 2)
+check("claimant listed before respondent", register["parties"][0]["name"] == "Ahmed Ali")
+check("duplicate events merged and their source pages combined",
+      register["counts"]["events"] == 3
+      and next(e for e in register["events"] if e["description"].startswith("Account"))["source_page_ids"] == ["P2", "P7"])
+check("events ordered chronologically, undated last",
+      [e["date"] for e in register["events"]] == ["2024-03-25", "2024-05-01", ""])
+fact = next(f for f in register["facts"] if "executed" in f["fact_text"])
+check("approved fact takes precedence over the matching candidate",
+      fact["fact_id"] == "F-APPROVED" and fact["approved"] and fact["source_page_ids"] == ["P1"])
+check("allegations kept separate from stated facts",
+      [a["fact_text"] for a in register["allegations"]] == ["The customer never authorised the transfer"])
+check("allegation keeps its status for the legal analysis", register["allegations"][0]["status"] == "alleged")
+check("merged allegation keeps pages from both documents", register["allegations"][0]["source_page_ids"] == ["P3", "P9"])
+check("high-priority issues first", register["issues"][0]["issue_title"] == "Unauthorised transfer liability")
+check("page labels attached", register["allegations"][0]["page_labels"][0] == "claim.pdf — page 1")
+check("sources counted", register["sources"] == {"documents": 2, "pages": 2, "usable_pages": 1})
+same = build_case_register({"parties": [{"party_name": "Ahmed Ali", "role_in_case": "Claimant"}]})
+changed = build_case_register({"parties": [{"party_name": "Ahmed Ali", "role_in_case": "Claimant"},
+                                           {"party_name": "Witness", "role_in_case": "witness"}]})
+check("fingerprint changes when the register changes", same["fingerprint"] != changed["fingerprint"])
+check("fingerprint is stable", same["fingerprint"] == build_case_register(
+    {"parties": [{"party_name": "Ahmed Ali", "role_in_case": "Claimant"}]})["fingerprint"])
+
+ordered = prioritise_pages_for_summary([
+    {"page_id": "A", "page_number": 1, "claims_json": "[]"},
+    {"page_id": "B", "page_number": 2, "claims_json": json.dumps(["claim"]), "facts_json": "[]"},
+    {"page_id": "C", "page_number": 3, "facts_json": json.dumps(["f1", "f2"])},
+])
+check("pages with claims come first for the attorney review", [p["page_id"] for p in ordered] == ["B", "C", "A"])
+
+result, by_key = overview(
+    has_analysis=True, register_fingerprint="new",
+    stages={"analysis": {"status": "completed", "register_fingerprint": "old", "finished_at": "2024-01-01"}},
+)
+check("analysis built on an older register -> stale", by_key["analysis"]["status"] == workflow.STALE
+      and by_key["analysis"]["stale_because"] == "documents")
 
 print()
 if failures:
