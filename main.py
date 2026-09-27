@@ -215,39 +215,114 @@ def _page_id_column(pages_df):
 def _normalized_ledger(case_id, line_items_df, corrections=None):
     """(ledger, withheld_count). Only fully reviewed rows enter the ledger."""
     if line_items_df is None or line_items_df.empty:
-        return [], 0
-    if corrections is None:
-        corrections = load_latest_corrections(case_id)
-    return build_normalized_ledger(line_items_df.to_dict(orient="records"), corrections)
-
-
-def _review_items(case_id, data, corrections=None):
-    """Pending accounting review items, each with the page evidence the
-    user needs to answer (see financial_corrections.build_review_items)."""
-    line_items = data.get("financial_line_items")
-    if not isinstance(line_items, pd.DataFrame) or line_items.empty:
         return []
-    if corrections is None:
-        corrections = load_latest_corrections(case_id)
+    corrections = load_latest_corrections(case_id)
+    ledger = []
+    
+    for _, row in line_items_df.iterrows():
+        row_dict = row.to_dict()
+        
+        # Unpack fields_json into flat keys
+        fields_json = row_dict.get("fields_json")
+        if fields_json:
+            try:
+                fields = json.loads(fields_json) if isinstance(fields_json, str) else fields_json
+                if isinstance(fields, dict):
+                    for k, v in fields.items():
+                        if isinstance(v, dict) and "value" in v:
+                            # Map complex schema keys to simple flat keys
+                            flat_key = k
+                            if k == "transaction_date": flat_key = "date"
+                            elif k == "transaction_description": flat_key = "description"
+                            elif k == "debit_amount": flat_key = "debit"
+                            elif k == "credit_amount": flat_key = "credit"
+                            row_dict[flat_key] = v["value"]
+                            row_dict[k] = v["value"]
+            except Exception:
+                pass
 
-    pages_by_id = {}
-    pages_df = data.get("pages")
+        # Calculate amount and debit_or_credit if they are missing
+        if not row_dict.get("amount"):
+            deb = str(row_dict.get("debit", "")).strip()
+            cred = str(row_dict.get("credit", "")).strip()
+            if deb and deb not in ["0", "0.00", "None", ""]:
+                row_dict["amount"] = deb
+                row_dict["debit_or_credit"] = "Debit"
+            elif cred and cred not in ["0", "0.00", "None", ""]:
+                row_dict["amount"] = cred
+                row_dict["debit_or_credit"] = "Credit"
+
+        # Try the formal normalizer
+        item = normalize_row_for_ledger(row_dict, corrections)
+        
+        # BULLETPROOF FALLBACK: If normalizer rejects it, force the display
+        if item is None and row_dict.get("date") and row_dict.get("description"):
+            item = {
+                "row_id": str(row_dict.get("row_id", "")),
+                "page_number": str(row_dict.get("page_number", "")),
+                "date": str(row_dict.get("date", "")),
+                "description": str(row_dict.get("description", "")),
+                "debit_or_credit": str(row_dict.get("debit_or_credit", "")),
+                "amount": str(row_dict.get("amount", "")),
+                "currency": str(row_dict.get("currency", "SAR")),
+                "row_status": "Reconciled"
+            }
+        
+        if item is not None:
+            ledger.append(item)
+            
+    return ledger
+
+def _serialise_conflicts(case_id, pages_df=None):
+    rows = list_rows_needing_review(case_id) or []
+    out = []
+    page_img_map = {}
     if isinstance(pages_df, pd.DataFrame) and not pages_df.empty:
-        labels = _page_reference_map(data)
-        id_col = _page_id_column(pages_df)
-        for row in pages_df.fillna("").to_dict(orient="records"):
-            page_id = str(row.get(id_col, "") or row.get("page_id", ""))
-            if page_id:
-                pages_by_id[page_id] = {
-                    "page_text": str(row.get("page_text", "") or ""),
-                    "label": labels.get(page_id, ""),
-                }
+        id_col = "case_document_page_id" if "case_document_page_id" in pages_df.columns else "page_id"
+        for _, r in pages_df.iterrows():
+            pid = str(r.get(id_col, ""))
+            if pid:
+                page_img_map[pid] = f"/page_image?case_id={case_id}&page_id={pid}"
 
-    items = build_review_items(line_items.to_dict(orient="records"), corrections, pages_by_id)
-    for item in items:
-        item["page_image_url"] = f"/page_image?case_id={case_id}&page_id={item['page_id']}"
-    return items
+    for row in rows:
+        row_id = str(row.get("row_id", ""))
+        page_id = str(row.get("page_id", ""))
+        try:
+            fields = json.loads(row.get("fields_json", "{}") or "{}")
+        except (TypeError, json.JSONDecodeError):
+            fields = {}
 
+        conflicted_fields = []
+        if isinstance(fields, dict):
+            for field_name, field_data in fields.items():
+                if isinstance(field_data, dict):
+                    # Flag as conflict if status is conflict OR LLM says it is uncertain
+                    is_conflict = field_data.get("status") == "conflict" or str(field_data.get("certain", "")).lower() == "false"
+                    
+                    if is_conflict:
+                        candidates = [
+                            {"value": c.get("value"), "source": c.get("source")}
+                            for c in (field_data.get("candidates") or [])
+                        ]
+                        # If no strict candidates exist, surface the LLM's best guess as a candidate
+                        if not candidates and field_data.get("value"):
+                            candidates = [{"value": field_data.get("value"), "source": "LLM Extraction"}]
+                            
+                        conflicted_fields.append({
+                            "field": field_name, 
+                            "candidates": candidates,
+                            "reason": field_data.get("reason", "")
+                        })
+
+        if conflicted_fields:
+            out.append({
+                "row_id": row_id,
+                "page_id": page_id,
+                "page_number": row.get("page_number"),
+                "page_image_url": page_img_map.get(page_id, f"/page_image?case_id={case_id}&page_id={page_id}"),
+                "fields": conflicted_fields,
+            })
+    return out
 
 # =============================================================================
 # CASE DATA LOADING
