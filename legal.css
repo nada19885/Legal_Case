@@ -381,6 +381,43 @@ textarea.bsf-input { resize: vertical; line-height: 1.5; }
 .step-card.current .step-icon { background: var(--bsf-gold); color: var(--on-accent); }
 .step-card.upcoming { opacity: .8; }
 
+/* Stage status on the step cards (cards are buttons that open the tab). */
+button.step-card { font: inherit; color: inherit; cursor: pointer; width: 100%; }
+button.step-card:hover { border-color: var(--bsf-green); }
+.step-card .step-status { font-size: .7rem; color: var(--ink-faint); margin-top: .2rem; line-height: 1.25; }
+.step-card.status-running { border-color: var(--bsf-green); }
+.step-card.status-running .step-icon { background: var(--info-bg); color: var(--bsf-green-700); }
+.step-card.status-waiting_for_user { border-color: var(--warn); background: var(--warn-bg); box-shadow: 0 0 0 2px var(--warn-line); opacity: 1; }
+.step-card.status-waiting_for_user .step-icon { background: var(--warn); color: var(--on-brand); }
+.step-card.status-waiting_for_user .step-status { color: var(--warn); font-weight: 600; }
+.step-card.status-error { border-color: var(--flag); background: var(--flag-bg); opacity: 1; }
+.step-card.status-error .step-icon { background: var(--flag); color: var(--on-brand); }
+.step-card.status-error .step-status { color: var(--flag); font-weight: 600; }
+.step-card.status-stale { border-style: dashed; border-color: var(--warn); }
+
+/* Per-tab status strip. */
+.bsf-stage-strip { border: 1px solid var(--line); border-inline-start: 4px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); padding: .6rem .9rem; margin: .4rem 0 .9rem; }
+.bsf-stage-strip-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.bsf-stage-strip-head strong { color: var(--bsf-green-700); font-size: .9rem; }
+.bsf-stage-strip-detail { font-size: .85rem; color: var(--ink-soft); margin-top: .3rem; }
+.bsf-stage-strip .bsf-job { margin: .5rem 0 0; }
+.bsf-stage-strip.status-running { border-inline-start-color: var(--bsf-green); }
+.bsf-stage-strip.status-completed { border-inline-start-color: var(--ok); }
+.bsf-stage-strip.status-ready { border-inline-start-color: var(--primary-light); }
+.bsf-stage-strip.status-waiting_for_user { border-inline-start-color: var(--warn); background: var(--warn-bg); }
+.bsf-stage-strip.status-waiting_for_user .bsf-stage-strip-detail { color: var(--warn); font-weight: 600; }
+.bsf-stage-strip.status-stale { border-inline-start-color: var(--warn); }
+.bsf-stage-strip.status-error { border-inline-start-color: var(--flag); background: var(--flag-bg); }
+.bsf-stage-strip.status-error .bsf-stage-strip-detail { color: var(--flag); }
+
+/* Case-wide "waiting for you" banner, visible from every tab. */
+.bsf-attention { border: 2px solid var(--warn); background: var(--warn-bg); border-radius: var(--radius); padding: .8rem 1rem; margin: .6rem 0 .9rem; }
+.bsf-attention.is-error { border-color: var(--flag); background: var(--flag-bg); }
+.bsf-attention-title { font-weight: 700; color: var(--warn); text-transform: uppercase; letter-spacing: .05em; font-size: .8rem; margin-bottom: .4rem; }
+.bsf-attention.is-error .bsf-attention-title { color: var(--flag); }
+.bsf-attention ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.bsf-attention li { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; font-size: .9rem; color: var(--ink); }
+
 .bsf-status-meta { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 1rem; }
 .bsf-metric { display: flex; flex-direction: column; }
 .bsf-metric .m-value { font-family: var(--font-serif); font-size: 1.4rem; color: var(--bsf-green-700); font-weight: 700; }
@@ -561,3 +598,15 @@ textarea.bsf-input { resize: vertical; line-height: 1.5; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
+
+/* ---------------- Accounting review items ---------------- */
+.bsf-review-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem; margin-bottom: .8rem; }
+@media (max-width: 760px) { .bsf-review-grid { grid-template-columns: 1fr; } }
+.bsf-review-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); margin: .6rem 0 .3rem; }
+.bsf-review-transaction th { width: 38%; font-weight: 600; color: var(--ink-soft); }
+.bsf-review-transaction tr.is-pending td { background: var(--warn-bg); }
+.bsf-source-text { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .5rem .7rem; font-size: .8rem; max-height: 180px; overflow: auto; margin: 0; }
+.bsf-review-image { display: block; width: 100%; padding: .4rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); cursor: zoom-in; }
+.bsf-review-image img { display: block; max-width: 100%; max-height: 320px; margin: 0 auto; object-fit: contain; }
+.bsf-conflict-field-name { display: flex; align-items: center; gap: .5rem; }
+.bsf-conflict-custom { flex-wrap: wrap; }

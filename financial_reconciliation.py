@@ -16,20 +16,10 @@ from .config import (
     FINANCIAL_REQUEST_MAX_ATTEMPTS,
     FINANCIAL_RETRY_DELAY_SECONDS,
 )
+from .financial_fields import FIELD_NAMES, REQUIRED_FIELDS, field_issue
 from .ids import stable_id
 from .llm import complete_json
 from .storage import append_rows
-
-FIELD_NAMES = (
-    "date",
-    "amount",
-    "currency",
-    "debit_or_credit",
-    "description",
-    "reference_number",
-    "party_source",
-    "running_balance",
-)
 
 RECONSTRUCTION_SYSTEM_PROMPT = r"""
 You are an expert forensic accountant reconciling two independent extractions of a single financial page.
@@ -44,6 +34,12 @@ YOUR TASK:
 4. Determine certainty field-by-field:
    - If the sources agree or the data is perfectly clear, set `certain: true`.
    - If the sources conflict (e.g., structural says 12,500 but VLM says 17,500), pick the most likely correct value, set `certain: false`, and explain your reasoning in `reason`.
+   - If a value is hard to read, ambiguous, or you had to interpret it, give your best reading, set `certain: false`, and explain what is unclear in `reason`.
+5. NEVER GUESS OR DEFAULT A VALUE:
+   - If a value is not on the page, return value "" with `certain: false` and say so in `reason`.
+   - Currency: use the currency printed on the row, or the account/statement currency printed elsewhere on this page (say where in `reason`). Do NOT assume SAR.
+   - debit_or_credit must be exactly "debit" or "credit". If the direction cannot be determined from the page, return "" with `certain: false`.
+6. For each row, copy the row exactly as printed on the page into `row_source_text` so a reviewer can check it.
 
 RETURN JSON SCHEMA ONLY:
 {
@@ -57,7 +53,8 @@ RETURN JSON SCHEMA ONLY:
       "debit_or_credit": { "value": "debit|credit", "certain": true, "reason": "" },
       "reference_number": { "value": "", "certain": true, "reason": "" },
       "party_source": { "value": "", "certain": true, "reason": "" },
-      "running_balance": { "value": "", "certain": true, "reason": "" }
+      "running_balance": { "value": "", "certain": true, "reason": "" },
+      "row_source_text": ""
     }
   ]
 }
@@ -97,24 +94,40 @@ def build_rows_from_reconstruction(
     page_number: int,
     reconstruction: dict,
 ) -> list[dict]:
+    """Turn the LLM reconstruction into fin_line_items rows.
+
+    Field statuses:
+      verified          the LLM was certain and the value is usable;
+      conflict          the LLM was uncertain -> user review, with its
+                        suggested value as the only candidate;
+      missing_required  a REQUIRED_FIELDS value is absent or unusable
+                        -> user review (never defaulted);
+      missing           an optional field is absent (not blocking).
+    Rows with no value at all are dropped as noise.
+    """
     rows: list[dict] = []
     for idx, item in enumerate(reconstruction.get("transactions", []) or []):
+        if not isinstance(item, dict):
+            continue
         resolved_fields = {}
         for field_name in FIELD_NAMES:
-            info = item.get(field_name) or {}
+            info = item.get(field_name)
+            if not isinstance(info, dict):
+                info = {"value": info, "certain": False} if info not in (None, "") else {}
             value = str(info.get("value", "") or "").strip()
             certain = bool(info.get("certain", False))
             reason = str(info.get("reason", "") or "").strip()
 
             if not value:
-                status = "missing"
+                status = "missing_required" if field_name in REQUIRED_FIELDS else "missing"
                 candidates = []
+                if status == "missing_required" and not reason:
+                    reason = "No value was found for this field on the page."
             elif certain:
                 status = "verified"
                 candidates = []
             else:
                 status = "conflict"
-                # ONLY show the AI's suggested value to the user
                 candidates = [{"value": value, "source": "AI Suggested"}]
 
             resolved_fields[field_name] = {
@@ -124,14 +137,26 @@ def build_rows_from_reconstruction(
                 "reason": reason,
             }
 
-        field_statuses = {
-            resolved_fields[f]["status"]
-            for f in FIELD_NAMES
-            if resolved_fields[f]["status"] != "missing"
-        }
-        row_status = "needs_review" if "conflict" in field_statuses else "verified"
+            # A certain-but-invalid direction ("unclear", "dr/cr"...) is
+            # still a question for the user, not something to infer later.
+            if status == "verified" and field_issue(field_name, resolved_fields[field_name]):
+                resolved_fields[field_name]["status"] = "conflict"
+                resolved_fields[field_name]["candidates"] = [{"value": value, "source": "AI Suggested"}]
+                resolved_fields[field_name]["reason"] = reason or "Direction must be debit or credit."
 
-        row_index = int(item.get("row_index", idx))
+        if not any(resolved_fields[name]["value"] for name in FIELD_NAMES):
+            continue
+
+        source_text = str(item.get("row_source_text", "") or item.get("source_quote", "") or "").strip()
+        resolved_fields["_row"] = {"source_text": source_text[:1000]}
+
+        needs_review = any(field_issue(name, resolved_fields[name]) for name in FIELD_NAMES)
+        row_status = "needs_review" if needs_review else "verified"
+
+        try:
+            row_index = int(item.get("row_index", idx))
+        except (TypeError, ValueError):
+            row_index = idx
         cluster_key = f"ROW_{page_number}_{row_index}"
         row_id = stable_id("FLI", page_id, cluster_key)
 

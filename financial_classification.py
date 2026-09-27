@@ -5,10 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import json
 from typing import Any
-import pandas as pd
-import dataiku
 
-from .storage import case_rows
+from .storage import case_rows, replace_case_rows
 from .config import (
     FINANCIAL_DOCUMENT_CLASSIFICATION_DATASET,
     FINANCIAL_CLASSIFICATION_LLM_ID,
@@ -160,21 +158,33 @@ def classify_case_pages(case_id: str, page_ids: list[str], actor: str = "", forc
             results.append(future.result())
             
     # --------------------------------------------------------
-    # Save bulk results to dataset
+    # Save: replace only the classifications of the pages just
+    # classified, keeping every other page's stored result.
     # --------------------------------------------------------
     if results:
-        df = pd.DataFrame(results)
-        ds = dataiku.Dataset(FINANCIAL_DOCUMENT_CLASSIFICATION_DATASET)
-        try:
-            ex_df = ds.get_dataframe()
-            if not ex_df.empty and "case_id" in ex_df.columns:
-                # Drop old classifications for this case to avoid duplicates
-                ex_df = ex_df[ex_df["case_id"].astype(str) != str(case_id)]
-            df = pd.concat([ex_df, df], ignore_index=True)
-        except Exception:
-            pass # Dataset was empty or didn't exist yet
-        ds.write_with_schema(df) # Automatically updates schema with our new columns!
+        classified = {str(row["page_id"]) for row in results}
+        replace_case_rows(
+            FINANCIAL_DOCUMENT_CLASSIFICATION_DATASET,
+            case_id,
+            results,
+            remove_where=lambda frame: frame["page_id"].astype(str).isin(classified),
+        )
 
     return results
 
 
+
+
+def pages_needing_classification(case_id: str, page_ids: list[str]) -> list[str]:
+    """Pages with no usable stored classification: never classified, or
+    the last attempt failed (a failed call must be retried, not treated as
+    a non-financial page)."""
+    frame = case_rows(FINANCIAL_DOCUMENT_CLASSIFICATION_DATASET, case_id)
+    done = set()
+    if not frame.empty and "page_id" in frame.columns:
+        working = frame.sort_values("created_at") if "created_at" in frame.columns else frame
+        latest = {}
+        for row in working.to_dict(orient="records"):
+            latest[str(row.get("page_id", ""))] = str(row.get("classification_status", "completed") or "completed")
+        done = {pid for pid, status in latest.items() if status != "failed"}
+    return [str(pid) for pid in page_ids if str(pid) not in done]

@@ -115,6 +115,7 @@
         </div>
 
         <div class="bsf-alert bsf-alert-warn" data-region="case-dirty" hidden></div>
+        <div data-region="case-attention"></div>
 
         <nav class="bsf-tabs" data-tabset="case">
           <button type="button" class="bsf-tab" data-tab="home" data-i18n="tab_home"></button>
@@ -134,6 +135,7 @@
         </div>
 
         <div class="bsf-panel" data-panel="documents">
+          <div data-region="stage-strip-documents"></div>
           <h3 class="bsf-section-title" data-i18n="documents_and_evidence"></h3>
           <p class="bsf-caption" data-i18n="documents_caption"></p>
           <div class="bsf-alert bsf-alert-ok" data-region="documents-stored" hidden></div>
@@ -171,6 +173,7 @@
         </div>
 
         <div class="bsf-panel" data-panel="accounting">
+          <div data-region="stage-strip-accounting"></div>
           <h3 class="bsf-section-title" data-i18n="accounting_analysis"></h3>
           <p class="bsf-caption" data-i18n="accounting_analysis_caption"></p>
 
@@ -181,6 +184,7 @@
                 <button type="button" class="bsf-btn" data-action="accounting-clear"
                         data-i18n="clear_accounting_data"></button>
               </div>
+              <p class="bsf-caption" data-i18n="clear_accounting_explainer"></p>
             </div>
           </details>
 
@@ -191,6 +195,7 @@
                     data-i18n="run_extraction_reconciliation"></button>
           </div>
           <div data-region="accounting-auto-job"></div>
+          <div data-region="accounting-report"></div>
 
           <hr class="bsf-divider">
 
@@ -219,6 +224,7 @@
         </div>
 
         <div class="bsf-panel" data-panel="review">
+          <div data-region="stage-strip-review"></div>
           <h3 class="bsf-section-title" data-i18n="consolidated_attorney_review"></h3>
           <div data-region="review-state"></div>
           <p class="bsf-caption" data-i18n="summary_check_caption"></p>
@@ -229,6 +235,7 @@
         </div>
 
         <div class="bsf-panel" data-panel="analysis">
+          <div data-region="stage-strip-analysis"></div>
           <h3 class="bsf-section-title" data-i18n="applicable_law_research"></h3>
           <div class="bsf-alert bsf-alert-info" data-i18n="kb_only_notice"></div>
           <button type="button" class="bsf-btn bsf-btn-primary" data-action="run-analysis"
@@ -239,6 +246,7 @@
         </div>
 
         <div class="bsf-panel" data-panel="pleading">
+          <div data-region="stage-strip-pleading"></div>
           <h3 class="bsf-section-title" data-i18n="written_pleading"></h3>
           <div data-region="pleading-state"></div>
           <p class="bsf-caption" data-i18n="pleading_caption"></p>
@@ -254,6 +262,7 @@
         </div>
 
         <div class="bsf-panel" data-panel="discussion">
+          <div data-region="stage-strip-discussion"></div>
           <h3 class="bsf-section-title" data-i18n="discuss_this_case"></h3>
           <div class="bsf-alert bsf-alert-info" data-i18n="discussion_intro"></div>
           <p class="bsf-caption" data-i18n="discussion_caption"></p>
@@ -383,6 +392,8 @@
 </div>
 
 <!-- Source-page viewer (click-to-source from facts, chronology, evidence) -->
+<div class="bsf-toasts" id="toasts" aria-live="polite"></div>
+
 <!-- style="display:none" is required as well as [hidden]: .bsf-modal sets
      display:flex in the author stylesheet, which outranks the browser's
      built-in [hidden] { display: none } rule. -->

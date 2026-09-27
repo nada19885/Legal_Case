@@ -70,6 +70,67 @@ def append_rows(dataset_name: str, rows: Iterable[dict]) -> int:
     return len(dataframe)
 
 
+def _invalidate(dataset_name: str) -> None:
+    with _CACHE_LOCK:
+        _DATASET_CACHE.pop(dataset_name, None)
+
+
+def replace_case_rows(
+    dataset_name: str,
+    case_id: str,
+    rows: Iterable[dict] = (),
+    remove_where=None,
+) -> int:
+    """Rewrite one case's slice of a dataset, leaving every other case intact.
+
+    remove_where(frame) -> boolean mask selects which of this case's existing
+    rows to drop (default: all of them). The new rows are then added. The
+    read-modify-write happens under the shared write lock and the read cache
+    is cleared afterwards, so the next case_rows() call sees the result.
+
+    If the existing dataset cannot be read, nothing is overwritten: new rows
+    are appended instead, because a blind overwrite would erase other cases.
+    """
+    rows = list(rows)
+    new_frame = _clean_frame(pd.DataFrame(rows)) if rows else pd.DataFrame()
+
+    with _WRITE_LOCK:
+        dataset = dataiku.Dataset(dataset_name, ignore_flow=True)
+        try:
+            existing = dataset.get_dataframe()
+        except Exception:
+            existing = None
+
+        if existing is None:
+            if rows:
+                dataset.spec_item["appendMode"] = True
+                dataset.write_with_schema(new_frame)
+            _invalidate(dataset_name)
+            return len(new_frame)
+
+        if not existing.empty and "case_id" in existing.columns:
+            in_case = existing["case_id"].astype(str) == str(case_id)
+            if remove_where is not None:
+                case_part = existing[in_case]
+                drop = pd.Series(False, index=existing.index)
+                if not case_part.empty:
+                    drop.loc[case_part.index] = remove_where(case_part).astype(bool).values
+            else:
+                drop = in_case
+            kept = existing[~drop]
+        else:
+            kept = existing
+
+        if not rows and len(kept) == len(existing):
+            return 0
+
+        result = pd.concat([kept, new_frame], ignore_index=True) if rows else kept
+        dataset.write_with_schema(result)
+        _invalidate(dataset_name)
+
+    return len(new_frame)
+
+
 def case_rows(
     dataset_name: str,
     case_id: str,
