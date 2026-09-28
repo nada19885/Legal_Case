@@ -94,10 +94,21 @@ from legal_platform.config import (
 )
 from legal_platform.financial_classification import classify_case_pages, pages_needing_classification
 from legal_platform.financial_corrections import (
-    build_review_items,
+    load_fact_resolutions,
     load_latest_corrections,
     submit_correction,
+    submit_fact_resolution,
 )
+from legal_platform.financial_facts import (
+    PROPOSAL_ACTION,
+    format_amount,
+    parse_amount,
+    build_fact_ledger,
+    build_fact_review_items,
+    effective_fact,
+    validate_fact_fields,
+)
+from legal_platform.financial_reconciliation import reinterpret_fact
 from legal_platform.financial_fields import FIELD_NAMES
 from legal_platform.financial_extraction_pipeline import run_financial_extraction
 from legal_platform.financial_forensics import (
@@ -106,7 +117,6 @@ from legal_platform.financial_forensics import (
     run_claim_based_accounting_analysis,
 )
 from legal_platform.financial_normalizer import (
-    build_normalized_ledger,
     normalize_amount,
     normalize_debit_credit,
 )
@@ -213,24 +223,21 @@ def _page_id_column(pages_df):
     return "case_document_page_id" if "case_document_page_id" in pages_df.columns else "page_id"
 
 
-def _normalized_ledger(case_id, line_items_df, corrections=None):
-    """(ledger, withheld_count). Only fully reviewed rows enter the ledger."""
+def _normalized_ledger(case_id, line_items_df, corrections=None, resolutions=None):
+    """(ledger, withheld_count). The final normalized ledger: every atomic
+    fact whose status is final (extracted, calculated, inferred, missing,
+    user-confirmed, user-corrected). UNCERTAIN facts are withheld until the
+    user resolves them; IGNORED facts are left out."""
     if line_items_df is None or line_items_df.empty:
         return [], 0
     if corrections is None:
         corrections = load_latest_corrections(case_id)
-    return build_normalized_ledger(line_items_df.to_dict(orient="records"), corrections)
+    if resolutions is None:
+        resolutions = load_fact_resolutions(case_id)
+    return build_fact_ledger(line_items_df.to_dict(orient="records"), corrections, resolutions)
 
 
-def _review_items(case_id, data, corrections=None):
-    """Pending accounting review items, each with the page evidence the
-    user needs to answer (see financial_corrections.build_review_items)."""
-    line_items = data.get("financial_line_items")
-    if not isinstance(line_items, pd.DataFrame) or line_items.empty:
-        return []
-    if corrections is None:
-        corrections = load_latest_corrections(case_id)
-
+def _pages_by_id(data):
     pages_by_id = {}
     pages_df = data.get("pages")
     if isinstance(pages_df, pd.DataFrame) and not pages_df.empty:
@@ -243,8 +250,22 @@ def _review_items(case_id, data, corrections=None):
                     "page_text": str(row.get("page_text", "") or ""),
                     "label": labels.get(page_id, ""),
                 }
+    return pages_by_id
 
-    items = build_review_items(line_items.to_dict(orient="records"), corrections, pages_by_id)
+
+def _review_items(case_id, data, corrections=None, resolutions=None):
+    """UNCERTAIN facts waiting for the user, each with the page evidence
+    needed to decide it (see financial_facts.build_fact_review_items)."""
+    line_items = data.get("financial_line_items")
+    if not isinstance(line_items, pd.DataFrame) or line_items.empty:
+        return []
+    if corrections is None:
+        corrections = load_latest_corrections(case_id)
+    if resolutions is None:
+        resolutions = load_fact_resolutions(case_id)
+    items = build_fact_review_items(
+        line_items.to_dict(orient="records"), corrections, resolutions, _pages_by_id(data),
+    )
     for item in items:
         item["page_image_url"] = f"/page_image?case_id={case_id}&page_id={item['page_id']}"
     return items
@@ -364,7 +385,7 @@ def accounting_state(data, state, review_items=None):
         "has_line_items": has_line_items,
         "has_pending_review": bool(pending_count),
         "pending_count": pending_count,
-        "pending_field_count": sum(len(item.get("fields") or []) for item in review_items),
+        "pending_field_count": len(review_items),
         "has_forensic_output": has_forensic_output,
     }
 
@@ -1033,7 +1054,8 @@ def case_endpoint():
 
     state = restore_workflow_state(data)
     corrections = load_latest_corrections(case_id)
-    review_items = _review_items(case_id, data, corrections)
+    resolutions = load_fact_resolutions(case_id)
+    review_items = _review_items(case_id, data, corrections, resolutions)
     accounting_meta = accounting_state(data, state, review_items)
     register = case_register(data)
     overview = stage_overview(case_id, state, data, accounting_meta, register)
@@ -1053,7 +1075,7 @@ def case_endpoint():
     response["facts_register"] = serialise_facts_register(data)
     response["summary_support"] = serialise_summary_support(state.get("attorney_summary") or {}, data)
 
-    ledger, withheld = _normalized_ledger(case_id, data["financial_line_items"], corrections)
+    ledger, withheld = _normalized_ledger(case_id, data["financial_line_items"], corrections, resolutions)
     classifications = _latest_classifications_by_page(data)
     accounting_record = (state.get("stages") or {}).get("accounting") or {}
     response["accounting"] = {
@@ -1083,9 +1105,110 @@ def case_endpoint():
         "run_metadata": data.get("forensic_run_metadata") or {},
         "cross_check_summary": data.get("cross_check_summary") or {},
         "discrepancies": data.get("discrepancies") or [],
-        "findings": data.get("forensic_findings") or {},
+        "findings": _claims_with_evidence(data.get("forensic_findings"), ledger, data),
     }
     return _ok(response)
+
+
+CLAIM_RESULT_ORDER = (
+    "CONTRADICTED", "PARTIALLY_SUPPORTED", "SUPPORTED",
+    "NOT_VERIFIABLE", "NO_FINANCIAL_EVIDENCE", "NOT_FINANCIAL_CLAIM",
+)
+
+
+EVIDENCE_GROUPS = (
+    "supporting_evidence",
+    "partially_supporting_evidence",
+    "contradicting_evidence",
+    "unresolved_evidence",
+)
+
+
+def _claims_with_evidence(findings, ledger, data):
+    """Claim evaluations with every cited ledger fact resolved to its
+    values, status and source page, so each accounting position can be
+    checked against the document it relies on.
+
+    For supporting and partial evidence the total of the cited facts'
+    values is computed here (per currency), independently of the model's
+    substantiated_amount. A cited id no longer in the ledger (cleared or
+    re-extracted after the analysis ran) is listed rather than dropped."""
+    by_id = {str(entry.get("row_id")): entry for entry in ledger}
+    labels = _page_reference_map(data)
+    fields = ("fact_type", "date", "description", "value", "value_field", "currency", "debit", "credit",
+              "balance", "transaction_reference", "counterparty", "status", "page_id")
+
+    def resolve(ids, stale):
+        rows = []
+        for record_id in ids or []:
+            entry = by_id.get(str(record_id))
+            if entry is None:
+                stale.append(str(record_id))
+                continue
+            row = {key: entry.get(key) for key in fields}
+            row["row_id"] = entry.get("row_id")
+            row["page_label"] = labels.get(str(entry.get("page_id", "")), "")
+            # Names the earlier view used.
+            row["amount"] = entry.get("value")
+            row["reference_number"] = entry.get("transaction_reference") or ""
+            row["debit_or_credit"] = entry.get("debit_or_credit", "")
+            rows.append(row)
+        return rows
+
+    def totals(groups):
+        sums = {}
+        seen = set()
+        for group in groups:
+            for row in group:
+                if row["row_id"] in seen:
+                    continue
+                seen.add(row["row_id"])
+                value = parse_amount(row.get("value"))
+                if value is not None:
+                    currency = row.get("currency") or "—"
+                    sums[currency] = sums.get(currency, 0) + value
+        return {currency: format_amount(total) for currency, total in sums.items()}
+
+    evaluations, counts = [], {}
+    for raw in (findings or {}).get("claim_evaluations") or []:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        stale = []
+        for group in EVIDENCE_GROUPS:
+            entries = []
+            for entry in item.get(group) or []:
+                if isinstance(entry, dict):
+                    entries.append({
+                        "explanation": entry.get("explanation", ""),
+                        "record_ids": entry.get("record_ids") or [],
+                        "rows": resolve(entry.get("record_ids"), stale),
+                    })
+            item[group] = entries
+        # Results saved before evidence was grouped.
+        if not any(item[group] for group in EVIDENCE_GROUPS):
+            if item.get("evidence_record_ids"):
+                item["supporting_evidence"] = [{"explanation": "", "record_ids": item["evidence_record_ids"],
+                                                "rows": resolve(item["evidence_record_ids"], stale)}]
+            for entry in item.get("contradictions") or []:
+                if isinstance(entry, dict):
+                    item["contradicting_evidence"].append({
+                        "explanation": entry.get("description", ""), "record_ids": entry.get("record_ids") or [],
+                        "rows": resolve(entry.get("record_ids"), stale)})
+        item["evidence_rows"] = [row for entry in item["supporting_evidence"] + item["partially_supporting_evidence"]
+                                 for row in entry["rows"]]
+        item["evidence_totals"] = totals([entry["rows"] for entry in
+                                          item["supporting_evidence"] + item["partially_supporting_evidence"]])
+        item["missing_evidence"] = [str(x) for x in (item.get("missing_evidence") or []) if str(x).strip()]
+        item["accounting_position"] = item.get("accounting_position") or item.get("accounting_response") or ""
+        item["no_longer_in_ledger"] = list(dict.fromkeys(stale))
+        result = str(item.get("result") or "NOT_VERIFIABLE").upper()
+        counts[result] = counts.get(result, 0) + 1
+        evaluations.append(item)
+
+    rank = {result: position for position, result in enumerate(CLAIM_RESULT_ORDER)}
+    evaluations.sort(key=lambda item: rank.get(str(item.get("result") or "").upper(), len(rank)))
+    return {"claim_evaluations": evaluations, "result_counts": counts}
 
 
 def _classification_counts(classifications):
@@ -1496,7 +1619,16 @@ def accounting_correction():
         return jsonify({"error": error}), 400
 
     submit_correction(case_id, row_id, field_name, value, corrected_by=corrected_by, correction_note=note)
+    result = _after_review_change(case_id, corrected_by)
+    result["value"] = value
+    return _ok(result)
 
+
+def _after_review_change(case_id, actor):
+    """Move the accounting stage on after the user answered a review item:
+    still waiting, ready to continue (last item answered), or — when the
+    analysis had already run — ready again with the old results marked
+    out of date."""
     data = load_case_data(case_id)
     state = restore_workflow_state(data)
     pending = _review_items(case_id, data)
@@ -1505,9 +1637,10 @@ def accounting_correction():
     if pending:
         update_workflow_state(
             case_id,
+            changes={"accounting_status": "needs_review"},
             stages={"accounting": stage_patch(WAITING, detail="review_items")},
-            action="accounting_field_corrected",
-            actor=corrected_by,
+            action="accounting_fact_reviewed",
+            actor=actor,
         )
     elif status in {"forensic_complete", "complete_no_transactions"}:
         update_workflow_state(
@@ -1515,11 +1648,11 @@ def accounting_correction():
             changes={
                 "accounting_status": "ready_for_synthesis",
                 "accounting_dirty": True,
-                "accounting_dirty_reason": "The ledger was corrected after the accounting analysis ran.",
+                "accounting_dirty_reason": "The ledger was changed after the accounting analysis ran.",
             },
             stages={"accounting": stage_patch(READY, detail="ready_for_analysis")},
-            action="accounting_ledger_corrected",
-            actor=corrected_by,
+            action="accounting_ledger_changed",
+            actor=actor,
         )
     else:
         update_workflow_state(
@@ -1527,16 +1660,101 @@ def accounting_correction():
             changes={"accounting_status": "ready_for_synthesis"},
             stages={"accounting": stage_patch(READY, detail="ready_for_analysis")},
             action="accounting_review_resolved",
-            actor=corrected_by,
+            actor=actor,
         )
 
-    return _ok({
+    return {
         "saved": True,
-        "value": value,
         "pending_count": len(pending),
         "ready_for_analysis": not pending,
         "instructions": state.get("accounting_instructions", ""),
-    })
+    }
+
+
+def _fact_row(data, row_id):
+    frame = data.get("financial_line_items")
+    if not isinstance(frame, pd.DataFrame) or frame.empty or "row_id" not in frame.columns:
+        return None
+    match = frame[frame["row_id"].astype(str) == str(row_id)]
+    return match.iloc[-1].to_dict() if not match.empty else None
+
+
+@app.route("/accounting/fact/resolve", methods=["POST"])
+def accounting_fact_resolve():
+    """The user's decision on one uncertain fact:
+      confirm         accept the fact as the AI interpreted it
+      correct         replace fields with the user's values (validated)
+      ignore          leave the fact out of the ledger
+      accept_proposal accept the rewrite produced from the user's explanation
+    The extracted fact is never overwritten; decisions are layered on top."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    row_id = str(body.get("row_id", ""))
+    action = str(body.get("action", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    explanation = str(body.get("explanation", "") or "").strip()
+    if not (case_id and row_id) or action not in {"confirm", "correct", "ignore", "accept_proposal"}:
+        return jsonify({"error": "case_id, row_id and a valid action are required."}), 400
+
+    data = load_case_data(case_id)
+    row = _fact_row(data, row_id)
+    if row is None:
+        return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
+
+    if action == "correct":
+        fields, errors = validate_fact_fields(body.get("fields") or {})
+        if errors:
+            return jsonify({"error": "; ".join(errors)}), 400
+        if not fields:
+            return jsonify({"error": "Enter at least one corrected value."}), 400
+        submit_fact_resolution(case_id, row_id, "correct", fields, explanation, actor)
+    elif action == "accept_proposal":
+        current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
+        proposal = current.get("proposal")
+        if not proposal:
+            return jsonify({"error": "There is no proposal to accept for this fact."}), 409
+        submit_fact_resolution(case_id, row_id, "correct", proposal.get("fields") or {},
+                               proposal.get("explanation", ""), actor, proposal.get("summary", ""))
+    else:
+        submit_fact_resolution(case_id, row_id, action, {}, explanation, actor)
+
+    return _ok(_after_review_change(case_id, actor))
+
+
+@app.route("/accounting/fact/explain", methods=["POST"])
+def accounting_fact_explain():
+    """The user explains how an uncertain fact should be read ("this is the
+    third installment"). The AI rewrites the fact from that explanation and
+    the page evidence; the rewrite is stored as a proposal that the user
+    must accept before it enters the ledger."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    row_id = str(body.get("row_id", ""))
+    explanation = str(body.get("explanation", "") or "").strip()
+    actor = str(body.get("decided_by", "") or "attorney")
+    if not (case_id and row_id and explanation):
+        return jsonify({"error": "case_id, row_id and an explanation are required."}), 400
+
+    data = load_case_data(case_id)
+    row = _fact_row(data, row_id)
+    if row is None:
+        return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
+    current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
+    page = _pages_by_id(data).get(current["page_id"]) or {}
+
+    try:
+        result = reinterpret_fact(current["fact"], current["review"], current["source_text"],
+                                  page.get("page_text", ""), explanation)
+    except Exception as error:
+        traceback.print_exc()
+        return jsonify({"error": f"The explanation could not be applied: {error}"}), 502
+
+    fields, errors = validate_fact_fields(result.get("fields") or {})
+    if errors:
+        return jsonify({"error": "The rewritten fact is not valid: " + "; ".join(errors)}), 502
+    summary = str(result.get("summary", "") or "")
+    submit_fact_resolution(case_id, row_id, PROPOSAL_ACTION, fields, explanation, actor, summary)
+    return _ok({"proposal": {"fields": fields, "summary": summary, "explanation": explanation}})
 
 
 def _financial_claims(state, data):

@@ -46,6 +46,8 @@ from legal_platform.financial_fields import effective_value, pending_fields
 from legal_platform.financial_normalizer import build_normalized_ledger, normalize_currency
 from legal_platform.financial_reconciliation import build_rows_from_reconstruction
 from legal_platform import workflow
+from legal_platform.financial_forensics import normalise_claim_evaluation
+from legal_platform import financial_facts as facts
 from legal_platform.case_register import build_case_register, normalise_text, prioritise_pages_for_summary
 
 failures = []
@@ -354,6 +356,135 @@ result, by_key = overview(
 )
 check("analysis built on an older register -> stale", by_key["analysis"]["status"] == workflow.STALE
       and by_key["analysis"]["stale_because"] == "documents")
+
+# --- claims vs evidence: model output is checked before it is stored -----
+evaluated = normalise_claim_evaluation({
+    "claim": "The customer never received 12,450 SAR",
+    "result": "partially supported",
+    "evidence_record_ids": ["R1", "INVENTED"],
+    "financial_evidence_found": [{"record_id": "R2"}],
+    "missing_evidence": ["Receipt for the transfer", "", "none"],
+    "contradictions": [
+        {"description": "Statement shows the credit on 25 March", "record_ids": ["R1", "FAKE"]},
+        "Balance does not match",
+        {"description": ""},
+    ],
+}, known_ids={"R1", "R2"})
+check("claim gets an id", evaluated["claim_id"] == "CLM_001")
+check("result wording normalised", evaluated["result"] == "PARTIALLY_SUPPORTED")
+check("only ledger records kept as evidence (incl. evidence_found ids)", evaluated["evidence_record_ids"] == ["R1", "R2"])
+check("invented ids set apart", evaluated["unverified_record_ids"] == ["INVENTED", "FAKE"])
+check("missing evidence cleaned to a list of text", evaluated["missing_evidence"] == ["Receipt for the transfer"])
+check("contradictions structured, empty ones dropped",
+      evaluated["contradictions"] == [
+          {"description": "Statement shows the credit on 25 March", "record_ids": ["R1"]},
+          {"description": "Balance does not match", "record_ids": []},
+      ])
+odd = normalise_claim_evaluation({"claim": "x", "result": "probably true"}, known_ids=set(), index=4)
+check("unknown result is not reinterpreted", odd["result"] == "NOT_VERIFIABLE" and odd["result_raw"] == "probably true"
+      and odd["claim_id"] == "CLM_005")
+
+# --- atomic financial facts -------------------------------------------------
+for text, expected in [("1,000,000", "1000000"), ("300,000", "300000"), ("12,450.00 SAR", "12450.00"),
+                       ("1.234,56", "1234.56"), ("(500.00)", "-500.00"), ("١٢٬٤٥٠٫٠٠", "12450.00"),
+                       ("1 000 000", "1000000"), ("SAR 540,000", "540000")]:
+    check(f"amount '{text}' read exactly", facts.parse_amount(text) == Decimal(expected))
+check("ambiguous '1.000' is not guessed", facts.parse_amount("1.000") is None)
+check("non-number is not read", facts.parse_amount("about a million") is None)
+
+page_output = {"facts": [
+    {"fact_key": "F1", "fact_type": "financing_amount", "amount": "1,000,000", "currency": "ريال", "status": "EXTRACTED"},
+    {"fact_key": "F2", "fact_type": "payment", "paid_amount": "300,000", "currency": "SAR", "status": "EXTRACTED"},
+    {"fact_key": "F3", "fact_type": "remaining_balance", "remaining_amount": "700,000", "status": "CALCULATED",
+     "calculation": {"operation": "subtract", "inputs": ["F1", "F2"], "result_field": "remaining_amount"}},
+    {"fact_key": "F4", "fact_type": "remaining_balance", "remaining_amount": "650,000", "status": "CALCULATED",
+     "calculation": {"operation": "subtract", "inputs": ["F1", "F2"]}},
+    {"fact_key": "F5", "fact_type": "outstanding_balance", "amount": "250,000", "status": "UNCERTAIN",
+     "review": {"question": "Balance or installment?", "suggestion": "Outstanding balance", "reason": "Header unreadable",
+                "alternatives": ["installment", "debit"]}},
+    {"fact_key": "F6", "fact_type": "payment", "description": "Payment date not stated", "status": "MISSING"},
+    {"fact_key": "F7", "amount": "5,000", "status": "EXTRACTED"},
+    {"fact_key": "F8", "fact_type": "fee", "amount": "one hundred", "status": "EXTRACTED"},
+    {"fact_key": "F9", "fact_type": "fee", "amount": "50", "status": "PROBABLY"},
+    {"fact_key": "F10", "status": "EXTRACTED"},
+]}
+fact_rows = facts.build_fact_rows("P1", "D1", 3, page_output)
+by_key = {json.loads(r["fields_json"])["fact_key"]: r for r in fact_rows}
+check("fact with no values dropped", "F10" not in by_key)
+check("explicit value -> EXTRACTED; currency read, not assumed", by_key["F1"]["row_status"] == "EXTRACTED"
+      and json.loads(by_key["F1"]["fields_json"])["fact"]["currency"] == "SAR")
+check("fields the page does not support stay null", json.loads(by_key["F2"]["fields_json"])["fact"]["date"] is None)
+check("correct calculation -> CALCULATED (recomputed)", by_key["F3"]["row_status"] == "CALCULATED"
+      and json.loads(by_key["F3"]["fields_json"])["calculation"]["check"]["ok"])
+f4 = json.loads(by_key["F4"]["fields_json"])
+check("wrong calculation -> UNCERTAIN with the recomputed value",
+      by_key["F4"]["row_status"] == "UNCERTAIN" and "700,000.00" in f4["review"]["reason"])
+check("ambiguous value -> UNCERTAIN with its review block",
+      by_key["F5"]["row_status"] == "UNCERTAIN" and json.loads(by_key["F5"]["fields_json"])["review"]["alternatives"] == ["installment", "debit"])
+check("missing information -> MISSING, not a question", by_key["F6"]["row_status"] == "MISSING" and not by_key["F6"]["has_conflict"])
+check("value with no meaning (fact type) -> UNCERTAIN", by_key["F7"]["row_status"] == "UNCERTAIN")
+check("unreadable number -> UNCERTAIN", by_key["F8"]["row_status"] == "UNCERTAIN")
+check("unknown status -> UNCERTAIN", by_key["F9"]["row_status"] == "UNCERTAIN")
+
+fact_ledger, fact_withheld = facts.build_fact_ledger(fact_rows)
+check("ledger: extracted, calculated and missing facts; uncertain withheld",
+      sorted(e["status"] for e in fact_ledger) == ["CALCULATED", "EXTRACTED", "EXTRACTED", "MISSING"] and fact_withheld == 5)
+check("ledger value uses the fact's own field", next(e for e in fact_ledger if e["fact_type"] == "payment" and e["value"])["value"] == "300,000.00")
+
+def decision(row, action, **payload):
+    return {"row_id": row["row_id"], "field_name": facts.RESOLUTION_FIELD,
+            "corrected_value": json.dumps({"action": action, **payload}), "corrected_by": "attorney"}
+
+resolutions = facts.latest_resolutions([
+    decision(by_key["F4"], "confirm"),
+    decision(by_key["F5"], "proposal", fields={"fact_type": "installment"}, explanation="third installment"),
+    decision(by_key["F7"], "ignore"),
+    decision(by_key["F8"], "correct", fields={"amount": "100.00"}, explanation="one hundred riyals"),
+])
+fact_ledger, fact_withheld = facts.build_fact_ledger(fact_rows, {}, resolutions)
+statuses = {e["row_id"]: e["status"] for e in fact_ledger}
+check("confirm -> USER_CONFIRMED", statuses.get(by_key["F4"]["row_id"]) == "USER_CONFIRMED")
+check("ignore -> left out of the ledger", by_key["F7"]["row_id"] not in statuses)
+corrected = next(e for e in fact_ledger if e["row_id"] == by_key["F8"]["row_id"])
+check("correct -> USER_CORRECTED with the new value and the note",
+      corrected["status"] == "USER_CORRECTED" and corrected["amount"] == "100.00" and corrected["user_note"] == "one hundred riyals")
+check("a proposal alone keeps the fact waiting", by_key["F5"]["row_id"] not in statuses and fact_withheld == 2)
+review = facts.build_fact_review_items(fact_rows, {}, resolutions, {"P1": {"label": "loan.pdf — page 3", "page_text": "..."}})
+check("review queue lists remaining uncertain facts with the proposal",
+      sorted(i["fact"]["fact_type"] or "" for i in review) == ["fee", "outstanding_balance"]
+      and next(i for i in review if i["fact"]["fact_type"] == "outstanding_balance")["proposal"]["explanation"] == "third installment")
+check("a later confirm replaces the proposal", facts.latest_resolutions([
+    decision(by_key["F5"], "proposal", fields={}), decision(by_key["F5"], "confirm")])[by_key["F5"]["row_id"]].get("proposal") is None)
+
+clean, errors = facts.validate_fact_fields({"amount": "12,500", "fact_type": "Third Installment", "currency": "riyal", "bogus": 1})
+check("user fields validated", clean == {"amount": "12,500.00", "fact_type": "third_installment", "currency": "SAR"} and not errors)
+check("other countries' riyals kept as written", facts.validate_fact_fields({"currency": "Qatari riyal"})[0]["currency"] == "QATARI RIYAL")
+check("user amount must be a number", facts.validate_fact_fields({"amount": "abc"})[1])
+
+legacy_rows = build_rows_from_reconstruction("P1", "D1", 1, reconstruction)
+legacy_ledger, legacy_withheld = facts.build_fact_ledger(legacy_rows)
+check("old transaction rows read as transaction facts",
+      len(legacy_ledger) == 1 and legacy_ledger[0]["fact_type"] == "transaction"
+      and legacy_ledger[0]["debit"] == "12,450.00" and legacy_withheld == 2)
+
+grouped = normalise_claim_evaluation({
+    "parent_claim": "Customer paid SAR 500,000 and owes nothing", "claim": "Customer paid SAR 500,000",
+    "claimed_amount": "500000", "substantiated_amount": "350,000", "result": "partially_supported",
+    "partially_supporting_evidence": [{"record_ids": ["R1"], "explanation": "Only 350,000 on page 11"}],
+    "contradicting_evidence": [{"record_ids": ["R2", "FAKE"], "explanation": "Balance still due"}],
+    "unresolved_evidence": [{"record_ids": ["R3"], "explanation": "Inferred meaning"}],
+    "accounting_position": "Records substantiate SAR 350,000 of SAR 500,000.",
+}, known_ids={"R1", "R2", "R3"})
+check("atomic claim keeps its parent claim", grouped["parent_claim"].startswith("Customer paid SAR 500,000 and"))
+check("claimed / substantiated amounts normalised", grouped["claimed_amount"] == "500,000.00" and grouped["substantiated_amount"] == "350,000.00")
+check("evidence groups kept with ledger ids only",
+      grouped["partially_supporting_evidence"][0]["record_ids"] == ["R1"]
+      and grouped["contradicting_evidence"][0]["record_ids"] == ["R2"]
+      and grouped["unresolved_evidence"][0]["record_ids"] == ["R3"] and grouped["unverified_record_ids"] == ["FAKE"])
+check("evidence resting only on invented records is dropped", normalise_claim_evaluation(
+    {"supporting_evidence": [{"record_ids": ["FAKE"], "explanation": "made up"}]}, known_ids={"R1"})["supporting_evidence"] == [])
+check("flat views kept for the pleading", grouped["evidence_record_ids"] == ["R1"]
+      and grouped["contradictions"] == [{"description": "Balance still due", "record_ids": ["R2"]}])
 
 print()
 if failures:

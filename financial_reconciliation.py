@@ -175,6 +175,147 @@ def build_rows_from_reconstruction(
     return rows
 
 
+# =============================================================================
+# ATOMIC FINANCIAL FACTS (current extraction)
+# =============================================================================
+ATOMIC_FACTS_SYSTEM_PROMPT = r"""
+You are a forensic accountant turning ONE page of a legal case file into atomic financial facts.
+
+You receive two independent readings of the same page:
+- structural_evidence: text and tables read directly from the PDF (may be empty for scanned pages);
+- transcription_text: a verbatim transcription of the page image by a vision model.
+Use both. Where they disagree, say so.
+
+WHAT AN ATOMIC FACT IS
+One independent piece of financial information. Never combine several amounts in one fact.
+"The customer obtained financing of SAR 1M, paid SAR 300K, and SAR 700K remains" becomes THREE facts:
+  financing_amount = 1,000,000 SAR; payment (paid_amount) = 300,000 SAR; remaining_balance (remaining_amount) = 700,000 SAR.
+Each row of a statement or ledger table is one fact (fact_type "transaction", with debit/credit/balance as printed).
+Ignore institutional boilerplate: paid-up capital, CR/VAT numbers, P.O. boxes, phone numbers, barcodes, page footers.
+
+FIELDS (fill ONLY what the page supports; use null for everything else)
+fact_type: one of transaction, payment, installment, deposit, withdrawal, transfer, financing_amount,
+  outstanding_balance, remaining_balance, amount_due, opening_balance, closing_balance, balance, fee,
+  interest, penalty, credit_limit, claimed_amount, other
+date, description, amount, currency, debit, credit, balance, amount_due, paid_amount, remaining_amount,
+account_number, transaction_reference, counterparty
+- Copy numbers exactly as printed (keep separators); do not convert or round.
+- currency: only if printed on the row or stated for the account/statement on this page. Never assume SAR.
+- Do NOT fill a field just because the column exists. A value not on the page is null, and that is fine.
+
+STATUS (exactly one per fact)
+- EXTRACTED: the page states the value explicitly.
+- CALCULATED: you derived it arithmetically from other facts on this page. Give "calculation":
+  {"operation": "add|subtract|multiply|divide", "inputs": ["<fact_key>", ...], "result_field": "<field>"}.
+  Inputs are the fact_keys of facts in your output. The system recomputes it.
+- INFERRED: the value is printed but its meaning (fact_type, direction) comes from context, and you are confident.
+- UNCERTAIN: something is on the page but you cannot confidently tell its value or meaning
+  (e.g. 250,000 that could be a balance, an installment or a debit; a smudged digit; an unreadable header).
+  Give your best interpretation in the fields AND a "review" block.
+- MISSING: information the page clearly should contain but does not (e.g. a payment with no date).
+  Put what is missing in "description"; leave values null.
+
+NEVER GUESS. If you are not confident, use UNCERTAIN rather than EXTRACTED or INFERRED.
+
+REVIEW BLOCK (only for UNCERTAIN)
+"review": {"question": "what the reviewer must decide", "suggestion": "your best interpretation in words",
+           "reason": "why you are unsure", "alternatives": ["other plausible meanings"]}
+
+For every fact, copy the exact text it came from into "source_text".
+
+RETURN JSON ONLY:
+{
+  "facts": [
+    {
+      "fact_key": "F1",
+      "fact_type": "financing_amount",
+      "date": null, "description": "Original financing amount",
+      "amount": "1,000,000", "currency": "SAR",
+      "debit": null, "credit": null, "balance": null,
+      "amount_due": null, "paid_amount": null, "remaining_amount": null,
+      "account_number": null, "transaction_reference": null, "counterparty": null,
+      "status": "EXTRACTED",
+      "source_text": "...",
+      "calculation": null,
+      "review": null
+    }
+  ]
+}
+""".strip()
+
+
+def extract_page_facts(
+    structural_evidence: dict,
+    transcription_text: str,
+    page_number: int,
+) -> dict:
+    """One LLM call: all evidence for a page -> atomic financial facts."""
+    payload = {
+        "page_number": page_number,
+        "structural_evidence": structural_evidence,
+        "transcription_text": transcription_text,
+    }
+    last_error: Optional[Exception] = None
+    for attempt in range(1, int(FINANCIAL_REQUEST_MAX_ATTEMPTS) + 1):
+        try:
+            return complete_json(
+                system_prompt=ATOMIC_FACTS_SYSTEM_PROMPT,
+                user_payload=payload,
+                llm_id=FINANCIAL_EXTRACTION_LLM_ID,
+                temperature=0.0,
+            )
+        except Exception as error:
+            last_error = error
+            if attempt < int(FINANCIAL_REQUEST_MAX_ATTEMPTS):
+                time.sleep(float(FINANCIAL_RETRY_DELAY_SECONDS))
+    raise RuntimeError(f"Atomic fact extraction failed: {last_error!r}")
+
+
+REINTERPRET_SYSTEM_PROMPT = r"""
+A reviewer has explained how an uncertain financial fact should be read. Rewrite that ONE fact
+according to the explanation, using the page evidence.
+
+Rules:
+- Follow the reviewer's explanation; it overrides your earlier interpretation.
+- Change only what the explanation implies. Keep values the explanation does not touch.
+- Copy numbers as printed on the page. Use null for anything the page does not show.
+- Do not invent dates, references or amounts that are neither on the page nor in the explanation.
+- fact_type must be one of: transaction, payment, installment, deposit, withdrawal, transfer,
+  financing_amount, outstanding_balance, remaining_balance, amount_due, opening_balance, closing_balance,
+  balance, fee, interest, penalty, credit_limit, claimed_amount, other.
+
+RETURN JSON ONLY:
+{
+  "fields": {"fact_type": "...", "date": null, "description": "...", "amount": null, "currency": null,
+             "debit": null, "credit": null, "balance": null, "amount_due": null, "paid_amount": null,
+             "remaining_amount": null, "account_number": null, "transaction_reference": null,
+             "counterparty": null},
+  "summary": "one sentence describing the fact as now understood"
+}
+""".strip()
+
+
+def reinterpret_fact(fact: dict, review: dict, source_text: str, page_text: str, explanation: str) -> dict:
+    """Rewrite an uncertain fact from the reviewer's explanation. The result
+    is only a proposal: the user confirms it before it is used."""
+    payload = {
+        "current_fact": fact,
+        "why_it_was_uncertain": review,
+        "source_text": source_text,
+        "page_text": (page_text or "")[:6000],
+        "reviewer_explanation": explanation,
+    }
+    result = complete_json(
+        system_prompt=REINTERPRET_SYSTEM_PROMPT,
+        user_payload=payload,
+        llm_id=FINANCIAL_EXTRACTION_LLM_ID,
+        temperature=0.0,
+    )
+    if not isinstance(result, dict) or not isinstance(result.get("fields"), dict):
+        raise RuntimeError("The model did not return a rewritten fact.")
+    return result
+
+
 def persist_reconciled_rows(case_id: str, rows: list[dict]) -> int:
     for row in rows:
         row["case_id"] = case_id

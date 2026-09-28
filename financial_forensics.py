@@ -21,8 +21,8 @@ from .config import (
 )
 
 from .storage import case_rows, replace_case_rows
-from .financial_corrections import load_latest_corrections
-from .financial_normalizer import build_normalized_ledger
+from .financial_corrections import load_fact_resolutions, load_latest_corrections
+from .financial_facts import build_fact_ledger, format_amount, parse_amount
 from .ids import random_id
 from .llm import parse_json_object, strip_think
 
@@ -38,62 +38,71 @@ logger = logging.getLogger("FinancialForensics")
 # -----------------------------------------------------------------------------
 CLAIM_BASED_ACCOUNTING_PROMPT = r"""
 You are a senior forensic accountant representing Banque Saudi Fransi (BSF).
-Evaluate each customer claim against the available financial records. 
+Compare the financial claims made in a legal case with the reviewed financial ledger.
 
 INPUTS:
-- Customer Claims: {claims_json}
-- Financial Evidence (Normalized Ledger): {ledger_json}
-- User Analysis Instructions: {instructions}
+- Claims: {claims_json}
+- Final normalized financial ledger (atomic facts, already reviewed): {ledger_json}
+- User analysis instructions: {instructions}
 
-METHODOLOGY:
-1. Understand each customer claim and determine the exact financial question that needs to be investigated.
-2. Read the User Analysis Instructions and use them to determine the requested accounting focus, scope, or methodology.
-3. Determine what financial evidence would normally be expected to answer the claim and the requested analysis.
-4. Identify the relevant financial evidence from the provided ledger.
-5. Perform the requested accounting analysis using the available evidence.
-6. Compare the claim against the financial evidence.
-7. Clearly identify any discrepancies, missing evidence, unexplained amounts, inconsistencies, or limitations.
+THE LEDGER
+Each record is one atomic financial fact with a record_id, fact_type, the fields the document supports
+(null = not stated) and a status:
+- EXTRACTED / USER_CONFIRMED / USER_CORRECTED: the value is established.
+- CALCULATED: derived arithmetically from other facts (and verified).
+- INFERRED: printed, but its meaning was interpreted from context. Treat conclusions that depend on it as
+  less certain and list it under unresolved_evidence when it is decisive.
+- MISSING: the document is silent on this point; it is an evidence gap, never evidence.
 
-HOW TO USE THE USER ANALYSIS INSTRUCTIONS:
-- Treat the user's instructions as guidance for what should be investigated.
-- The instructions may specify a period, transaction type, amount, calculation, reconciliation, discrepancy, or accounting question to focus on.
-- The instructions guide the scope and methodology of the accounting analysis.
-- The instructions MUST NOT determine the conclusion.
-- Do not assume that a hypothesis stated by the user is true.
-- Verify the requested issue independently using the provided financial evidence.
-- Do not ignore evidence that contradicts the user's requested hypothesis.
-- If the evidence does not support the user's requested hypothesis, state that clearly.
-- If no user instructions are provided, perform the normal claim-based accounting analysis.
+METHOD
+1. Break every claim into ATOMIC CLAIMS: one assertion each (one amount, one payment, one date, one
+   balance). "The customer paid SAR 500,000 and owes nothing" becomes two atomic claims. Keep the original
+   wording in parent_claim.
+2. For each atomic claim state the financial question and the evidence that would normally prove it.
+3. Classify the ledger records that bear on it:
+   - supporting_evidence: records that establish the claim.
+   - partially_supporting_evidence: records that establish only part of it (e.g. 350,000 of a claimed 500,000).
+   - contradicting_evidence: records that cannot be true at the same time as the claim.
+   - unresolved_evidence: records whose relevance or meaning is ambiguous (e.g. INFERRED facts), with why.
+   - missing_evidence: what would be needed but is not in the ledger (a missing record is NOT a contradiction).
+   Every evidence entry cites record_ids from the ledger and explains in one sentence how it bears on the claim.
+4. claimed_amount: the amount the claim asserts, if any. substantiated_amount: the part the records establish.
+5. accounting_position: a precise statement such as "Available financial records substantiate SAR 350,000 of
+   the claimed SAR 500,000; no record of the remaining SAR 150,000 was located." Cite amounts and pages.
+6. result: SUPPORTED, PARTIALLY_SUPPORTED, CONTRADICTED, NOT_VERIFIABLE, NO_FINANCIAL_EVIDENCE or
+   NOT_FINANCIAL_CLAIM (for claims that make no financial assertion).
 
-RULES:
-- Use ONLY the provided claims and financial evidence.
-- Never invent transactions, amounts, dates, references, calculations, or supporting evidence.
-- Every accounting conclusion must be supported by the available financial evidence.
-- Do not make legal conclusions such as liability, regulatory violations, or legal entitlement.
-- Clearly state limitations when the available ledger cannot fully answer the accounting question.
-- Result must be one of: SUPPORTED, PARTIALLY_SUPPORTED, CONTRADICTED, NOT_VERIFIABLE, NO_FINANCIAL_EVIDENCE, NOT_FINANCIAL_CLAIM.
+USER INSTRUCTIONS
+They set the scope, period, focus or method of the analysis. They MUST NOT decide the conclusion: do not
+assume a hypothesis in them is true, do not ignore evidence that contradicts it, and say so clearly when the
+evidence does not support it. With no instructions, perform the normal analysis.
+
+RULES
+- Use ONLY the claims and the ledger. Never invent records, amounts, dates, references or calculations.
+- Cite only record_ids that appear in the ledger.
+- No legal conclusions (liability, violations, entitlement) — accounting positions only.
+- State limitations where the ledger cannot fully answer the question.
+
 RETURN JSON ONLY:
 {
   "claim_evaluations": [
     {
       "claim_id": "CLM_001",
-      "claim": "...",
+      "parent_claim": "original claim text",
+      "claim": "atomic claim",
+      "claimed_amount": "500,000",
+      "currency": "SAR",
       "financial_question": "...",
       "expected_evidence": "...",
-      "financial_evidence_found": [
-        {
-          "record_id": "...",
-          "date": "...",
-          "type": "...",
-          "amount": 0.0,
-          "reference": "..."
-        }
-      ],
-      "comparison": "...",
-      "result": "SUPPORTED",
-      "accounting_response": "...",
-      "limitation": "...",
-      "evidence_record_ids": ["..."]
+      "supporting_evidence": [{"record_ids": ["..."], "explanation": "..."}],
+      "partially_supporting_evidence": [{"record_ids": ["..."], "explanation": "..."}],
+      "contradicting_evidence": [{"record_ids": ["..."], "explanation": "..."}],
+      "unresolved_evidence": [{"record_ids": ["..."], "explanation": "..."}],
+      "missing_evidence": ["..."],
+      "substantiated_amount": "350,000",
+      "accounting_position": "...",
+      "result": "PARTIALLY_SUPPORTED",
+      "limitation": "..."
     }
   ]
 }
@@ -131,8 +140,11 @@ def build_full_normalized_ledger(case_id: str) -> list[dict]:
     if rows_df.empty:
         return []
 
-    corrections = load_latest_corrections(case_id)
-    ledger, _withheld = build_normalized_ledger(rows_df.to_dict(orient="records"), corrections)
+    ledger, _withheld = build_fact_ledger(
+        rows_df.to_dict(orient="records"),
+        load_latest_corrections(case_id),
+        load_fact_resolutions(case_id),
+    )
     return ledger
 
 
@@ -194,19 +206,7 @@ def run_claim_based_accounting_analysis(
         _persist_forensic_results(case_id, result)
         return result
 
-    compact_ledger = [
-        {
-            "record_id": r.get("row_id"),
-            "page_number": r.get("page_number"),
-            "date": r.get("date"),
-            "type": r.get("debit_or_credit"),
-            "amount": r.get("amount"),
-            "currency": r.get("currency"),
-            "reference": r.get("reference_number", ""),
-            "description": str(r.get("description", ""))[:120],
-        }
-        for r in normalized_ledger
-    ]
+    compact_ledger = [compact_ledger_record(r) for r in normalized_ledger]
 
     prompt = CLAIM_BASED_ACCOUNTING_PROMPT.replace("{claims_json}", json.dumps(customer_claims, ensure_ascii=False)) \
                                           .replace("{ledger_json}", json.dumps(compact_ledger, ensure_ascii=False)) \
@@ -220,15 +220,151 @@ def run_claim_based_accounting_analysis(
         raise RuntimeError(f"The accounting analysis model call failed: {err}") from err
 
     known_ids = {str(r.get("row_id")) for r in normalized_ledger}
-    for evaluation in findings_result.get("claim_evaluations", []) or []:
-        if isinstance(evaluation, dict):
-            cited = [str(x) for x in (evaluation.get("evidence_record_ids") or [])]
-            evaluation["evidence_record_ids"] = [x for x in cited if x in known_ids]
-            evaluation["unverified_record_ids"] = [x for x in cited if x not in known_ids]
+    findings_result["claim_evaluations"] = [
+        normalise_claim_evaluation(evaluation, known_ids, index)
+        for index, evaluation in enumerate(findings_result.get("claim_evaluations") or [])
+        if isinstance(evaluation, dict)
+    ]
 
     findings_result["run_metadata"] = run_metadata
     _persist_forensic_results(case_id, findings_result)
     return findings_result
+
+
+CLAIM_RESULTS = (
+    "SUPPORTED",
+    "PARTIALLY_SUPPORTED",
+    "CONTRADICTED",
+    "NOT_VERIFIABLE",
+    "NO_FINANCIAL_EVIDENCE",
+    "NOT_FINANCIAL_CLAIM",
+)
+
+
+def _as_text_list(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    items = value if isinstance(value, list) else [value]
+    out = []
+    for item in items:
+        if isinstance(item, dict):
+            item = item.get("description") or item.get("item") or item.get("text") or ""
+        text = str(item or "").strip()
+        if text and text.lower() not in {"none", "n/a", "-"}:
+            out.append(text)
+    return out
+
+
+EVIDENCE_GROUPS = (
+    "supporting_evidence",
+    "partially_supporting_evidence",
+    "contradicting_evidence",
+    "unresolved_evidence",
+)
+
+_LEDGER_KEYS = (
+    "fact_type", "date", "description", "amount", "currency", "debit", "credit", "balance",
+    "amount_due", "paid_amount", "remaining_amount", "account_number", "transaction_reference",
+    "counterparty", "status", "page_number",
+)
+
+
+def compact_ledger_record(entry: dict) -> dict:
+    """One ledger fact as the analysis prompt sees it: only non-null fields."""
+    record = {"record_id": entry.get("row_id")}
+    for key in _LEDGER_KEYS:
+        value = entry.get(key)
+        if value not in (None, "", []):
+            record[key] = str(value)[:160] if key == "description" else value
+    if entry.get("user_note"):
+        record["reviewer_note"] = str(entry["user_note"])[:200]
+    return record
+
+
+def _evidence_group(value: Any, known_ids: set, unverified: list) -> list[dict]:
+    items = value if isinstance(value, list) else ([value] if value else [])
+    out = []
+    for entry in items:
+        if isinstance(entry, dict):
+            ids = [str(x) for x in (entry.get("record_ids") or []) if str(x).strip()]
+            if entry.get("record_id"):
+                ids.append(str(entry["record_id"]))
+            text = str(entry.get("explanation") or entry.get("description") or "").strip()
+        else:
+            ids, text = [], str(entry or "").strip()
+        ids = list(dict.fromkeys(ids))
+        unverified.extend(x for x in ids if x not in known_ids)
+        kept = [x for x in ids if x in known_ids]
+        # Evidence that rests only on records the ledger does not contain
+        # is not evidence: drop it (its ids are listed as unverified).
+        if ids and not kept:
+            continue
+        if kept or text:
+            out.append({"record_ids": kept, "explanation": text})
+    return out
+
+
+def _amount_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text or text.lower() in {"null", "none", "n/a"}:
+        return ""
+    amount = parse_amount(text)
+    return format_amount(amount) if amount is not None else text
+
+
+def normalise_claim_evaluation(evaluation: dict, known_ids: set, index: int = 0) -> dict:
+    """Make one LLM claim evaluation safe to store and display.
+
+    * evidence is grouped as supporting / partially supporting /
+      contradicting / unresolved, each entry {record_ids, explanation};
+      only ids present in the reviewed ledger are kept, others move to
+      `unverified_record_ids`;
+    * missing_evidence is a list of strings;
+    * results from the earlier single-list format (evidence_record_ids,
+      contradictions, financial_evidence_found) are mapped onto the groups;
+    * a result outside CLAIM_RESULTS is not reinterpreted: it becomes
+      NOT_VERIFIABLE and the model's wording is kept in result_raw.
+    """
+    item = dict(evaluation)
+    item["claim_id"] = str(item.get("claim_id") or f"CLM_{index + 1:03d}")
+    unverified: list = []
+
+    for group in EVIDENCE_GROUPS:
+        item[group] = _evidence_group(item.get(group), known_ids, unverified)
+
+    # Earlier format -> groups.
+    legacy_ids = [str(x) for x in (item.get("evidence_record_ids") or []) if str(x).strip()]
+    for found in item.get("financial_evidence_found") or []:
+        if isinstance(found, dict) and str(found.get("record_id") or "").strip():
+            legacy_ids.append(str(found["record_id"]))
+    if legacy_ids and not item["supporting_evidence"] and not item["partially_supporting_evidence"]:
+        item["supporting_evidence"] = _evidence_group(
+            [{"record_ids": list(dict.fromkeys(legacy_ids)), "explanation": ""}], known_ids, unverified)
+    if item.get("contradictions") and not item["contradicting_evidence"]:
+        item["contradicting_evidence"] = _evidence_group(item.get("contradictions"), known_ids, unverified)
+
+    item["missing_evidence"] = _as_text_list(item.get("missing_evidence"))
+    item["claimed_amount"] = _amount_text(item.get("claimed_amount"))
+    item["substantiated_amount"] = _amount_text(item.get("substantiated_amount"))
+    item["accounting_position"] = str(item.get("accounting_position") or item.get("accounting_response") or "").strip()
+    item["parent_claim"] = str(item.get("parent_claim") or item.get("claim") or "").strip()
+
+    # Flat views kept for the pleading and chatbot context.
+    item["evidence_record_ids"] = list(dict.fromkeys(
+        x for group in ("supporting_evidence", "partially_supporting_evidence")
+        for entry in item[group] for x in entry["record_ids"]))
+    item["contradictions"] = [
+        {"description": entry["explanation"], "record_ids": entry["record_ids"]}
+        for entry in item["contradicting_evidence"]
+    ]
+    item["unverified_record_ids"] = list(dict.fromkeys(unverified))
+
+    result = str(item.get("result") or "").strip().upper().replace(" ", "_").replace("-", "_")
+    if result not in CLAIM_RESULTS:
+        item["result_raw"] = item.get("result")
+        result = "NOT_VERIFIABLE"
+    item["result"] = result
+    return item
 
 
 # -----------------------------------------------------------------------------

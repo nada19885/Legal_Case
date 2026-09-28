@@ -611,3 +611,38 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-conflict-field-name { display: flex; align-items: center; gap: .5rem; }
 .bsf-conflict-custom { flex-wrap: wrap; }
 .bsf-register-metrics { margin: .2rem 0 .4rem; }
+
+/* ---------------- Claims vs evidence ---------------- */
+.bsf-claim-summary { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .4rem 0 .8rem; }
+.bsf-claim > summary { display: flex; align-items: center; gap: .6rem; }
+.bsf-claim-title { font-weight: 600; color: var(--ink); }
+.bsf-claim-block { margin: .6rem 0; }
+.bsf-claim-list { margin: .2rem 0; padding-inline-start: 1.2rem; }
+.bsf-claim-contradiction { border-inline-start: 3px solid var(--warn); padding: .3rem .7rem; margin: .4rem 0; background: var(--warn-bg); border-radius: var(--radius-sm); }
+.bsf-claim-rows { font-size: .82rem; margin-top: .3rem; }
+.bsf-claim-rows .bsf-source-links { display: inline; }
+@media (max-width: 760px) { .bsf-claim-rows { display: block; overflow-x: auto; } }
+
+/* ---------------- Atomic facts ---------------- */
+.bsf-table-scroll { overflow-x: auto; }
+.bsf-fact-ledger { font-size: .82rem; }
+.bsf-fact-ledger td, .bsf-fact-ledger th { white-space: nowrap; }
+.bsf-fact-ledger td:nth-child(4) { white-space: normal; min-width: 180px; }
+.bsf-fact-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: .5rem; margin: .8rem 0 .4rem; }
+.bsf-fact-correct > summary { list-style: none; cursor: pointer; }
+.bsf-fact-correct > summary::-webkit-details-marker { display: none; }
+.bsf-fact-correct[open] { flex-basis: 100%; order: 3; }
+.bsf-fact-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: .4rem .7rem; margin-top: .6rem;
+  padding: .7rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+.bsf-fact-form .bsf-field { margin: 0; }
+.bsf-fact-form .bsf-fact-note { grid-column: 1 / -1; }
+.bsf-fact-form > button { justify-self: start; }
+.bsf-fact-explain { margin-top: .6rem; }
+.bsf-fact-proposal { border: 1px solid var(--primary); background: var(--mint-light); border-radius: var(--radius-sm); padding: .6rem .8rem; margin: .6rem 0; }
+.bsf-claim-amounts { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin: .3rem 0 .6rem; font-size: .88rem; }
+.bsf-claim-position { border-inline-start: 4px solid var(--primary); background: var(--mint-light); padding: .5rem .8rem; border-radius: var(--radius-sm); margin: .4rem 0 .6rem; font-weight: 500; }
+.bsf-claim-block.is-support { border-inline-start: 3px solid var(--ok); padding-inline-start: .6rem; }
+.bsf-claim-block.is-partial { border-inline-start: 3px solid var(--primary-light); padding-inline-start: .6rem; }
+.bsf-claim-block.is-contra { border-inline-start: 3px solid var(--flag); padding-inline-start: .6rem; }
+.bsf-claim-block.is-unresolved { border-inline-start: 3px solid var(--warn); padding-inline-start: .6rem; }
+.bsf-claim-evidence { margin: .3rem 0 .5rem; }
