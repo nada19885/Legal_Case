@@ -17,6 +17,7 @@ from .financial_fields import (
     parse_fields,
     pending_fields,
 )
+from .financial_facts import RESOLUTION_FIELD, latest_resolutions
 from .ids import random_id
 from .storage import append_rows, case_rows
 
@@ -176,8 +177,66 @@ def load_latest_corrections(case_id: str) -> dict[str, dict[str, dict]]:
     for row in corrections_df.to_dict(orient="records"):
         row_id = str(row.get("row_id", ""))
         field_name = str(row.get("field_name", ""))
+        if field_name == RESOLUTION_FIELD:
+            continue  # fact-level decisions, see load_fact_resolutions
         result.setdefault(row_id, {})[field_name] = row  # later rows overwrite earlier ones
     return result
+
+
+def load_fact_resolutions(case_id: str) -> dict:
+    """row_id -> {"final": ..., "proposal": ...}: the user's latest decision
+    on each atomic fact (see financial_facts.latest_resolutions)."""
+    corrections_df = case_rows(FINANCIAL_LINE_ITEM_CORRECTIONS_DATASET, case_id)
+    if corrections_df.empty:
+        return {}
+    if "corrected_at" in corrections_df.columns:
+        corrections_df = corrections_df.sort_values("corrected_at", kind="stable")
+    return latest_resolutions(corrections_df.to_dict(orient="records"))
+
+
+def submit_fact_resolution(
+    case_id: str,
+    row_id: str,
+    action: str,
+    fields: Optional[dict] = None,
+    explanation: str = "",
+    decided_by: str = "",
+    summary: str = "",
+) -> str:
+    """Record the user's decision on one atomic fact: confirm, correct,
+    ignore, or an explanation-based proposal awaiting confirmation.
+
+    Stored as its own row in the corrections dataset (field_name
+    "__resolution__"); the extracted fact itself is never overwritten, so
+    the original reading and every decision stay on record."""
+    payload = {
+        "action": action,
+        "fields": fields or {},
+        "explanation": explanation,
+        "summary": summary,
+    }
+    correction_id = random_id("FACTRES")
+    append_rows(FINANCIAL_LINE_ITEM_CORRECTIONS_DATASET, [{
+        "correction_id": correction_id,
+        "case_id": case_id,
+        "row_id": row_id,
+        "field_name": RESOLUTION_FIELD,
+        "candidates_json": "[]",
+        "corrected_value": json.dumps(payload, ensure_ascii=False),
+        "corrected_by": decided_by,
+        "corrected_at": datetime.now(timezone.utc).isoformat(),
+        "correction_note": explanation,
+    }])
+    audit(
+        case_id=case_id,
+        entity_type="financial_fact",
+        entity_id=row_id,
+        action=f"fact_{action}",
+        actor=decided_by,
+        new_value=payload,
+        reason=explanation,
+    )
+    return correction_id
 
 
 def effective_field_value(

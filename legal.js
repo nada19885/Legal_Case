@@ -994,7 +994,7 @@ Object.assign(I18N.en, {
   phase_generating_pleading: "Generating the written pleading",
   phase_revising_pleading: "Revising the written pleading",
   phase_answering: "Answering",
-  detail_review_items: "{count} value(s) need your confirmation before the accounting analysis can continue.",
+  detail_review_items: "{count} fact(s) need your review before the accounting analysis can continue.",
   detail_ready_for_analysis: "All extracted values are confirmed. Run the claims-vs-evidence analysis to continue.",
   detail_pages_classified: "Pages are classified. Run the extraction to continue.",
   detail_approve_summary: "The attorney review is prepared and waits for your approval.",
@@ -1038,11 +1038,11 @@ Object.assign(I18N.en, {
   field_reference_number: "Reference",
   field_party_source: "Party",
   field_running_balance: "Running balance",
-  accounting_continue_auto: "All values confirmed — continuing the accounting analysis…",
+  accounting_continue_auto: "All facts reviewed — continuing the accounting analysis…",
   report_line: "{financial} of {scope} page(s) are financial · {rows} new row(s) extracted · {pending} value(s) awaiting you",
   report_failures: "{count} page(s) could not be processed. Run the extraction again to retry them.",
   report_discarded: "{count} zero-amount line(s) were ignored as balance or heading rows.",
-  ledger_withheld: "{count} row(s) are withheld from the ledger until you confirm their values.",
+  ledger_withheld: "{count} uncertain fact(s) are held back from the ledger until you review them.",
   column_reference: "Reference",
   findings_run_meta: "Last run {at} · {claims} claim(s) from {source} · instructions: {instructions}",
   claims_source_attorney_review: "the attorney review",
@@ -1080,6 +1080,78 @@ Object.assign(I18N.en, {
   unverified_ids: "Cited by the model but not in the reviewed ledger (ignored): {ids}",
   stale_ids: "No longer in the ledger (accounting data changed after this analysis — rerun it): {ids}",
   claims_summary: "{count} claim(s) evaluated",
+  fact_status_EXTRACTED: "Extracted",
+  fact_status_CALCULATED: "Calculated",
+  fact_status_INFERRED: "Inferred",
+  fact_status_UNCERTAIN: "Uncertain",
+  fact_status_MISSING: "Missing",
+  fact_status_USER_CONFIRMED: "Confirmed by you",
+  fact_status_USER_CORRECTED: "Corrected by you",
+  fact_status_IGNORED: "Ignored",
+  fact_type_transaction: "Transaction",
+  fact_type_payment: "Payment",
+  fact_type_installment: "Installment",
+  fact_type_deposit: "Deposit",
+  fact_type_withdrawal: "Withdrawal",
+  fact_type_transfer: "Transfer",
+  fact_type_financing_amount: "Financing amount",
+  fact_type_outstanding_balance: "Outstanding balance",
+  fact_type_remaining_balance: "Remaining balance",
+  fact_type_amount_due: "Amount due",
+  fact_type_opening_balance: "Opening balance",
+  fact_type_closing_balance: "Closing balance",
+  fact_type_balance: "Balance",
+  fact_type_fee: "Fee",
+  fact_type_interest: "Interest",
+  fact_type_penalty: "Penalty",
+  fact_type_credit_limit: "Credit limit",
+  fact_type_claimed_amount: "Claimed amount",
+  fact_type_other: "Other",
+  field_fact_type: "Fact type",
+  field_debit: "Debit",
+  field_credit: "Credit",
+  field_balance: "Balance",
+  field_amount_due: "Amount due",
+  field_paid_amount: "Paid amount",
+  field_remaining_amount: "Remaining amount",
+  field_account_number: "Account number",
+  field_transaction_reference: "Reference",
+  field_counterparty: "Counterparty",
+  column_fact_type: "Fact",
+  column_value: "Value",
+  column_debit: "Debit",
+  column_credit: "Credit",
+  column_balance: "Balance",
+  fact_review_heading: "Facts waiting for your review",
+  fact_review_count: "{count} fact(s) need your review before the accounting analysis can run.",
+  fact_item_title: "{page} — {type}",
+  fact_ai_interpretation: "AI interpretation",
+  fact_question: "Question",
+  fact_alternatives: "Other possible meanings",
+  fact_calc_failed: "Calculation check",
+  fact_confirm: "Confirm",
+  fact_ignore: "Ignore",
+  fact_correct: "Correct",
+  fact_save_correction: "Save correction",
+  fact_explain_label: "Or explain how to read it (the AI will rewrite the fact for you to confirm)",
+  fact_explain_placeholder: "e.g. This is actually the amount of the third installment.",
+  fact_apply_explanation: "Apply explanation",
+  fact_proposal_heading: "AI rewrite based on your explanation",
+  fact_accept_proposal: "Accept rewrite",
+  fact_note_label: "Note (optional)",
+  fact_explaining: "Applying your explanation…",
+  fact_saved: "Decision saved.",
+  fact_ignore_confirm: "Leave this fact out of the ledger?",
+  ledger_note: "Note: {note}",
+  claim_parent: "From claim: {text}",
+  claimed_amount_label: "Claimed",
+  substantiated_amount_label: "Substantiated",
+  evidence_total_label: "Total of cited evidence",
+  accounting_position_label: "Accounting position",
+  supporting_evidence_label: "Supporting evidence",
+  partially_supporting_evidence_label: "Partially supporting evidence",
+  contradicting_evidence_label: "Contradicting evidence",
+  unresolved_evidence_label: "Unresolved / ambiguous evidence",
 });
 Object.assign(I18N.ar, {
   step_accounting: "التحليل المحاسبي",
@@ -1105,7 +1177,7 @@ Object.assign(I18N.ar, {
   phase_generating_pleading: "إعداد المذكرة المكتوبة",
   phase_revising_pleading: "تعديل المذكرة المكتوبة",
   phase_answering: "إعداد الإجابة",
-  detail_review_items: "{count} قيمة تحتاج إلى تأكيدك قبل متابعة التحليل المحاسبي.",
+  detail_review_items: "{count} واقعة تحتاج إلى مراجعتك قبل متابعة التحليل المحاسبي.",
   detail_ready_for_analysis: "تم تأكيد جميع القيم المستخرجة. شغّل تحليل المطالبات مقابل الأدلة للمتابعة.",
   detail_pages_classified: "تم تصنيف الصفحات. شغّل الاستخراج للمتابعة.",
   detail_approve_summary: "مراجعة المحامي جاهزة وبانتظار اعتمادك.",
@@ -1149,11 +1221,11 @@ Object.assign(I18N.ar, {
   field_reference_number: "المرجع",
   field_party_source: "الطرف",
   field_running_balance: "الرصيد الجاري",
-  accounting_continue_auto: "تم تأكيد جميع القيم — جارٍ متابعة التحليل المحاسبي…",
+  accounting_continue_auto: "تمت مراجعة جميع الوقائع — جارٍ متابعة التحليل المحاسبي…",
   report_line: "{financial} من {scope} صفحة مالية · {rows} بند جديد مستخرج · {pending} قيمة بانتظارك",
   report_failures: "تعذّرت معالجة {count} صفحة. شغّل الاستخراج مرة أخرى لإعادة المحاولة.",
   report_discarded: "تم تجاهل {count} سطر بمبلغ صفري باعتبارها أرصدة أو عناوين.",
-  ledger_withheld: "{count} بند محجوب عن السجل المالي حتى تؤكد قيمه.",
+  ledger_withheld: "{count} واقعة غير مؤكدة محجوبة عن السجل المالي حتى تراجعها.",
   column_reference: "المرجع",
   findings_run_meta: "آخر تشغيل {at} · {claims} مطالبة من {source} · التعليمات: {instructions}",
   claims_source_attorney_review: "مراجعة المحامي",
@@ -1191,6 +1263,78 @@ Object.assign(I18N.ar, {
   unverified_ids: "أشار إليها النموذج لكنها غير موجودة في السجل المراجَع (تم تجاهلها): {ids}",
   stale_ids: "لم تعد في السجل (تغيّرت البيانات المحاسبية بعد هذا التحليل — أعد تشغيله): {ids}",
   claims_summary: "تم تقييم {count} مطالبة",
+  fact_status_EXTRACTED: "مستخرجة",
+  fact_status_CALCULATED: "محسوبة",
+  fact_status_INFERRED: "مستنتجة",
+  fact_status_UNCERTAIN: "غير مؤكدة",
+  fact_status_MISSING: "غير موجودة",
+  fact_status_USER_CONFIRMED: "أكدتها",
+  fact_status_USER_CORRECTED: "صححتها",
+  fact_status_IGNORED: "مستبعدة",
+  fact_type_transaction: "معاملة",
+  fact_type_payment: "سداد",
+  fact_type_installment: "قسط",
+  fact_type_deposit: "إيداع",
+  fact_type_withdrawal: "سحب",
+  fact_type_transfer: "تحويل",
+  fact_type_financing_amount: "مبلغ التمويل",
+  fact_type_outstanding_balance: "الرصيد القائم",
+  fact_type_remaining_balance: "الرصيد المتبقي",
+  fact_type_amount_due: "المبلغ المستحق",
+  fact_type_opening_balance: "الرصيد الافتتاحي",
+  fact_type_closing_balance: "الرصيد الختامي",
+  fact_type_balance: "الرصيد",
+  fact_type_fee: "رسوم",
+  fact_type_interest: "فوائد",
+  fact_type_penalty: "غرامة",
+  fact_type_credit_limit: "حد ائتماني",
+  fact_type_claimed_amount: "المبلغ المطالب به",
+  fact_type_other: "أخرى",
+  field_fact_type: "نوع الواقعة",
+  field_debit: "مدين",
+  field_credit: "دائن",
+  field_balance: "الرصيد",
+  field_amount_due: "المبلغ المستحق",
+  field_paid_amount: "المبلغ المسدد",
+  field_remaining_amount: "المبلغ المتبقي",
+  field_account_number: "رقم الحساب",
+  field_transaction_reference: "المرجع",
+  field_counterparty: "الطرف المقابل",
+  column_fact_type: "الواقعة",
+  column_value: "القيمة",
+  column_debit: "مدين",
+  column_credit: "دائن",
+  column_balance: "الرصيد",
+  fact_review_heading: "وقائع بانتظار مراجعتك",
+  fact_review_count: "{count} واقعة تحتاج إلى مراجعتك قبل تشغيل التحليل المحاسبي.",
+  fact_item_title: "{page} — {type}",
+  fact_ai_interpretation: "تفسير الذكاء الاصطناعي",
+  fact_question: "السؤال",
+  fact_alternatives: "معانٍ محتملة أخرى",
+  fact_calc_failed: "التحقق من الحساب",
+  fact_confirm: "تأكيد",
+  fact_ignore: "استبعاد",
+  fact_correct: "تصحيح",
+  fact_save_correction: "حفظ التصحيح",
+  fact_explain_label: "أو اشرح كيف تُقرأ (سيعيد الذكاء الاصطناعي صياغة الواقعة لتأكيدها)",
+  fact_explain_placeholder: "مثال: هذا في الواقع مبلغ القسط الثالث.",
+  fact_apply_explanation: "تطبيق الشرح",
+  fact_proposal_heading: "إعادة صياغة بناءً على شرحك",
+  fact_accept_proposal: "قبول الصياغة",
+  fact_note_label: "ملاحظة (اختياري)",
+  fact_explaining: "جارٍ تطبيق شرحك…",
+  fact_saved: "تم حفظ القرار.",
+  fact_ignore_confirm: "استبعاد هذه الواقعة من السجل المالي؟",
+  ledger_note: "ملاحظة: {note}",
+  claim_parent: "من المطالبة: {text}",
+  claimed_amount_label: "المطالب به",
+  substantiated_amount_label: "الثابت بالأدلة",
+  evidence_total_label: "مجموع الأدلة المستشهد بها",
+  accounting_position_label: "الموقف المحاسبي",
+  supporting_evidence_label: "أدلة داعمة",
+  partially_supporting_evidence_label: "أدلة داعمة جزئياً",
+  contradicting_evidence_label: "أدلة مناقضة",
+  unresolved_evidence_label: "أدلة غير محسومة / ملتبسة",
 });
 
 const LANGUAGES = { en: "English", ar: "العربية" };
@@ -2271,14 +2415,44 @@ function renderAccountingDocPicker(documents) {
     </div>`);
 }
 
-const REVIEW_FIELD_ORDER = [
-  "date", "amount", "currency", "debit_or_credit", "description", "reference_number", "party_source", "running_balance",
+const FACT_FIELD_ORDER = [
+  "fact_type", "date", "description", "amount", "currency", "debit", "credit", "balance",
+  "amount_due", "paid_amount", "remaining_amount", "account_number", "transaction_reference", "counterparty",
 ];
+const FACT_AMOUNT_FIELDS = ["amount", "debit", "credit", "balance", "amount_due", "paid_amount", "remaining_amount"];
+const FACT_STATUS_KIND = {
+  EXTRACTED: "verified", CALCULATED: "ai", INFERRED: "provisional", UNCERTAIN: "review",
+  MISSING: "neutral", USER_CONFIRMED: "verified", USER_CORRECTED: "provisional", IGNORED: "neutral",
+};
 
-/* Pending accounting review items. Each shows the transaction as currently
-   understood, the system's interpretation and reasoning for every open
-   field, the row as printed and the surrounding page text, and a place to
-   give the correct answer. Nothing enters the ledger until answered. */
+function factTypeLabel(value) {
+  if (!value) return "—";
+  const key = `fact_type_${value}`;
+  const text = t(key);
+  return text !== key ? text : String(value).replace(/_/g, " ");
+}
+
+function factStatusBadge(status) {
+  return badge(t(`fact_status_${status}`), FACT_STATUS_KIND[status] || "neutral");
+}
+
+function factFieldsTable(fact, onlyFilled) {
+  const names = FACT_FIELD_ORDER.filter((name) =>
+    !onlyFilled || (fact[name] !== null && fact[name] !== undefined && fact[name] !== ""));
+  if (!names.length) return "";
+  return `
+    <table class="bsf-table bsf-review-transaction">
+      <tbody>${names.map((name) => `
+        <tr><th>${esc(t(`field_${name}`))}</th>
+            <td>${esc(name === "fact_type" ? factTypeLabel(fact[name]) : (fact[name] ?? "—"))}</td></tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
+/* Facts the AI marked UNCERTAIN. Each card shows the AI's interpretation,
+   why it is unsure, the text as printed and the page, and four ways to
+   decide: confirm it, correct it, ignore it, or explain how to read it
+   (the AI rewrites the fact and you accept the rewrite). */
 function renderAccountingConflicts(items) {
   const target = region("accounting-conflicts");
   if (!target) return;
@@ -2288,54 +2462,58 @@ function renderAccountingConflicts(items) {
     return;
   }
 
-  const transactionMarkup = (transaction) => `
-    <table class="bsf-table bsf-review-transaction">
-      <tbody>
-        ${REVIEW_FIELD_ORDER.filter((name) => transaction[name]).map((name) => {
-          const cell = transaction[name];
-          return `<tr class="${cell.pending ? "is-pending" : ""}">
-            <th>${esc(t(`field_${name}`))}</th>
-            <td>${esc(cell.value || "—")}${cell.pending ? ` ${badge(t("review_pending_marker"), "review")}` : ""}</td>
-          </tr>`;
-        }).join("")}
-      </tbody>
-    </table>`;
-
-  const fieldMarkup = (item, field) => `
-    <div class="bsf-conflict-field" data-row-id="${esc(item.row_id)}" data-field-name="${esc(field.field)}">
-      <div class="bsf-conflict-field-name">
-        ${esc(t(`field_${field.field}`))}
-        ${badge(t(field.issue === "missing" ? "review_issue_missing" : "review_issue_uncertain"), field.issue === "missing" ? "flagged" : "review")}
-      </div>
-      <div class="bsf-kv"><strong>${esc(t("review_suggestion"))}:</strong>
-        ${field.suggested_value ? esc(field.suggested_value) : `<em>${esc(t("review_no_suggestion"))}</em>`}</div>
-      ${field.reason ? `<div class="bsf-kv"><strong>${esc(t("review_reasoning"))}:</strong> ${esc(field.reason)}</div>` : ""}
-      <div class="bsf-conflict-custom">
-        <input type="text" class="bsf-input" placeholder="${esc(t("review_answer_placeholder", { field: t(`field_${field.field}`) }))}">
-        ${field.suggested_value ? `
-          <button type="button" class="bsf-btn" data-action="accounting-confirm-field" data-use-suggestion="1"
-                  data-value="${esc(field.suggested_value)}"
-                  data-row-id="${esc(item.row_id)}" data-field-name="${esc(field.field)}">
-            ${esc(t("review_use_suggestion"))}
-          </button>` : ""}
-        <button type="button" class="bsf-btn bsf-btn-primary" data-action="accounting-confirm-field"
-                data-row-id="${esc(item.row_id)}" data-field-name="${esc(field.field)}">
-          ${esc(t("review_save_answer"))}
+  const correctForm = (item) => `
+    <details class="bsf-fact-correct">
+      <summary class="bsf-btn">${esc(t("fact_correct"))}</summary>
+      <div class="bsf-fact-form">
+        ${FACT_FIELD_ORDER.map((name) => `
+          <label class="bsf-field">
+            <span>${esc(t(`field_${name}`))}</span>
+            <input type="text" class="bsf-input" data-fact-field="${esc(name)}"
+                   ${FACT_AMOUNT_FIELDS.includes(name) ? 'inputmode="decimal"' : ""}
+                   value="${esc(item.fact[name] ?? "")}">
+          </label>`).join("")}
+        <label class="bsf-field bsf-fact-note">
+          <span>${esc(t("fact_note_label"))}</span>
+          <input type="text" class="bsf-input" data-fact-note>
+        </label>
+        <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-correct" data-row-id="${esc(item.row_id)}">
+          ${esc(t("fact_save_correction"))}
         </button>
       </div>
-    </div>`;
+    </details>`;
 
-  html(target, `
-    <h4 class="bsf-subsection">${esc(t("review_items_heading"))}</h4>
-    ${alertBox(t("detail_review_items", { count: items.reduce((total, item) => total + (item.fields || []).length, 0) }), "warn")}
-    ${items.map((item) => `
+  const proposalBox = (item) => item.proposal ? `
+    <div class="bsf-fact-proposal">
+      <div class="bsf-review-label">${esc(t("fact_proposal_heading"))}</div>
+      <div class="bsf-caption">“${esc(item.proposal.explanation || "")}”</div>
+      ${item.proposal.summary ? `<div><strong>${esc(item.proposal.summary)}</strong></div>` : ""}
+      ${factFieldsTable(item.proposal.fields || {}, true)}
+      <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-accept-proposal" data-row-id="${esc(item.row_id)}">
+        ${esc(t("fact_accept_proposal"))}
+      </button>
+    </div>` : "";
+
+  const card = (item) => {
+    const review = item.review || {};
+    const check = (item.calculation && item.calculation.check) || null;
+    return `
       <details class="bsf-expander bsf-review-item" open>
-        <summary>${esc(t("review_item_title", { page: item.page_label || `${t("page_label")} ${item.page_number || "—"}` }))}</summary>
+        <summary>${esc(t("fact_item_title", {
+          page: item.page_label || `${t("page_label")} ${item.page_number || "—"}`,
+          type: factTypeLabel(item.fact.fact_type),
+        }))}</summary>
         <div class="bsf-expander-body">
           <div class="bsf-review-grid">
             <div>
-              <div class="bsf-review-label">${esc(t("review_transaction"))}</div>
-              ${transactionMarkup(item.transaction || {})}
+              <div class="bsf-review-label">${esc(t("fact_ai_interpretation"))}</div>
+              ${factFieldsTable(item.fact, true)}
+              ${review.question ? `<div class="bsf-kv"><strong>${esc(t("fact_question"))}:</strong> ${esc(review.question)}</div>` : ""}
+              ${review.suggestion ? `<div class="bsf-kv"><strong>${esc(t("review_suggestion"))}:</strong> ${esc(review.suggestion)}</div>` : ""}
+              ${review.reason ? `<div class="bsf-kv"><strong>${esc(t("review_reasoning"))}:</strong> ${esc(review.reason)}</div>` : ""}
+              ${(review.alternatives || []).length ? `<div class="bsf-kv"><strong>${esc(t("fact_alternatives"))}:</strong>
+                ${review.alternatives.map((alt) => badge(factTypeLabel(alt), "neutral")).join(" ")}</div>` : ""}
+              ${check && !check.ok ? alertBox(`${t("fact_calc_failed")}: ${check.message || ""}`, "warn") : ""}
               ${item.source_text ? `
                 <div class="bsf-review-label">${esc(t("review_row_as_printed"))}</div>
                 <pre class="bsf-source-text">${esc(item.source_text)}</pre>` : ""}
@@ -2350,58 +2528,88 @@ function renderAccountingConflicts(items) {
                 </button>` : ""}
             </div>
           </div>
-          ${(item.fields || []).map((field) => fieldMarkup(item, field)).join("")}
+          ${proposalBox(item)}
+          <div class="bsf-fact-actions">
+            <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-confirm" data-row-id="${esc(item.row_id)}">
+              ${esc(t("fact_confirm"))}
+            </button>
+            ${correctForm(item)}
+            <button type="button" class="bsf-btn" data-action="fact-ignore" data-row-id="${esc(item.row_id)}">
+              ${esc(t("fact_ignore"))}
+            </button>
+          </div>
+          <div class="bsf-fact-explain">
+            <label class="bsf-field">
+              <span>${esc(t("fact_explain_label"))}</span>
+              <textarea class="bsf-input" rows="2" data-fact-explanation
+                        placeholder="${esc(t("fact_explain_placeholder"))}"></textarea>
+            </label>
+            <button type="button" class="bsf-btn" data-action="fact-explain" data-row-id="${esc(item.row_id)}">
+              ${esc(t("fact_apply_explanation"))}
+            </button>
+          </div>
         </div>
-      </details>`).join("")}`);
+      </details>`;
+  };
+
+  html(target, `
+    <h4 class="bsf-subsection">${esc(t("fact_review_heading"))}</h4>
+    ${alertBox(t("fact_review_count", { count: items.length }), "warn")}
+    ${items.map(card).join("")}`);
 }
 
 function renderAccountingLedger(ledger, hasLineItems, hasPendingReview, withheld) {
   const target = region("accounting-ledger");
   if (!target) return;
 
-  // The ledger only ever holds reviewed rows, so it is safe to show while
-  // other rows still wait for the user; those are counted, not shown.
+  // The ledger only holds facts with a final status; uncertain ones wait
+  // for the user and are counted here instead of shown.
   const withheldNote = withheld ? alertBox(t("ledger_withheld", { count: withheld }), "info") : "";
-
   if (!hasLineItems || !ledger.length) {
     html(target, withheldNote || `<p class="bsf-caption">${esc(t("no_line_items"))}</p>`);
     return;
   }
 
+  const cell = (value) => esc(value === null || value === undefined || value === "" ? "—" : value);
   html(target, `
     ${withheldNote}
-    <table class="bsf-table">
+    <div class="bsf-table-scroll">
+    <table class="bsf-table bsf-fact-ledger">
       <thead>
         <tr>
           <th>${esc(t("column_page"))}</th>
           <th>${esc(t("column_fin_date"))}</th>
+          <th>${esc(t("column_fact_type"))}</th>
           <th>${esc(t("column_description"))}</th>
-          <th>${esc(t("column_reference"))}</th>
-          <th>${esc(t("column_debit_credit"))}</th>
-          <th>${esc(t("column_amount"))}</th>
+          <th>${esc(t("column_value"))}</th>
+          <th>${esc(t("column_debit"))}</th>
+          <th>${esc(t("column_credit"))}</th>
+          <th>${esc(t("column_balance"))}</th>
           <th>${esc(t("column_currency"))}</th>
+          <th>${esc(t("column_reference"))}</th>
           <th>${esc(t("column_row_status"))}</th>
         </tr>
       </thead>
       <tbody>
         ${ledger.map((item) => `
           <tr>
-            <td>${esc(item.page_number)}</td>
-            <td>${esc(item.date)}</td>
-            <td>${esc(item.description)}</td>
-            <td>${esc(item.reference_number || "")}</td>
-            <td>${esc(item.debit_or_credit)}</td>
-            <td>${esc(item.amount)}</td>
-            <td>${esc(item.currency)}</td>
-            <td>${item.row_status === "verified_with_corrections"
-              ? badge((item.corrected_fields || []).map((name) => t(`field_${name}`)).join(", "), "provisional")
-              : badge(item.row_status, "verified")}</td>
-          </tr>
-        `).join("")}
+            <td>${cell(item.page_number)}</td>
+            <td>${cell(item.date)}</td>
+            <td>${esc(factTypeLabel(item.fact_type))}</td>
+            <td>${cell(item.description)}${item.user_note ? `<div class="bsf-caption">${esc(t("ledger_note", { note: item.user_note }))}</div>` : ""}</td>
+            <td>${cell(item.value)}${item.value_field && item.value_field !== "amount" ? `<div class="bsf-caption">${esc(t(`field_${item.value_field}`))}</div>` : ""}</td>
+            <td>${cell(item.debit)}</td>
+            <td>${cell(item.credit)}</td>
+            <td>${cell(item.balance)}</td>
+            <td>${cell(item.currency)}</td>
+            <td>${cell(item.transaction_reference || item.counterparty)}</td>
+            <td>${factStatusBadge(item.status)}</td>
+          </tr>`).join("")}
       </tbody>
     </table>
-  `);
+    </div>`);
 }
+
 function renderAccountingCrossCheck(summary) {
   const target = region("accounting-crosscheck");
   if (!target) return;
@@ -2481,23 +2689,44 @@ function renderAccountingFindings(findings, runMeta) {
   const rowsTable = (rows) => rows.length ? `
     <table class="bsf-table bsf-claim-rows">
       <thead><tr>
-        <th>${esc(t("column_fin_date"))}</th><th>${esc(t("column_description"))}</th>
-        <th>${esc(t("column_reference"))}</th><th>${esc(t("column_debit_credit"))}</th>
-        <th>${esc(t("column_amount"))}</th><th>${esc(t("column_page"))}</th>
+        <th>${esc(t("column_fin_date"))}</th><th>${esc(t("column_fact_type"))}</th>
+        <th>${esc(t("column_description"))}</th><th>${esc(t("column_value"))}</th>
+        <th>${esc(t("column_row_status"))}</th><th>${esc(t("column_page"))}</th>
       </tr></thead>
       <tbody>${rows.map((row) => `<tr>
-        <td>${esc(row.date || "")}</td><td>${esc(row.description || "")}</td>
-        <td>${esc(row.reference_number || "")}</td><td>${esc(row.debit_or_credit || "")}</td>
-        <td>${esc(row.amount || "")} ${esc(row.currency || "")}</td>
+        <td>${esc(row.date || "—")}</td><td>${esc(factTypeLabel(row.fact_type))}</td>
+        <td>${esc(row.description || "")}</td>
+        <td>${esc(row.value || "—")} ${esc(row.currency || "")}</td>
+        <td>${row.status ? factStatusBadge(row.status) : ""}</td>
         <td>${row.page_id ? sourceLinks([row.page_id], [row.page_label || t("source_page")]) : ""}</td>
       </tr>`).join("")}</tbody>
     </table>` : "";
 
-  const block = (label, body) => `
-    <div class="bsf-claim-block">
+  const block = (label, body, kind) => `
+    <div class="bsf-claim-block${kind ? ` is-${kind}` : ""}">
       <div class="bsf-review-label">${esc(label)}</div>
       ${body}
     </div>`;
+
+  const group = (item, key, kind) => {
+    const entries = item[key] || [];
+    if (!entries.length) return "";
+    return block(t(`${key}_label`), entries.map((entry) => `
+      <div class="bsf-claim-evidence">
+        ${entry.explanation ? `<div>${esc(entry.explanation)}</div>` : ""}
+        ${rowsTable(entry.rows || [])}
+      </div>`).join(""), kind);
+  };
+
+  const amounts = (item) => {
+    const parts = [];
+    if (item.claimed_amount) parts.push(`<span><strong>${esc(t("claimed_amount_label"))}:</strong> ${esc(item.claimed_amount)} ${esc(item.currency || "")}</span>`);
+    if (item.substantiated_amount) parts.push(`<span><strong>${esc(t("substantiated_amount_label"))}:</strong> ${esc(item.substantiated_amount)} ${esc(item.currency || "")}</span>`);
+    const totals = item.evidence_totals || {};
+    const totalText = Object.keys(totals).map((currency) => `${totals[currency]} ${currency === "—" ? "" : currency}`).join(" · ");
+    if (totalText) parts.push(`<span><strong>${esc(t("evidence_total_label"))}:</strong> ${esc(totalText)}</span>`);
+    return parts.length ? `<div class="bsf-claim-amounts">${parts.join("")}</div>` : "";
+  };
 
   html(target, `
     <h4 class="bsf-subsection">${esc(t("findings_heading"))}</h4>
@@ -2510,23 +2739,23 @@ function renderAccountingFindings(findings, runMeta) {
           <span class="bsf-claim-title">${esc(item.claim || "")}</span>
         </summary>
         <div class="bsf-expander-body">
+          ${item.parent_claim && item.parent_claim !== item.claim
+            ? `<p class="bsf-caption">${esc(t("claim_parent", { text: item.parent_claim }))}</p>` : ""}
+          ${amounts(item)}
+          ${item.accounting_position ? `
+            <div class="bsf-claim-position">
+              <div class="bsf-review-label">${esc(t("accounting_position_label"))}</div>
+              <div>${esc(item.accounting_position)}</div>
+            </div>` : ""}
           ${item.financial_question ? `<div class="bsf-kv"><strong>${esc(t("financial_question_label"))}:</strong> ${esc(item.financial_question)}</div>` : ""}
-          ${block(t("expected_evidence_label"), `<div>${esc(item.expected_evidence || "—")}</div>`)}
-          ${block(t("evidence_found_label"), (item.evidence_rows || []).length
-            ? rowsTable(item.evidence_rows)
-            : `<p class="bsf-caption">${esc(t("none_found"))}</p>`)}
+          ${item.expected_evidence ? block(t("expected_evidence_label"), `<div>${esc(item.expected_evidence)}</div>`) : ""}
+          ${group(item, "supporting_evidence", "support")}
+          ${group(item, "partially_supporting_evidence", "partial")}
+          ${group(item, "contradicting_evidence", "contra")}
+          ${group(item, "unresolved_evidence", "unresolved")}
           ${block(t("missing_evidence_label"), (item.missing_evidence || []).length
             ? `<ul class="bsf-claim-list">${item.missing_evidence.map((text) => `<li>${esc(text)}</li>`).join("")}</ul>`
             : `<p class="bsf-caption">${esc(t("none_identified"))}</p>`)}
-          ${block(t("contradictions_label"), (item.contradictions || []).length
-            ? item.contradictions.map((entry) => `
-                <div class="bsf-claim-contradiction">
-                  <div>${esc(entry.description || "")}</div>
-                  ${rowsTable(entry.rows || [])}
-                </div>`).join("")
-            : `<p class="bsf-caption">${esc(t("none_identified"))}</p>`)}
-          ${item.comparison ? block(t("comparison_label"), `<div>${esc(item.comparison)}</div>`) : ""}
-          ${item.accounting_response ? `<div class="bsf-kv"><strong>${esc(t("accounting_response_label"))}:</strong> ${esc(item.accounting_response)}</div>` : ""}
           ${item.limitation ? `<p class="bsf-caption">${esc(item.limitation)}</p>` : ""}
           ${(item.unverified_record_ids || []).length ? alertBox(t("unverified_ids", { ids: item.unverified_record_ids.join(", ") }), "info") : ""}
           ${(item.no_longer_in_ledger || []).length ? alertBox(t("stale_ids", { ids: item.no_longer_in_ledger.join(", ") }), "warn") : ""}
@@ -3433,6 +3662,31 @@ function closeModal() {
 /* ============================================================
    Action handlers, wired through one delegated click listener.
    ============================================================ */
+/* Save the user's decision on one uncertain fact. When it was the last one,
+   continue the accounting analysis from where it stopped, with the
+   instructions on screen (or the ones last used). */
+async function resolveFact(el, body) {
+  let saved;
+  el.disabled = true;
+  try {
+    saved = await apiPost("/accounting/fact/resolve", Object.assign({ case_id: S.caseId, row_id: el.dataset.rowId }, body));
+    toast(t("fact_saved"), "ok");
+  } catch (error) {
+    el.disabled = false;
+    fail(error);
+    return;
+  }
+  if (saved.ready_for_analysis) {
+    const box = $("#accounting-instructions");
+    const instructions = (box && box.value.trim()) || saved.instructions || "";
+    toast(t("accounting_continue_auto"), "ok");
+    await refreshCase();
+    await ACTIONS["accounting-synthesize"](null, instructions);
+    return;
+  }
+  await refreshCase();
+}
+
 const ACTIONS = {
   "open-case": (el) => openCase(el.dataset.caseId),
 
@@ -3582,33 +3836,39 @@ const ACTIONS = {
     } catch (error) { fail(error); }
   },
 
-  "accounting-confirm-field": async (el) => {
-    const rowId = el.dataset.rowId;
-    const fieldName = el.dataset.fieldName;
-    const wrap = el.closest(".bsf-conflict-field");
-    const customInput = wrap ? wrap.querySelector('input[type="text"]') : null;
-    const customValue = customInput ? customInput.value.trim() : "";
-    const value = el.dataset.useSuggestion ? (el.dataset.value || "") : customValue;
-    if (!value) { toast(t("no_value_selected"), "warn"); return; }
-    let saved;
-    try {
-      saved = await apiPost("/accounting/correction", {
-        case_id: S.caseId, row_id: rowId, field_name: fieldName, value, corrected_by: "attorney",
-      });
-      toast(t("correction_saved"), "ok");
-    } catch (error) { fail(error); return; }
+  "fact-confirm": (el) => resolveFact(el, { action: "confirm" }),
 
-    // Last pending value answered: continue the accounting analysis from
-    // where it stopped, with the instructions on screen (or last used).
-    if (saved.ready_for_analysis) {
-      const box = $("#accounting-instructions");
-      const instructions = (box && box.value.trim()) || saved.instructions || "";
-      toast(t("accounting_continue_auto"), "ok");
+  "fact-ignore": (el) => {
+    if (!window.confirm(t("fact_ignore_confirm"))) return;
+    return resolveFact(el, { action: "ignore" });
+  },
+
+  "fact-correct": (el) => {
+    const form = el.closest(".bsf-fact-form");
+    const fields = {};
+    form.querySelectorAll("[data-fact-field]").forEach((input) => {
+      fields[input.dataset.factField] = input.value.trim();
+    });
+    const note = (form.querySelector("[data-fact-note]") || {}).value || "";
+    return resolveFact(el, { action: "correct", fields, explanation: note.trim() });
+  },
+
+  "fact-accept-proposal": (el) => resolveFact(el, { action: "accept_proposal" }),
+
+  "fact-explain": async (el) => {
+    const box = el.closest(".bsf-fact-explain").querySelector("[data-fact-explanation]");
+    const explanation = (box.value || "").trim();
+    if (!explanation) { toast(t("no_value_selected"), "warn"); return; }
+    el.disabled = true;
+    toast(t("fact_explaining"));
+    try {
+      await apiPost("/accounting/fact/explain", { case_id: S.caseId, row_id: el.dataset.rowId, explanation });
       await refreshCase();
-      await ACTIONS["accounting-synthesize"](null, instructions);
-      return;
+    } catch (error) {
+      fail(error);
+    } finally {
+      el.disabled = false;
     }
-    await refreshCase();
   },
 
   "accounting-synthesize": async (el, presetInstructions) => {

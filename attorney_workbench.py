@@ -125,15 +125,19 @@ def _compact_forensic_data(case_data: dict | None) -> dict:
                 row.get("row_id", "")
                 or row.get("timeline_id", "")
             ),
-            "date": str(row.get("date", "—")),
+            "fact_type": str(row.get("fact_type", "") or "transaction"),
+            "date": str(row.get("date", "") or "—"),
             "page": str(row.get("page_number", "")),
-            "amount": f"{row.get('amount', '—')} {row.get('currency', 'SAR')}",
-            "type": str(row.get("debit_or_credit", "unclear")),
+            "amount": " ".join(filter(None, [
+                str(row.get("value") or row.get("amount") or "—"),
+                str(row.get("currency") or ""),
+            ])),
+            "type": str(row.get("debit_or_credit", "") or ""),
             "description": _compact(
                 row.get("description", ""),
                 300,
             ),
-            "status": str(row.get("row_status", "")),
+            "status": str(row.get("status", "") or row.get("row_status", "")),
         })
 
     # ---------------------------------------------------------
@@ -198,6 +202,26 @@ def _compact_forensic_data(case_data: dict | None) -> dict:
                 1000,
             ),
             "financial_evidence_found": evidence_found,
+            "parent_claim": _compact(evaluation.get("parent_claim", ""), 800),
+            "claimed_amount": str(evaluation.get("claimed_amount", "") or ""),
+            "substantiated_amount": str(evaluation.get("substantiated_amount", "") or ""),
+            "accounting_position": _compact(evaluation.get("accounting_position", ""), 1500),
+            **{
+                group: [
+                    {
+                        "record_ids": [str(x) for x in (entry.get("record_ids") or [])][:10],
+                        "explanation": _compact(entry.get("explanation", ""), 500),
+                    }
+                    for entry in (evaluation.get(group) or [])[:8]
+                    if isinstance(entry, dict)
+                ]
+                for group in (
+                    "supporting_evidence",
+                    "partially_supporting_evidence",
+                    "contradicting_evidence",
+                    "unresolved_evidence",
+                )
+            },
             "missing_evidence": [
                 _compact(item, 400)
                 for item in (evaluation.get("missing_evidence") or [])[:10]

@@ -14,6 +14,7 @@ a financial-specific re-read would use.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 import re
 from typing import Callable, Optional
 from .storage import case_rows
@@ -26,10 +27,10 @@ from .financial_page_sources import (
     load_document_pdf_bytes,
     load_financial_pages,
 )
+from .financial_facts import build_fact_rows
 from .financial_reconciliation import (
-    build_rows_from_reconstruction,
+    extract_page_facts,
     persist_reconciled_rows,
-    reconstruct_page_transactions,
 )
 
 ProgressCallback = Callable[[int, int, str], None]
@@ -90,21 +91,20 @@ def _process_page(
     # already produced at document intake (extraction.py) — no fresh VLM call.
     transcription_text = page.page_text
 
-    # Stage 2: text-LLM reconstruction cross-checking both evidence sources.
+    # Stage 2: one LLM call breaks the page into atomic financial facts,
+    # each with a status (extracted / calculated / inferred / uncertain /
+    # missing). Calculated facts are recomputed in build_fact_rows.
     try:
-        reconstruction = reconstruct_page_transactions(
-            structural_evidence, transcription_text, page.page_number,
-        )
+        output = extract_page_facts(structural_evidence, transcription_text, page.page_number)
     except Exception as error:
-        failures.append(f"Stage 2 reconstruction failed: {error!r}")
-        reconstruction = {"transactions": []}
+        failures.append(f"Fact extraction failed: {error!r}")
+        return [], failures, 0
 
-    rows = build_rows_from_reconstruction(
-        page.page_id, page.case_document_id, page.page_number, reconstruction,
+    rows = build_fact_rows(
+        page.page_id, page.case_document_id, page.page_number, output,
+        created_at=datetime.now(timezone.utc).isoformat(),
     )
-
-    cleaned_rows, discarded = sanitize_extracted_line_items(rows)
-    return cleaned_rows, failures, discarded
+    return rows, failures, 0
 
 
 def run_financial_extraction(
