@@ -646,3 +646,14 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-claim-block.is-contra { border-inline-start: 3px solid var(--flag); padding-inline-start: .6rem; }
 .bsf-claim-block.is-unresolved { border-inline-start: 3px solid var(--warn); padding-inline-start: .6rem; }
 .bsf-claim-evidence { margin: .3rem 0 .5rem; }
+
+/* Mixed Arabic / English text (descriptions, rows as printed, evidence):
+   each line takes the direction of its own first strong character, so an
+   Arabic description reads right-to-left and an English one left-to-right
+   whatever the page language, and embedded runs keep their order. */
+.bsf-fact-ledger td, .bsf-review-transaction td, .bsf-claim-rows td,
+.bsf-source-text, .bsf-claim-evidence, .bsf-claim-title, .bsf-claim-position,
+.bsf-fact-proposal, .bsf-item, .bsf-kv {
+  unicode-bidi: plaintext;
+  text-align: start;
+}

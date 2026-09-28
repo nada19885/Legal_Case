@@ -48,6 +48,7 @@ from legal_platform.financial_reconciliation import build_rows_from_reconstructi
 from legal_platform import workflow
 from legal_platform.financial_forensics import normalise_claim_evaluation
 from legal_platform import financial_facts as facts
+from legal_platform.arabic_text import fix_structure, fix_visual_arabic, is_visual_order
 from legal_platform.case_register import build_case_register, normalise_text, prioritise_pages_for_summary
 
 failures = []
@@ -485,6 +486,34 @@ check("evidence resting only on invented records is dropped", normalise_claim_ev
     {"supporting_evidence": [{"record_ids": ["FAKE"], "explanation": "made up"}]}, known_ids={"R1"})["supporting_evidence"] == [])
 check("flat views kept for the pleading", grouped["evidence_record_ids"] == ["R1"]
       and grouped["contradictions"] == [{"description": "Balance still due", "record_ids": ["R2"]}])
+
+# --- Arabic stored in visual (drawing) order --------------------------------
+visual_line = ("Pay) /6.00 لىأ قيبطت( عملا طاقم ربع عفد ىدم ةقاطب يسيئرلا يدوعسلا كنبلا / TEA TIME RESTAURANT "
+               "\\Apple / 611**# مقرلا - Pay App /SA /POS#63122666 /SNB")
+fixed_line = fix_visual_arabic(visual_line)
+check("reversed Arabic detected", is_visual_order(visual_line))
+check("Arabic words restored to reading order", "البنك السعودي الرئيسي بطاقة مدى دفع عبر" in fixed_line)
+check("English runs keep their own order", "TEA TIME RESTAURANT" in fixed_line and "Pay App /SA /POS#63122666 /SNB" in fixed_line)
+check("brackets and masked numbers kept as printed", "(تطبيق" in fixed_line and fixed_line.endswith("Pay)") and "611**#" in fixed_line)
+check("fees line restored", fix_visual_arabic("ةفاضملا ةميقلا ةبيرض :موسرلا ليصافت - موسر")
+      == "رسوم - تفاصيل الرسوم: ضريبة القيمة المضافة")
+check("common banking words detected", fix_visual_arabic("12,450.00 لاير ليوحت") == "تحويل ريال 12,450.00")
+for untouched in ["رسوم - تفاصيل الرسوم: ضريبة القيمة المضافة", "تحويل 12,450.00 ريال", "TEA TIME RESTAURANT",
+                  "البنك السعودي الرئيسي بطاقة مدى"]:
+    check(f"text already in reading order left alone: {untouched[:20]}", fix_visual_arabic(untouched) == untouched)
+check("fix is idempotent", fix_visual_arabic(fixed_line) == fixed_line)
+check("nested structures fixed", fix_structure({"rows": [["موسر", 5]]}) == {"rows": [["رسوم", 5]]})
+
+stored_reversed = facts.build_fact_rows("P9", "D9", 1, {"facts": [
+    {"fact_key": "F1", "fact_type": "fee", "amount": "6.00", "status": "EXTRACTED",
+     "description": "ةفاضملا ةميقلا ةبيرض :موسرلا ليصافت - موسر"}]})
+check("fact descriptions stored in reading order",
+      json.loads(stored_reversed[0]["fields_json"])["fact"]["description"].startswith("رسوم - تفاصيل"))
+old_row = dict(stored_reversed[0])
+old_fields = json.loads(old_row["fields_json"])
+old_fields["fact"]["description"] = "ةفاضملا ةميقلا ةبيرض :موسرلا ليصافت - موسر"
+old_row["fields_json"] = json.dumps(old_fields, ensure_ascii=False)
+check("facts stored earlier are fixed when read", facts.build_fact_ledger([old_row])[0][0]["description"].startswith("رسوم - تفاصيل"))
 
 print()
 if failures:

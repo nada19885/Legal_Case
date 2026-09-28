@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import fitz  # PyMuPDF
 
+from .arabic_text import fix_structure
+
 SPACE_RE = re.compile(r"[ \t]+")
 
 
@@ -183,11 +185,13 @@ def extract_page_structure(pdf_bytes: bytes, page_number: int) -> Dict[str, Any]
                 "section": current_section,
             })
 
-        return {
+        # Arabic PDFs often store text in drawing (visual) order; restore
+        # reading order so the LLM and the reviewer see real words.
+        return fix_structure({
             "paragraphs": paragraphs,
             "tables": [{"rows": t["rows"]} for t in table_blocks],
             "has_text_layer": bool(paragraphs or table_blocks),
-        }
+        })
     finally:
         doc.close()
 
