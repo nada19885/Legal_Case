@@ -38,6 +38,7 @@ import re
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
+from .arabic_text import fix_structure, fix_visual_arabic
 from .financial_fields import effective_value, parse_fields, pending_fields
 from .ids import stable_id
 
@@ -60,6 +61,7 @@ FACT_FIELDS = (
     "counterparty",
 )
 AMOUNT_FIELDS = ("amount", "debit", "credit", "balance", "amount_due", "paid_amount", "remaining_amount")
+TEXT_FIELDS = ("description", "counterparty", "account_number", "transaction_reference")
 # Order used to pick "the" number of a fact (display, timeline, calculations).
 PRIMARY_VALUE_ORDER = ("amount", "paid_amount", "remaining_amount", "amount_due", "balance", "debit", "credit")
 
@@ -246,7 +248,7 @@ def _normalise_fact(raw: dict) -> tuple[dict, dict, list[str]]:
         elif name == "currency":
             fact[name] = _currency(value)
         else:
-            fact[name] = _clean(value)
+            fact[name] = fix_visual_arabic(_clean(value))
     return fact, raw_amounts, problems
 
 
@@ -364,7 +366,7 @@ def build_fact_rows(page_id: str, case_document_id: str, page_number: int, outpu
             "key": key, "fact": fact, "raw": raw_amounts, "status": status or UNCERTAIN,
             "problems": problems, "review": review,
             "calculation": raw.get("calculation") if isinstance(raw.get("calculation"), dict) else None,
-            "source_text": _clean(raw.get("source_text")) or "",
+            "source_text": fix_visual_arabic(_clean(raw.get("source_text")) or ""),
         })
 
     facts_by_key = {item["key"]: item["fact"] for item in prepared}
@@ -479,7 +481,7 @@ def fact_from_row(row: dict, corrections: Optional[dict] = None) -> dict:
     stored = _stored(row)
     if stored.get("schema") == SCHEMA:
         fact = {name: stored.get("fact", {}).get(name) for name in FACT_FIELDS}
-        return {
+        base = {
             "fact": fact,
             "status": stored.get("status") or UNCERTAIN,
             "review": stored.get("review") or {},
@@ -487,7 +489,14 @@ def fact_from_row(row: dict, corrections: Optional[dict] = None) -> dict:
             "source_text": stored.get("source_text") or "",
             "legacy": False,
         }
-    return _legacy_fact(row, corrections or {})
+    else:
+        base = _legacy_fact(row, corrections or {})
+    # Facts stored before visual-order Arabic was fixed at extraction.
+    for name in TEXT_FIELDS:
+        base["fact"][name] = fix_visual_arabic(base["fact"].get(name))
+    base["source_text"] = fix_visual_arabic(base["source_text"])
+    base["review"] = fix_structure(base["review"])
+    return base
 
 
 def _resolution_payload(correction_row: dict) -> dict:
@@ -657,7 +666,7 @@ def build_fact_review_items(rows: list[dict], corrections: Optional[dict], resol
             "review": item["review"],
             "calculation": item.get("calculation"),
             "source_text": item["source_text"],
-            "page_excerpt": _page_excerpt(page.get("page_text", ""), needles),
+            "page_excerpt": fix_visual_arabic(_page_excerpt(page.get("page_text", ""), needles)),
             "proposal": item.get("proposal"),
             "legacy": item["legacy"],
         })

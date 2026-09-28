@@ -185,6 +185,9 @@ You receive two independent readings of the same page:
 - structural_evidence: text and tables read directly from the PDF (may be empty for scanned pages);
 - transcription_text: a verbatim transcription of the page image by a vision model.
 Use both. Where they disagree, say so.
+Arabic text in structural_evidence can be garbled (letters reversed or wrong glyphs, a known PDF issue).
+For Arabic wording, prefer transcription_text; use structural_evidence mainly for numbers and table layout.
+Write every description in normal Arabic/English reading order.
 
 WHAT AN ATOMIC FACT IS
 One independent piece of financial information. Never combine several amounts in one fact.
