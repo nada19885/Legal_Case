@@ -71,7 +71,7 @@ from legal_platform.facts import add_fact_candidate
 from legal_platform.chat_orchestrator import assess_next_step, run_legal_analysis, run_defence_plan
 from legal_platform.interview_state import persist_interview_state
 from legal_platform.case_summary import generate_case_summary, approve_case_summary
-from legal_platform.attorney_workbench import generate_bilingual_memo, answer_case_question, revise_bilingual_pleading
+from legal_platform.attorney_workbench import answer_case_question, revise_bilingual_pleading
 from legal_platform.audit import audit
 from legal_platform.agreement_workbench import (
     AGREEMENT_TYPES, RELATIONSHIP_TYPES, classify_agreement, extract_clause_map,
@@ -115,8 +115,16 @@ from legal_platform.financial_fields import FIELD_NAMES
 from legal_platform.financial_extraction_pipeline import run_financial_extraction
 from legal_platform.financial_forensics import (
     build_and_save_financial_timeline,
+    ledger_summary,
     load_saved_forensic_results,
     run_claim_based_accounting_analysis,
+)
+from legal_platform.pleading import (
+    build_drafting_record,
+    draft_pleading,
+    is_full_pleading,
+    pleading_to_markdown,
+    revise_pleading,
 )
 from legal_platform.financial_normalizer import (
     normalize_amount,
@@ -560,12 +568,6 @@ def serialise_summary_support(summary, data):
     chronology_list = summary.get("chronology") or []
     parties_list = summary.get("parties") or []
 
-    evidence_list = []
-    for item in summary.get("available_evidence", []) or []:
-        if isinstance(item, dict):
-            page_ids = item.get("source_page_ids", []) or item.get("page_ids", []) or []
-            evidence_list.append({"item": item, "page_ids": page_ids, "page_labels": _page_labels(page_ids, data)})
-
     contradictions_list = []
     contradictions_frame = data.get("contradictions")
     if isinstance(contradictions_frame, pd.DataFrame) and not contradictions_frame.empty:
@@ -589,13 +591,14 @@ def serialise_summary_support(summary, data):
             {"item": item, "page_labels": _page_labels(item.get("source_page_ids", []), data)}
             for item in _ordered_chronology(chronology_list)
         ],
-        "ordered_evidence": evidence_list,
         "contradictions": contradictions_list,
     }
 
 def memo_to_markdown(memo, language):
     if not isinstance(memo, dict):
         return str(memo or "")
+    if is_full_pleading(memo):
+        return pleading_to_markdown(memo, language)
     section = memo.get("pleading_ar" if language == "ar" else "pleading_en", {})
     if isinstance(section, str):
         return section
@@ -655,7 +658,10 @@ def memo_to_markdown(memo, language):
     return "\n\n".join(lines)
 
 
-def build_pleading_docx_bytes(memo, case_reference=""):
+def build_pleading_docx_bytes(memo, case_reference="", languages=("ar", "en")):
+    """Word version of the pleading, in the given languages (Arabic
+    right-to-left). Headings, tables, lists and **bold** labels of the
+    markdown are kept."""
     from io import BytesIO
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -667,10 +673,39 @@ def build_pleading_docx_bytes(memo, case_reference=""):
         bidi = OxmlElement("w:bidi")
         p_pr.append(bidi)
 
+    def _add_runs(paragraph, text):
+        for index, part in enumerate(re.split(r"\*\*(.+?)\*\*", text.replace("`", ""))):
+            if part:
+                paragraph.add_run(part).bold = index % 2 == 1
+
+    def _add_table(document, rows, rtl):
+        cells = [[cell.strip() for cell in row.strip().strip("|").split("|")] for row in rows]
+        cells = [row for row in cells if not all(re.fullmatch(r"-{3,}", cell) for cell in row)]
+        if not cells:
+            return
+        table = document.add_table(rows=len(cells), cols=len(cells[0]))
+        table.style = "Table Grid"
+        for r, row in enumerate(cells):
+            for c, value in enumerate(row[:len(cells[0])]):
+                paragraph = table.cell(r, c).paragraphs[0]
+                _add_runs(paragraph, f"**{value}**" if r == 0 else value)
+                if rtl:
+                    _set_rtl(paragraph)
+        if rtl:
+            tbl_pr = table._tbl.tblPr
+            tbl_pr.append(OxmlElement("w:bidiVisual"))
+
     def _add_markdown_text(document, markdown_text, rtl=False):
-        for raw_line in str(markdown_text or "").split("\n"):
+        table_rows = []
+        for raw_line in str(markdown_text or "").split("\n") + [""]:
             line = raw_line.strip()
-            if not line:
+            if line.startswith("|"):
+                table_rows.append(line)
+                continue
+            if table_rows:
+                _add_table(document, table_rows, rtl)
+                table_rows = []
+            if not line or line == "---":
                 continue
             if line.startswith("### "):
                 paragraph = document.add_heading(line[4:], level=3)
@@ -678,8 +713,12 @@ def build_pleading_docx_bytes(memo, case_reference=""):
                 paragraph = document.add_heading(line[3:], level=2)
             elif line.startswith("# "):
                 paragraph = document.add_heading(line[2:], level=1)
+            elif line.startswith("- "):
+                paragraph = document.add_paragraph(style="List Bullet")
+                _add_runs(paragraph, line[2:])
             else:
-                paragraph = document.add_paragraph(line)
+                paragraph = document.add_paragraph()
+                _add_runs(paragraph, line)
             if rtl:
                 _set_rtl(paragraph)
 
@@ -687,9 +726,10 @@ def build_pleading_docx_bytes(memo, case_reference=""):
     if case_reference:
         title_paragraph = document.add_paragraph(case_reference)
         title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _add_markdown_text(document, memo_to_markdown(memo, "ar"), rtl=True)
-    document.add_page_break()
-    _add_markdown_text(document, memo_to_markdown(memo, "en"), rtl=False)
+    for index, language in enumerate(languages):
+        if index:
+            document.add_page_break()
+        _add_markdown_text(document, memo_to_markdown(memo, language), rtl=language == "ar")
 
     buffer = BytesIO()
     document.save(buffer)
@@ -2034,6 +2074,25 @@ def analysis_defence_plan():
     )
 
 
+def _drafting_record(case_id, data, state, instructions=""):
+    """Everything the written pleading may rely on (see
+    legal_platform.pleading.build_drafting_record)."""
+    ledger, _ = _normalized_ledger(case_id, data.get("financial_line_items"))
+    return build_drafting_record(
+        data["case"],
+        state.get("attorney_summary"),
+        state.get("analysis"),
+        state.get("research"),
+        data,
+        case_register(data),
+        _page_reference_map(data),
+        ledger,
+        ledger_summary(ledger),
+        instructions,
+        strategy=state.get("strategy"),
+    )
+
+
 @app.route("/pleading/generate", methods=["POST"])
 def pleading_generate():
     body = request.get_json(force=True)
@@ -2063,22 +2122,12 @@ def pleading_generate():
         if accounting["status"] not in {"forensic_complete", "complete_no_transactions"}:
             raise ValueError("Complete the accounting analysis before generating the written pleading.")
 
-        case = data["case"]
-        _set_phase(job_id, "generating_pleading", "Synthesizing bilingual court pleading…")
-        instructions = (
-            "Prepare a complete formal defence pleading exclusively on behalf of Banque Saudi Fransi (BSF)."
-            if direct else (memo_instructions or "Prepare a complete formal defence pleading on behalf of BSF.")
-        )
-        summary_obj = dict(state.get("attorney_summary") or {})
-        if data.get("forensic_findings"):
-            summary_obj["forensic_findings"] = data["forensic_findings"]
-        memo = generate_bilingual_memo(
-            case, summary_obj, state.get("analysis"), state.get("strategy"),
-            state.get("research"), instructions,
-            case_data=data,
-        )
+        _set_phase(job_id, "generating_pleading", "Collecting the record for the pleading…")
+        instructions = "" if direct else memo_instructions
+        record = _drafting_record(case_id, data, state, instructions)
+        memo = draft_pleading(record, progress=lambda message: _set_phase(job_id, "generating_pleading", message))
         if session_id:
-            increment_usage(session_id, "llm_request_count", 1)
+            increment_usage(session_id, "llm_request_count", 4)
             increment_usage(session_id, "message_count", 1)
         note = "Initial approved-summary draft" if direct else (memo_instructions or "Initial pleading draft")
         versions = [{"version": 1, "draft": memo, "note": note}]
@@ -2113,16 +2162,23 @@ def pleading_revise():
         if not state.get("memo"):
             raise ValueError("Generate the written pleading before revising it.")
         _set_phase(job_id, "revising_pleading", "Revising the written pleading…")
-        revised = revise_bilingual_pleading(
-            revision_request,
-            state["memo"],
-            data["case"],
-            state["attorney_summary"],
-            state["analysis"],
-            state["strategy"],
-            state["research"],
-            case_data=data,
-        )
+        if is_full_pleading(state["memo"]):
+            revised = revise_pleading(
+                state["memo"], revision_request, _drafting_record(case_id, data, state),
+                progress=lambda message: _set_phase(job_id, "revising_pleading", message),
+            )
+        else:
+            # Pleadings drafted before the full structure keep their format.
+            revised = revise_bilingual_pleading(
+                revision_request,
+                state["memo"],
+                data["case"],
+                state["attorney_summary"],
+                state["analysis"],
+                state["strategy"],
+                state["research"],
+                case_data=data,
+            )
         if session_id:
             increment_usage(session_id, "llm_request_count", 1)
             increment_usage(session_id, "message_count", 1)
@@ -2204,21 +2260,22 @@ def pleading_export():
     case_id = request.args.get("case_id", "")
     fmt = request.args.get("fmt", "md")
     language = request.args.get("lang", "en")
-    data, state = _load_state(case_id)
-    memo = state.get("memo")
+    # Only the stored state is needed; the case datasets are not read.
+    memo = read_workflow_state(case_id).get("memo")
     if not memo:
         return jsonify({"error": "no pleading available"}), 404
     reference = short_case_reference(case_id)
     if fmt == "docx":
+        languages = ("ar", "en") if language == "both" else (language,)
         try:
-            docx_bytes = build_pleading_docx_bytes(memo, reference)
+            docx_bytes = build_pleading_docx_bytes(memo, reference, languages)
         except ImportError:
             return jsonify({"error": "python-docx is not installed in this code environment."}), 501
         return send_file(
             io.BytesIO(docx_bytes),
             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             as_attachment=True,
-            download_name=f"pleading_{reference}.docx",
+            download_name=f"pleading_{reference}_{language}.docx",
         )
     text = memo_to_markdown(memo, language)
     return Response(
