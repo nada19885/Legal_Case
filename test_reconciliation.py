@@ -515,6 +515,14 @@ old_fields["fact"]["description"] = "ةفاضملا ةميقلا ةبيرض :م�
 old_row["fields_json"] = json.dumps(old_fields, ensure_ascii=False)
 check("facts stored earlier are fixed when read", facts.build_fact_ledger([old_row])[0][0]["description"].startswith("رسوم - تفاصيل"))
 
+# --- no-op workflow updates are not re-written -------------------------------
+waiting = workflow.merge_state(workflow.blank_workflow_state(), {"accounting_status": "needs_review"},
+                               {"accounting": workflow.stage_patch(workflow.WAITING, detail="review_items")})
+again = workflow.merge_state(waiting, {"accounting_status": "needs_review"},
+                             {"accounting": workflow.stage_patch(workflow.WAITING, detail="review_items")})
+check("repeating the same stage update changes nothing (timestamps kept)", again == waiting)
+check("count of uncertain facts", facts.count_uncertain(fact_rows) == 5)
+
 print()
 if failures:
     print(f"{len(failures)} check(s) failed: {failures}")

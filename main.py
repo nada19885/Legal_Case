@@ -98,13 +98,16 @@ from legal_platform.financial_corrections import (
     load_latest_corrections,
     submit_correction,
     submit_fact_resolution,
+    submit_fact_resolutions,
 )
 from legal_platform.financial_facts import (
     PROPOSAL_ACTION,
     format_amount,
     parse_amount,
+    UNCERTAIN,
     build_fact_ledger,
     build_fact_review_items,
+    count_uncertain,
     effective_fact,
     validate_fact_fields,
 )
@@ -1629,9 +1632,13 @@ def _after_review_change(case_id, actor):
     still waiting, ready to continue (last item answered), or — when the
     analysis had already run — ready again with the old results marked
     out of date."""
-    data = load_case_data(case_id)
-    state = restore_workflow_state(data)
-    pending = _review_items(case_id, data)
+    rows = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
+    pending = count_uncertain(
+        rows.to_dict(orient="records") if not rows.empty else [],
+        load_latest_corrections(case_id),
+        load_fact_resolutions(case_id),
+    )
+    state = read_workflow_state(case_id)
     status = str(state.get("accounting_status", "") or "")
 
     if pending:
@@ -1665,15 +1672,15 @@ def _after_review_change(case_id, actor):
 
     return {
         "saved": True,
-        "pending_count": len(pending),
+        "pending_count": pending,
         "ready_for_analysis": not pending,
         "instructions": state.get("accounting_instructions", ""),
     }
 
 
-def _fact_row(data, row_id):
-    frame = data.get("financial_line_items")
-    if not isinstance(frame, pd.DataFrame) or frame.empty or "row_id" not in frame.columns:
+def _fact_row(case_id, row_id):
+    frame = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
+    if frame.empty or "row_id" not in frame.columns:
         return None
     match = frame[frame["row_id"].astype(str) == str(row_id)]
     return match.iloc[-1].to_dict() if not match.empty else None
@@ -1696,8 +1703,7 @@ def accounting_fact_resolve():
     if not (case_id and row_id) or action not in {"confirm", "correct", "ignore", "accept_proposal"}:
         return jsonify({"error": "case_id, row_id and a valid action are required."}), 400
 
-    data = load_case_data(case_id)
-    row = _fact_row(data, row_id)
+    row = _fact_row(case_id, row_id)
     if row is None:
         return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
 
@@ -1721,6 +1727,33 @@ def accounting_fact_resolve():
     return _ok(_after_review_change(case_id, actor))
 
 
+@app.route("/accounting/fact/resolve_bulk", methods=["POST"])
+def accounting_fact_resolve_bulk():
+    """Confirm or ignore several uncertain facts in one request (one
+    dataset write), e.g. "Confirm all on this page". Facts that are no
+    longer uncertain are skipped, so a repeated click is harmless."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    action = str(body.get("action", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    row_ids = [str(r) for r in (body.get("row_ids") or []) if str(r).strip()]
+    if not case_id or action not in {"confirm", "ignore"} or not row_ids:
+        return jsonify({"error": "case_id, row_ids and action (confirm or ignore) are required."}), 400
+
+    frame = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
+    rows = {str(r.get("row_id")): r for r in (frame.to_dict(orient="records") if not frame.empty else [])}
+    corrections, resolutions = load_latest_corrections(case_id), load_fact_resolutions(case_id)
+    wanted = [
+        row_id for row_id in dict.fromkeys(row_ids)
+        if row_id in rows and effective_fact(rows[row_id], corrections, resolutions)["status"] == UNCERTAIN
+    ]
+    if wanted:
+        submit_fact_resolutions(case_id, [{"row_id": row_id, "action": action} for row_id in wanted], actor)
+    result = _after_review_change(case_id, actor)
+    result["applied"] = len(wanted)
+    return _ok(result)
+
+
 @app.route("/accounting/fact/explain", methods=["POST"])
 def accounting_fact_explain():
     """The user explains how an uncertain fact should be read ("this is the
@@ -1736,7 +1769,7 @@ def accounting_fact_explain():
         return jsonify({"error": "case_id, row_id and an explanation are required."}), 400
 
     data = load_case_data(case_id)
-    row = _fact_row(data, row_id)
+    row = _fact_row(case_id, row_id)
     if row is None:
         return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
     current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
@@ -2236,16 +2269,20 @@ def discussion_ask():
 
 @app.route("/page_image")
 def page_image():
+    """One page image. Reads only the page table (not the whole case): the
+    review screen requests many images at once. Images never change once
+    rendered, so the browser may cache them."""
     case_id = request.args.get("case_id", "")
     page_id = request.args.get("page_id", "")
-    data = load_case_data(case_id)
-    row = _page_row(data, page_id)
+    row = _page_row({"pages": case_rows("case_document_pages", case_id)}, page_id)
     if not row:
         return Response(status=404)
     image_bytes = _load_page_image_bytes(row.get("page_image_path", ""))
     if not image_bytes:
         return Response(status=404)
-    return send_file(io.BytesIO(image_bytes), mimetype="image/png")
+    response = send_file(io.BytesIO(image_bytes), mimetype="image/png")
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    return response
 
 
 @app.route("/page_text")

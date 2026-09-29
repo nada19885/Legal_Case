@@ -1142,6 +1142,11 @@ Object.assign(I18N.en, {
   fact_explaining: "Applying your explanation…",
   fact_saved: "Decision saved.",
   fact_ignore_confirm: "Leave this fact out of the ledger?",
+  review_prev: "‹ Previous",
+  review_next: "Next ›",
+  review_page_of: "Page {page} of {pages} · {total} fact(s) to review",
+  review_confirm_page: "Confirm all on this page ({count})",
+  review_confirm_page_prompt: "Confirm the {count} fact(s) on this page exactly as the AI interpreted them?",
   ledger_note: "Note: {note}",
   claim_parent: "From claim: {text}",
   claimed_amount_label: "Claimed",
@@ -1325,6 +1330,11 @@ Object.assign(I18N.ar, {
   fact_explaining: "جارٍ تطبيق شرحك…",
   fact_saved: "تم حفظ القرار.",
   fact_ignore_confirm: "استبعاد هذه الواقعة من السجل المالي؟",
+  review_prev: "‹ السابق",
+  review_next: "التالي ›",
+  review_page_of: "صفحة {page} من {pages} · {total} واقعة للمراجعة",
+  review_confirm_page: "تأكيد كل ما في هذه الصفحة ({count})",
+  review_confirm_page_prompt: "تأكيد {count} واقعة في هذه الصفحة كما فسّرها الذكاء الاصطناعي؟",
   ledger_note: "ملاحظة: {note}",
   claim_parent: "من المطالبة: {text}",
   claimed_amount_label: "المطالب به",
@@ -1368,6 +1378,7 @@ const S = {
   uploads: { documents: [], agreement: [] },
   jobs: {},                    // region -> { detail, current, total }
   accountingSelectedDocs: null, // Set of case_document_id, lazily defaulted to "all" per case
+  reviewPage: 0,               // page of the uncertain-facts review list
 };
 
 /* ============================================================
@@ -2419,6 +2430,7 @@ const FACT_FIELD_ORDER = [
   "fact_type", "date", "description", "amount", "currency", "debit", "credit", "balance",
   "amount_due", "paid_amount", "remaining_amount", "account_number", "transaction_reference", "counterparty",
 ];
+const REVIEW_PAGE_SIZE = 10;
 const FACT_AMOUNT_FIELDS = ["amount", "debit", "credit", "balance", "amount_due", "paid_amount", "remaining_amount"];
 const FACT_STATUS_KIND = {
   EXTRACTED: "verified", CALCULATED: "ai", INFERRED: "provisional", UNCERTAIN: "review",
@@ -2498,7 +2510,7 @@ function renderAccountingConflicts(items) {
     const review = item.review || {};
     const check = (item.calculation && item.calculation.check) || null;
     return `
-      <details class="bsf-expander bsf-review-item" open>
+      <details class="bsf-expander bsf-review-item" data-row-id="${esc(item.row_id)}" open>
         <summary>${esc(t("fact_item_title", {
           page: item.page_label || `${t("page_label")} ${item.page_number || "—"}`,
           type: factTypeLabel(item.fact.fact_type),
@@ -2552,10 +2564,28 @@ function renderAccountingConflicts(items) {
       </details>`;
   };
 
+  // Ten facts at a time: fewer cards (and page images) to load at once.
+  const pages = Math.max(1, Math.ceil(items.length / REVIEW_PAGE_SIZE));
+  S.reviewPage = Math.min(Math.max(0, S.reviewPage || 0), pages - 1);
+  const shown = items.slice(S.reviewPage * REVIEW_PAGE_SIZE, (S.reviewPage + 1) * REVIEW_PAGE_SIZE);
+  const pager = () => `
+    <div class="bsf-review-pager">
+      <button type="button" class="bsf-btn" data-action="review-page" data-step="-1" ${S.reviewPage === 0 ? "disabled" : ""}>
+        ${esc(t("review_prev"))}</button>
+      <span>${esc(t("review_page_of", { page: S.reviewPage + 1, pages, total: items.length }))}</span>
+      <button type="button" class="bsf-btn" data-action="review-page" data-step="1" ${S.reviewPage >= pages - 1 ? "disabled" : ""}>
+        ${esc(t("review_next"))}</button>
+      <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-confirm-page"
+              data-row-ids="${esc(shown.map((item) => item.row_id).join(","))}">
+        ${esc(t("review_confirm_page", { count: shown.length }))}</button>
+    </div>`;
+
   html(target, `
     <h4 class="bsf-subsection">${esc(t("fact_review_heading"))}</h4>
     ${alertBox(t("fact_review_count", { count: items.length }), "warn")}
-    ${items.map(card).join("")}`);
+    ${pager()}
+    ${shown.map(card).join("")}
+    ${shown.length > 3 ? pager() : ""}`);
 }
 
 function renderAccountingLedger(ledger, hasLineItems, hasPendingReview, withheld) {
@@ -3662,29 +3692,72 @@ function closeModal() {
 /* ============================================================
    Action handlers, wired through one delegated click listener.
    ============================================================ */
-/* Save the user's decision on one uncertain fact. When it was the last one,
-   continue the accounting analysis from where it stopped, with the
-   instructions on screen (or the ones last used). */
-async function resolveFact(el, body) {
-  let saved;
-  el.disabled = true;
-  try {
-    saved = await apiPost("/accounting/fact/resolve", Object.assign({ case_id: S.caseId, row_id: el.dataset.rowId }, body));
-    toast(t("fact_saved"), "ok");
-  } catch (error) {
-    el.disabled = false;
-    fail(error);
-    return;
-  }
-  if (saved.ready_for_analysis) {
-    const box = $("#accounting-instructions");
-    const instructions = (box && box.value.trim()) || saved.instructions || "";
-    toast(t("accounting_continue_auto"), "ok");
-    await refreshCase();
-    await ACTIONS["accounting-synthesize"](null, instructions);
-    return;
-  }
-  await refreshCase();
+/* Decisions on uncertain facts are sent one at a time, in order, so quick
+   clicks never pile up parallel requests on the backend. A decided card is
+   removed at once; the full case refresh happens once, after the user
+   pauses. When the last fact is decided, the accounting analysis continues
+   automatically with the instructions on screen (or the ones last used). */
+let decisionQueue = Promise.resolve();
+let decisionsInFlight = 0;
+let reviewRefreshTimer = null;
+
+function setCardsSaving(rowIds, saving) {
+  rowIds.forEach((rowId) => {
+    const card = document.querySelector(`.bsf-review-item[data-row-id="${CSS.escape(rowId)}"]`);
+    if (!card) return;
+    card.classList.toggle("is-saving", saving);
+    card.querySelectorAll("button, input, textarea").forEach((control) => { control.disabled = saving; });
+  });
+}
+
+function dropReviewItems(rowIds, pendingCount) {
+  const acc = (S.snapshot && S.snapshot.accounting) || null;
+  if (!acc) return;
+  acc.review_items = (acc.review_items || []).filter((item) => !rowIds.includes(item.row_id));
+  acc.pending_conflicts = acc.review_items;
+  acc.pending_count = typeof pendingCount === "number" ? pendingCount : acc.review_items.length;
+  acc.pending_field_count = acc.pending_count;
+  acc.has_pending_review = acc.pending_count > 0;
+  renderAccountingConflicts(acc.review_items);
+  renderStageStrips();
+  renderAttention();
+}
+
+function scheduleReviewRefresh() {
+  clearTimeout(reviewRefreshTimer);
+  reviewRefreshTimer = setTimeout(() => { if (!decisionsInFlight) refreshCase(); }, 1500);
+}
+
+function queueDecision(rowIds, send) {
+  setCardsSaving(rowIds, true);
+  decisionsInFlight += 1;
+  decisionQueue = decisionQueue.then(async () => {
+    try {
+      const saved = await send();
+      dropReviewItems(rowIds, saved.pending_count);
+      if (saved.ready_for_analysis) {
+        clearTimeout(reviewRefreshTimer);
+        const box = $("#accounting-instructions");
+        const instructions = (box && box.value.trim()) || saved.instructions || "";
+        toast(t("accounting_continue_auto"), "ok");
+        await refreshCase();
+        await ACTIONS["accounting-synthesize"](null, instructions);
+      }
+    } catch (error) {
+      setCardsSaving(rowIds, false);
+      fail(error);
+    } finally {
+      decisionsInFlight -= 1;
+      if (!decisionsInFlight) scheduleReviewRefresh();
+    }
+  });
+  return decisionQueue;
+}
+
+function resolveFact(el, body) {
+  const rowId = el.dataset.rowId;
+  return queueDecision([rowId], () =>
+    apiPost("/accounting/fact/resolve", Object.assign({ case_id: S.caseId, row_id: rowId }, body)));
 }
 
 const ACTIONS = {
@@ -3854,6 +3927,20 @@ const ACTIONS = {
   },
 
   "fact-accept-proposal": (el) => resolveFact(el, { action: "accept_proposal" }),
+
+  "fact-confirm-page": (el) => {
+    const rowIds = (el.dataset.rowIds || "").split(",").filter(Boolean);
+    if (!rowIds.length || !window.confirm(t("review_confirm_page_prompt", { count: rowIds.length }))) return;
+    return queueDecision(rowIds, () =>
+      apiPost("/accounting/fact/resolve_bulk", { case_id: S.caseId, row_ids: rowIds, action: "confirm" }));
+  },
+
+  "review-page": (el) => {
+    S.reviewPage = (S.reviewPage || 0) + Number(el.dataset.step || 0);
+    renderAccountingConflicts(((S.snapshot && S.snapshot.accounting) || {}).review_items || []);
+    const target = region("accounting-conflicts");
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  },
 
   "fact-explain": async (el) => {
     const box = el.closest(".bsf-fact-explain").querySelector("[data-fact-explanation]");

@@ -214,6 +214,8 @@ def merge_state(state: dict, changes: Optional[dict] = None, stages: Optional[di
     all_stages = merged.setdefault("stages", {})
     for key, patch in (stages or {}).items():
         record = dict(all_stages.get(key) or {})
+        if patch and all(record.get(field) == value for field, value in patch.items()):
+            continue  # nothing new: keep the record (and its timestamps) as is
         record.update(patch or {})
         status = record.get("status")
         record["updated_at"] = now
@@ -241,11 +243,15 @@ def update_workflow_state(
 
     Only the keys in `changes` (and the stage records in `stages`) are
     touched, so concurrent jobs that each update their own keys keep
-    each other's results.
+    each other's results. An update that changes nothing is not written:
+    every write appends the full state to audit_events, so repeated no-op
+    updates (e.g. one per reviewed fact) would make every later read slower.
     """
     with _STATE_LOCK:
         current = read_workflow_state(case_id)
         merged = merge_state(current, changes, stages)
+        if all(merged.get(key) == current.get(key) for key in WORKFLOW_KEYS):
+            return current
         audit(
             case_id,
             "case_workflow",
