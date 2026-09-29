@@ -29,6 +29,7 @@ screen, the .md export and the .docx export all use it.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Callable, Optional
 
 from .llm import complete_json
@@ -70,8 +71,9 @@ def _records(value: Any) -> list[dict]:
 # ---------------------------------------------------------------------------
 # 1. The record the pleading may rely on
 # ---------------------------------------------------------------------------
+# The app's own case_id is not a court case number, so it is not sent.
 CASE_FIELDS = (
-    "case_id", "case_name", "case_number", "court_case_number", "najiz_case_number", "court", "court_name",
+    "case_name", "case_number", "court_case_number", "najiz_case_number", "court", "court_name",
     "judicial_authority", "committee", "circuit", "case_type", "matter_type", "jurisdiction", "product_type",
     "matter_date", "customer_type", "customer_name", "client_name", "claimant_name", "defendant_name",
     "responsible_attorney", "attorney_license", "preferred_language",
@@ -336,7 +338,8 @@ SOURCES: use only the supplied record.
 - defence_plan is the attorney's defence structure: follow it where the record
   supports it.
 - Never fill a gap with an assumption. Unknown identification details are
-  written as […].
+  written as […]. Never cite internal record ids (such as FLI_…, CLM_…) as
+  evidence or documents; cite the source label (file and page) instead.
 """.strip()
 
 
@@ -459,7 +462,9 @@ English text of this part. Produce the same part in formal Saudi legal Arabic
   claim_ids and the "outcome" values, which stay unchanged;
 - in the heading, "title" is e.g. "مذكرة جوابية (مذكرة دفاع أولى)", and
   "submitted_by" is e.g. "البنك السعودي الفرنسي – المدعى عليه".
-Return one JSON object with exactly the keys of english_part.
+Return ONE JSON object whose top-level keys are exactly `required_keys` (the
+keys of english_part), each holding the Arabic version of that section. Do not
+wrap the answer in another key, do not add keys, do not translate the keys.
 """.strip()
 
 
@@ -500,6 +505,14 @@ def _str_list(value: Any, limit: int = 60) -> list[str]:
     if not isinstance(value, list):
         return []
     return [_text(item) for item in value[:limit] if _text(item)]
+
+
+_INTERNAL_ID = re.compile(r"^(FLI|CASE|NODE|CLM|ROW)_[0-9A-Za-z_]+$")
+
+
+def _public_list(value: Any, limit: int = 60) -> list[str]:
+    """A list of evidence or documents without the app's internal record ids."""
+    return [item for item in _str_list(value, limit) if not _INTERNAL_ID.match(item)]
 
 
 def _dicts(value: Any) -> list[dict]:
@@ -554,7 +567,7 @@ def normalise_part(part: Any, allowed_node_ids: set, notes: Optional[list] = Non
                 "heading": _text(item.get("heading")),
                 "points": [{"label": _text(p.get("label")), "value": _text(p.get("value"))}
                            for p in _dicts(item.get("points")) if _text(p.get("label"))],
-                "evidence": _str_list(item.get("evidence"), 20),
+                "evidence": _public_list(item.get("evidence"), 20),
                 "finding": _text(item.get("finding")),
                 "outcome": outcome if outcome in OUTCOMES else "unresolved",
             })
@@ -565,7 +578,7 @@ def normalise_part(part: Any, allowed_node_ids: set, notes: Optional[list] = Non
             {"number": index + 1,
              **{key: _text(item.get(key)) for key in ("title", "allegation", "bank_position",
                                                       "accounting_finding", "applicable_provision", "conclusion")},
-             "evidence": _str_list(item.get("evidence"), 20),
+             "evidence": _public_list(item.get("evidence"), 20),
              "node_ids": _ids(item.get("node_ids"), allowed_node_ids),
              "analysis": _str_list(item.get("analysis"))}
             for index, item in enumerate(_dicts(part.get("claim_responses")))
@@ -588,7 +601,7 @@ def normalise_part(part: Any, allowed_node_ids: set, notes: Optional[list] = Non
         relief = part.get("relief_requested") if isinstance(part.get("relief_requested"), dict) else {}
         out["relief_requested"] = {"introduction": _text(relief.get("introduction")),
                                    "items": _str_list(relief.get("items"), 20)}
-        out["documents_relied_upon"] = _str_list(part.get("documents_relied_upon"))
+        out["documents_relied_upon"] = _public_list(part.get("documents_relied_upon"))
         signature = part.get("signature") if isinstance(part.get("signature"), dict) else {}
         out["signature"] = {key: _text(signature.get(key)) or PLACEHOLDER
                             for key in ("party", "counsel", "license", "date")}
@@ -612,13 +625,64 @@ def _call(prompt: str, payload: dict, attempts: int = 2) -> dict:
     raise RuntimeError("Pleading drafting failed: " + "; ".join(failures))
 
 
+def _unwrap(result: Any, keys: tuple) -> dict:
+    """The model sometimes wraps its answer ({"arabic_part": {...}},
+    {"result": {...}}, a one-item list). Return the dict that actually
+    holds the expected keys, searching nested dicts and lists."""
+    best, best_hits = {}, 0
+    stack = [result]
+    while stack:
+        value = stack.pop()
+        if isinstance(value, list):
+            stack.extend(value)
+        elif isinstance(value, dict):
+            hits = sum(1 for key in keys if key in value)
+            if hits > best_hits:
+                best, best_hits = value, hits
+            stack.extend(value.values())
+    return best
+
+
+def _has_content(part: dict, keys: tuple) -> bool:
+    for key in keys:
+        value = part.get(key)
+        if key == "heading":
+            if any(v and v != PLACEHOLDER for v in (value or {}).values()):
+                return True
+        elif key in ("relief_requested", "signature"):
+            continue
+        elif value:
+            return True
+    return False
+
+
 def _arabic(part_en: dict, record: dict, allowed: set, notes: list) -> dict:
+    """Arabic version of one drafted half. Unwraps a wrapped answer and
+    retries once when the answer holds none of the expected sections; if
+    it still fails, the attorney is told instead of a blank Arabic text
+    being shown as if it were drafted."""
+    keys = tuple(part_en)
     payload = {
         "english_part": part_en,
+        "required_keys": list(keys),
         "parties": record.get("parties", []),
         "case_identification": record.get("case_identification", {}),
     }
-    return normalise_part(_call(ARABIC_PROMPT, payload), allowed, notes)
+    for attempt in range(2):
+        raw = _call(ARABIC_PROMPT, payload)
+        found = _unwrap(raw, keys)
+        part = normalise_part(found, allowed, [])
+        if _has_content(part, keys):
+            return part
+        print("[pleading arabic] attempt {} returned no usable sections; top-level keys={}".format(
+            attempt + 1, list(raw)[:12] if isinstance(raw, dict) else type(raw).__name__), flush=True)
+        payload["previous_answer_problem"] = (
+            "Your previous answer did not contain the required keys. Return ONE JSON object whose "
+            "top-level keys are exactly: " + ", ".join(keys) + ". Do not wrap it and do not translate the keys."
+        )
+    notes.append("The Arabic version of part of the pleading could not be prepared; regenerate the pleading "
+                 "or use the English version.")
+    return {}
 
 
 def _node_ids_used(section: dict) -> list[str]:
@@ -666,9 +730,9 @@ def draft_pleading(record: dict, progress: Optional[Callable[[str], None]] = Non
     pleading_en = {**part_a, **part_b}
 
     report("Preparing the Arabic pleading (part 1 of 2)…")
-    ar_a = _arabic(part_a, record, allowed, [])
+    ar_a = _arabic(part_a, record, allowed, notes)
     report("Preparing the Arabic pleading (part 2 of 2)…")
-    ar_b = _arabic(part_b, record, allowed, [])
+    ar_b = _arabic(part_b, record, allowed, notes)
     pleading_ar = {**ar_a, **ar_b}
 
     if not record.get("contract_pages"):
@@ -714,8 +778,10 @@ def revise_pleading(memo: dict, revision_request: str, record: dict,
     if changed:
         report("Updating the Arabic pleading…")
         english_changed = {key: revised_en[key] for key in changed if key in revised_en}
-        arabic = _call(ARABIC_PROMPT, {"english_part": english_changed, "parties": record.get("parties", []),
-                                       "case_identification": record.get("case_identification", {})})
+        arabic = _unwrap(_call(ARABIC_PROMPT, {"english_part": english_changed, "required_keys": list(english_changed),
+                                               "parties": record.get("parties", []),
+                                               "case_identification": record.get("case_identification", {})}),
+                         tuple(english_changed))
         merged = normalise_part({**current_ar, **{k: v for k, v in arabic.items() if k in english_changed}}, allowed, [])
         revised_ar.update({key: merged[key] for key in english_changed if key in merged})
 
@@ -730,6 +796,31 @@ def revise_pleading(memo: dict, revision_request: str, record: dict,
         "attorney_checks": list(memo.get("attorney_checks") or []) + notes,
         "source_ids_used": _node_ids_used(revised_en),
     }
+
+
+def arabic_missing(memo: Any) -> bool:
+    """True when a full pleading has no usable Arabic text."""
+    if not is_full_pleading(memo):
+        return False
+    arabic = memo.get("pleading_ar") or {}
+    return not (_has_content(arabic, PART_A_KEYS) and _has_content(arabic, PART_B_KEYS))
+
+
+def prepare_arabic(memo: dict, record: dict, progress: Optional[Callable[[str], None]] = None) -> dict:
+    """Rebuild the Arabic pleading from the stored English one (two calls);
+    the English text is not redrafted."""
+    report = progress or (lambda message: None)
+    allowed = {node["node_id"] for node in record.get("authorities", []) if node.get("node_id")}
+    english = memo.get("pleading_en") or {}
+    notes: list = []
+    report("Preparing the Arabic pleading (part 1 of 2)…")
+    ar_a = _arabic({key: english[key] for key in PART_A_KEYS if key in english}, record, allowed, notes)
+    report("Preparing the Arabic pleading (part 2 of 2)…")
+    ar_b = _arabic({key: english[key] for key in PART_B_KEYS if key in english}, record, allowed, notes)
+    arabic = {**ar_a, **ar_b}
+    checks = [c for c in memo.get("attorney_checks") or [] if "Arabic version" not in c]
+    return {**memo, "pleading_ar": arabic, "title_ar": (arabic.get("heading") or {}).get("title", ""),
+            "attorney_checks": checks + notes}
 
 
 def is_full_pleading(memo: Any) -> bool:
@@ -810,6 +901,11 @@ def _cell(value: str) -> str:
 
 def pleading_to_markdown(memo: dict, language: str) -> str:
     is_ar = language == "ar"
+    if is_ar and arabic_missing(memo):
+        return ("# النسخة العربية غير متوفرة\n\n"
+                "لم يتم إعداد النسخة العربية من هذه المذكرة. استخدم زر «إعداد النسخة العربية» لإعدادها من النسخة الإنجليزية.\n\n"
+                "The Arabic version of this pleading is not available yet. Use \"Prepare Arabic version\" to prepare it "
+                "from the English pleading.")
     labels = LABELS["ar" if is_ar else "en"]
     section = memo.get("pleading_ar" if is_ar else "pleading_en") or {}
     letters = LETTERS_AR if is_ar else list(LETTERS_EN)

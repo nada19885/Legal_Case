@@ -120,10 +120,12 @@ from legal_platform.financial_forensics import (
     run_claim_based_accounting_analysis,
 )
 from legal_platform.pleading import (
+    arabic_missing,
     build_drafting_record,
     draft_pleading,
     is_full_pleading,
     pleading_to_markdown,
+    prepare_arabic,
     revise_pleading,
 )
 from legal_platform.financial_normalizer import (
@@ -2201,6 +2203,37 @@ def pleading_revise():
 
     return _start_stage_job(
         case_id, "pleading", "revising_pleading", "Revising the written pleading…", task, session_id=session_id,
+    )
+
+
+@app.route("/pleading/prepare_arabic", methods=["POST"])
+def pleading_prepare_arabic():
+    """Rebuild only the Arabic pleading from the stored English one."""
+    body = request.get_json(force=True)
+    case_id = body.get("case_id", "")
+    session_id = body.get("session_id")
+
+    def task(job_id):
+        data = load_case_data(case_id)
+        state = restore_workflow_state(data)
+        memo = state.get("memo")
+        if not is_full_pleading(memo):
+            raise ValueError("Generate the written pleading first.")
+        updated = prepare_arabic(memo, _drafting_record(case_id, data, state),
+                                 progress=lambda message: _set_phase(job_id, "preparing_arabic", message))
+        versions = list(read_workflow_state(case_id).get("pleading_versions") or [])
+        version_no = len(versions) + 1
+        versions.append({"version": version_no, "draft": updated, "note": "Arabic version prepared"})
+        update_workflow_state(
+            case_id,
+            changes={"memo": updated, "pleading_versions": versions},
+            stages={"pleading": stage_patch(COMPLETED, detail="draft")},
+            action="pleading_arabic_prepared",
+        )
+        return {"memo": updated, "pleading_versions": versions, "arabic_missing": arabic_missing(updated)}
+
+    return _start_stage_job(
+        case_id, "pleading", "preparing_arabic", "Preparing the Arabic pleading…", task, session_id=session_id,
     )
 
 

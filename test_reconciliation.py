@@ -622,8 +622,12 @@ check("drafting record: ledger samples carry source pages", record["accounting"]
 check("drafting record: issues split by retrieved authority",
       [i["issue_title"] for i in record["legal_analysis"]["issues_with_retrieved_authority"]] == ["Fees"]
       and record["legal_analysis"]["issues_without_retrieved_authority"] == ["Venue"])
-check("drafting record: case identification kept, blanks dropped",
-      record["case_identification"] == {"case_id": "c1", "case_number": "445"})
+check("drafting record: court case number kept, internal id and blanks dropped",
+      record["case_identification"] == {"case_number": "445"})
+check("internal record ids removed from evidence and documents",
+      pleading.normalise_part({"claim_responses": [{"evidence": ["Stmt.pdf — page 2", "FLI_612229CF38D054F034AA"]}],
+                               "documents_relied_upon": ["FLI_9E1C9D794EAED3E90208", "Agreement"]}, set())
+      ["documents_relied_upon"] == ["Agreement"])
 
 calls = []
 def fake_complete_json(prompt, payload, temperature=0.0):
@@ -692,6 +696,29 @@ check("revision rewrites only the changed section in both languages",
       and [c[0] for c in calls] == [pleading.REVISION_PROMPT, pleading.ARABIC_PROMPT]
       and list(calls[1][1]["english_part"]) == ["introduction"])
 check("revision ignores unknown sections", "bogus" not in revised["pleading_en"])
+
+# --- Arabic answers that come back wrapped or empty ----------------------------
+def wrapped_llm(prompt, payload, temperature=0.0):
+    english = payload["english_part"]
+    if "heading" in english:
+        return {"arabic_part": {**part_a_raw, "heading": {**part_a_raw["heading"], "title": "مذكرة جوابية"}}}
+    return {"result": [part_b_raw]}
+pleading.complete_json = wrapped_llm
+fixed = pleading.prepare_arabic({**memo, "pleading_ar": {}}, record)
+check("wrapped Arabic answers are unwrapped", fixed["pleading_ar"]["heading"]["title"] == "مذكرة جوابية"
+      and fixed["pleading_ar"]["claim_responses"] and not pleading.arabic_missing(fixed))
+empty_calls = []
+def empty_llm(prompt, payload, temperature=0.0):
+    empty_calls.append(payload)
+    return {"مقدمة": "نص"}
+pleading.complete_json = empty_llm
+failed = pleading.prepare_arabic({**memo, "pleading_ar": {}}, record)
+check("unusable Arabic answer retried once with the key list", len(empty_calls) == 4
+      and "required keys" in empty_calls[1]["previous_answer_problem"])
+check("failed Arabic is reported, not shown blank",
+      pleading.arabic_missing(failed) and any("Arabic version" in c for c in failed["attorney_checks"])
+      and "النسخة العربية غير متوفرة" in pleading.pleading_to_markdown(failed, "ar"))
+pleading.complete_json = fake_complete_json
 
 print()
 if failures:

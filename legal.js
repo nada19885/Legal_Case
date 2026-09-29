@@ -221,6 +221,7 @@ const I18N = {
     "download_combined_pleading": "Download Arabic + English (.docx)",
     "download_pleading_docx": "Download this version (.docx)",
     "pleading_language": "Pleading language",
+    "prepare_arabic": "Prepare Arabic version",
     "pleading_language_en": "English",
     "pleading_language_ar": "Arabic — العربية",
     "download_english_pleading": "Download English pleading (.md)",
@@ -669,6 +670,7 @@ const I18N = {
     "download_combined_pleading": "تنزيل النسختين العربية والإنجليزية (.docx)",
     "download_pleading_docx": "تنزيل هذه النسخة (.docx)",
     "pleading_language": "لغة المذكرة",
+    "prepare_arabic": "إعداد النسخة العربية",
     "pleading_language_en": "English — الإنجليزية",
     "pleading_language_ar": "العربية",
     "download_english_pleading": "تنزيل المرافعة الإنجليزية (.md)",
@@ -3147,6 +3149,9 @@ if (canDraft) {
   // The pleading exists in both languages; the attorney picks which one to
   // read, independently of the interface language.
   const lang = S.pleadingLang || S.lang;
+  const arabicSection = memo.pleading_ar || {};
+  const arabicMissing = memo.format === "full_v2"
+    && !((arabicSection.introduction || []).length && (arabicSection.claim_responses || []).length);
   const downloadKey = lang === "ar" ? "download_arabic_pleading" : "download_english_pleading";
 
   html(body, `
@@ -3165,8 +3170,11 @@ if (canDraft) {
           ${esc(t("download_pleading_docx"))}</button>
         <button type="button" class="bsf-btn" data-action="download" data-fmt="docx" data-lang="both">
           ${esc(t("download_combined_pleading"))}</button>
+        ${arabicMissing ? `<button type="button" class="bsf-btn bsf-btn-primary" data-action="prepare-arabic">
+          ${esc(t("prepare_arabic"))}</button>` : ""}
       </div>
     </div>
+    <div data-region="arabic-job"></div>
 
     <div class="bsf-pleading-body ${lang === "ar" ? "arabic-block" : "english-block"}"
          dir="${lang === "ar" ? "rtl" : "ltr"}" lang="${lang}"
@@ -3802,6 +3810,16 @@ const ACTIONS = {
       await refreshCase();
       html(region("pleading-body"), alertBox(t("pleading_generation_failed", { error: error.message }), "flag"));
     }
+  },
+
+  "prepare-arabic": async () => {
+    try {
+      await runJob(apiPost("/pleading/prepare_arabic", { case_id: S.caseId }), "arabic-job");
+      S.pleadingLang = "ar";
+    } catch (error) {
+      toast(t("request_failed", { error: error.message }));
+    }
+    await refreshCase();
   },
 
   "reopen-pleading": async () => {
