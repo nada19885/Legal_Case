@@ -553,8 +553,7 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-pleading-body h2 { text-align: center; }
 .bsf-pleading-body ol, .bsf-pleading-body ul { padding-inline-start: 1.4rem; }
 .bsf-pleading-body .bsf-table td, .bsf-pleading-body .bsf-table th { text-align: start; }
-.bsf-pleading-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .8rem; }
-.bsf-pleading-lang { min-width: 12rem; margin: 0; }
+.bsf-pleading-lang { max-width: 20rem; }
 
 /* Job / progress */
 .bsf-job { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .8rem 1rem; margin: .7rem 0; }

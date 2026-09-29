@@ -120,12 +120,11 @@ from legal_platform.financial_forensics import (
     run_claim_based_accounting_analysis,
 )
 from legal_platform.pleading import (
-    arabic_missing,
     build_drafting_record,
     draft_pleading,
     is_full_pleading,
+    pleading_language,
     pleading_to_markdown,
-    prepare_arabic,
     revise_pleading,
 )
 from legal_platform.financial_normalizer import (
@@ -2102,10 +2101,15 @@ def pleading_generate():
     memo_instructions = body.get("instructions", "")
     direct = bool(body.get("direct", False))
     session_id = body.get("session_id")
+    requested_language = str(body.get("language", "") or "").strip().lower()
 
     def task(job_id):
         data = load_case_data(case_id)
         state = restore_workflow_state(data)
+        # The pleading is drafted in one language: the one chosen on the
+        # pleading tab, else the case's preferred language.
+        language = requested_language if requested_language in ("ar", "en") else (
+            str(data["case"].get("preferred_language", "") or "").strip().lower() or "en")
 
         # 1. Attorney review must be prepared / approved.
         if not approval_gate_passed(state):
@@ -2127,9 +2131,9 @@ def pleading_generate():
         _set_phase(job_id, "generating_pleading", "Collecting the record for the pleading…")
         instructions = "" if direct else memo_instructions
         record = _drafting_record(case_id, data, state, instructions)
-        memo = draft_pleading(record, progress=lambda message: _set_phase(job_id, "generating_pleading", message))
+        memo = draft_pleading(record, language, progress=lambda message: _set_phase(job_id, "generating_pleading", message))
         if session_id:
-            increment_usage(session_id, "llm_request_count", 4)
+            increment_usage(session_id, "llm_request_count", 2)
             increment_usage(session_id, "message_count", 1)
         note = "Initial approved-summary draft" if direct else (memo_instructions or "Initial pleading draft")
         versions = [{"version": 1, "draft": memo, "note": note}]
@@ -2206,37 +2210,6 @@ def pleading_revise():
     )
 
 
-@app.route("/pleading/prepare_arabic", methods=["POST"])
-def pleading_prepare_arabic():
-    """Rebuild only the Arabic pleading from the stored English one."""
-    body = request.get_json(force=True)
-    case_id = body.get("case_id", "")
-    session_id = body.get("session_id")
-
-    def task(job_id):
-        data = load_case_data(case_id)
-        state = restore_workflow_state(data)
-        memo = state.get("memo")
-        if not is_full_pleading(memo):
-            raise ValueError("Generate the written pleading first.")
-        updated = prepare_arabic(memo, _drafting_record(case_id, data, state),
-                                 progress=lambda message: _set_phase(job_id, "preparing_arabic", message))
-        versions = list(read_workflow_state(case_id).get("pleading_versions") or [])
-        version_no = len(versions) + 1
-        versions.append({"version": version_no, "draft": updated, "note": "Arabic version prepared"})
-        update_workflow_state(
-            case_id,
-            changes={"memo": updated, "pleading_versions": versions},
-            stages={"pleading": stage_patch(COMPLETED, detail="draft")},
-            action="pleading_arabic_prepared",
-        )
-        return {"memo": updated, "pleading_versions": versions, "arabic_missing": arabic_missing(updated)}
-
-    return _start_stage_job(
-        case_id, "pleading", "preparing_arabic", "Preparing the Arabic pleading…", task, session_id=session_id,
-    )
-
-
 @app.route("/pleading/restore_version", methods=["POST"])
 def pleading_restore_version():
     body = request.get_json(force=True)
@@ -2299,7 +2272,8 @@ def pleading_export():
         return jsonify({"error": "no pleading available"}), 404
     reference = short_case_reference(case_id)
     if fmt == "docx":
-        languages = ("ar", "en") if language == "both" else (language,)
+        languages = (pleading_language(memo),) if is_full_pleading(memo) else (
+            ("ar", "en") if language == "both" else (language,))
         try:
             docx_bytes = build_pleading_docx_bytes(memo, reference, languages)
         except ImportError:
@@ -2308,7 +2282,7 @@ def pleading_export():
             io.BytesIO(docx_bytes),
             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             as_attachment=True,
-            download_name=f"pleading_{reference}_{language}.docx",
+            download_name=f"pleading_{reference}_{'_'.join(languages)}.docx",
         )
     text = memo_to_markdown(memo, language)
     return Response(

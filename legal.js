@@ -218,10 +218,8 @@ const I18N = {
     "documents_caption": "Upload all available material here. The system will extract, classify, and map it into the case record.",
     "docx_export_missing": "Word export needs `python-docx` in this code environment — add it to the environment's package list to enable this button.",
     "download_arabic_pleading": "Download Arabic pleading (.md)",
-    "download_combined_pleading": "Download Arabic + English (.docx)",
-    "download_pleading_docx": "Download this version (.docx)",
+    "download_pleading_docx": "Download pleading (.docx)",
     "pleading_language": "Pleading language",
-    "prepare_arabic": "Prepare Arabic version",
     "pleading_language_en": "English",
     "pleading_language_ar": "Arabic — العربية",
     "download_english_pleading": "Download English pleading (.md)",
@@ -667,10 +665,8 @@ const I18N = {
     "documents_caption": "ارفع هنا كل المواد المتاحة. سيقوم النظام باستخراجها وتصنيفها وربطها بسجل القضية.",
     "docx_export_missing": "يتطلب التصدير إلى Word حزمة `python-docx` في بيئة التنفيذ — أضفها إلى قائمة حزم البيئة لتفعيل هذا الزر.",
     "download_arabic_pleading": "تنزيل المرافعة العربية (.md)",
-    "download_combined_pleading": "تنزيل النسختين العربية والإنجليزية (.docx)",
-    "download_pleading_docx": "تنزيل هذه النسخة (.docx)",
+    "download_pleading_docx": "تنزيل المذكرة (.docx)",
     "pleading_language": "لغة المذكرة",
-    "prepare_arabic": "إعداد النسخة العربية",
     "pleading_language_en": "English — الإنجليزية",
     "pleading_language_ar": "العربية",
     "download_english_pleading": "تنزيل المرافعة الإنجليزية (.md)",
@@ -1839,6 +1835,7 @@ async function openCase(caseId) {
     S.caseId = caseId;
     S.snapshot = snapshot;
     S.compareVersion = null;
+    S.pleadingLang = null;
     S.accountingSelectedDocs = null;
     // Every matter opens on its first tab, whatever was selected last time.
     S.tab = "home";
@@ -3143,38 +3140,23 @@ if (canDraft) {
   );
 }
 
+  const languageSelect = $("#pleading-language");
+  if (languageSelect) languageSelect.value = preferredPleadingLanguage();
+
   const body = region("pleading-body");
   if (!memo) { html(body, ""); return; }
 
-  // The pleading exists in both languages; the attorney picks which one to
-  // read, independently of the interface language.
-  const lang = S.pleadingLang || S.lang;
-  const arabicSection = memo.pleading_ar || {};
-  const arabicMissing = memo.format === "full_v2"
-    && !((arabicSection.introduction || []).length && (arabicSection.claim_responses || []).length);
+  // The pleading is drafted in one language, chosen before generating.
+  const lang = pleadingLanguage(memo);
   const downloadKey = lang === "ar" ? "download_arabic_pleading" : "download_english_pleading";
 
   html(body, `
-    <div class="bsf-pleading-toolbar">
-      <label class="bsf-field bsf-pleading-lang">
-        <span>${esc(t("pleading_language"))}</span>
-        <select class="bsf-input" data-action="select-pleading-lang">
-          <option value="en" ${lang === "en" ? "selected" : ""}>${esc(t("pleading_language_en"))}</option>
-          <option value="ar" ${lang === "ar" ? "selected" : ""}>${esc(t("pleading_language_ar"))}</option>
-        </select>
-      </label>
-      <div class="bsf-btn-row">
-        <button type="button" class="bsf-btn" data-action="download" data-fmt="md" data-lang="${lang}">
-          ${esc(t(downloadKey))}</button>
-        <button type="button" class="bsf-btn" data-action="download" data-fmt="docx" data-lang="${lang}">
-          ${esc(t("download_pleading_docx"))}</button>
-        <button type="button" class="bsf-btn" data-action="download" data-fmt="docx" data-lang="both">
-          ${esc(t("download_combined_pleading"))}</button>
-        ${arabicMissing ? `<button type="button" class="bsf-btn bsf-btn-primary" data-action="prepare-arabic">
-          ${esc(t("prepare_arabic"))}</button>` : ""}
-      </div>
+    <div class="bsf-btn-row">
+      <button type="button" class="bsf-btn" data-action="download" data-fmt="md" data-lang="${lang}">
+        ${esc(t(downloadKey))}</button>
+      <button type="button" class="bsf-btn" data-action="download" data-fmt="docx" data-lang="${lang}">
+        ${esc(t("download_pleading_docx"))}</button>
     </div>
-    <div data-region="arabic-job"></div>
 
     <div class="bsf-pleading-body ${lang === "ar" ? "arabic-block" : "english-block"}"
          dir="${lang === "ar" ? "rtl" : "ltr"}" lang="${lang}"
@@ -3239,6 +3221,24 @@ async function loadPleadingMarkdown(lang) {
   }
 }
 
+/* Language a stored pleading was drafted in (older pleadings held both
+   languages and follow the interface language). */
+function pleadingLanguage(memo) {
+  if (memo && (memo.language === "ar" || memo.language === "en")) return memo.language;
+  if (memo && memo.pleading_en && memo.pleading_ar) return S.lang;
+  return memo && memo.pleading_ar && !memo.pleading_en ? "ar" : "en";
+}
+
+/* Language the next pleading is drafted in: the one picked on the tab,
+   else the case's preferred language. */
+function preferredPleadingLanguage() {
+  const preferred = String(((S.snapshot && S.snapshot.case) || {}).preferred_language || "").toLowerCase();
+  if (S.pleadingLang) return S.pleadingLang;
+  if (preferred === "ar" || preferred === "en") return preferred;
+  const memo = S.snapshot && S.snapshot.workflow_state && S.snapshot.workflow_state.memo;
+  return memo ? pleadingLanguage(memo) : S.lang;
+}
+
 function versionHistoryMarkup(versions) {
   if (versions.length < 2) return "";
   const selected = S.compareVersion || versions[0].version;
@@ -3263,8 +3263,8 @@ function versionHistoryMarkup(versions) {
           <summary>${esc(t("compare_with_current"))}</summary>
           <div class="bsf-expander-body">
             <p class="bsf-caption">${esc(t("redline_caption", { old: selected, new: current.version }))}</p>
-            <div class="bsf-diff ${(S.pleadingLang || S.lang) === "ar" ? "arabic-block" : "english-block"}">
-              ${renderDiff(memoPlainText(chosen.draft, S.pleadingLang || S.lang), memoPlainText(current.draft, S.pleadingLang || S.lang))}
+            <div class="bsf-diff ${pleadingLanguage(current.draft) === "ar" ? "arabic-block" : "english-block"}">
+              ${renderDiff(memoPlainText(chosen.draft, pleadingLanguage(current.draft)), memoPlainText(current.draft, pleadingLanguage(current.draft)))}
             </div>
           </div>
         </details>` : ""}
@@ -3804,22 +3804,13 @@ const ACTIONS = {
   "generate-pleading": async () => {
     const instructions = ($("#pleading-instructions") || {}).value || "";
     try {
-      await runJob(apiPost("/pleading/generate", { case_id: S.caseId, instructions }), "pleading-job");
+      const language = ($("#pleading-language") || {}).value || preferredPleadingLanguage();
+      await runJob(apiPost("/pleading/generate", { case_id: S.caseId, instructions, language }), "pleading-job");
       await refreshCase();
     } catch (error) {
       await refreshCase();
       html(region("pleading-body"), alertBox(t("pleading_generation_failed", { error: error.message }), "flag"));
     }
-  },
-
-  "prepare-arabic": async () => {
-    try {
-      await runJob(apiPost("/pleading/prepare_arabic", { case_id: S.caseId }), "arabic-job");
-      S.pleadingLang = "ar";
-    } catch (error) {
-      toast(t("request_failed", { error: error.message }));
-    }
-    await refreshCase();
   },
 
   "reopen-pleading": async () => {
@@ -4195,7 +4186,6 @@ function wireEvents() {
     const pleadingLang = event.target.closest('[data-action="select-pleading-lang"]');
     if (pleadingLang) {
       S.pleadingLang = pleadingLang.value;
-      renderPleadingTab();
       return;
     }
 
