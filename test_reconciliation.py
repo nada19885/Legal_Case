@@ -46,7 +46,7 @@ from legal_platform.financial_fields import effective_value, pending_fields
 from legal_platform.financial_normalizer import build_normalized_ledger, normalize_currency
 from legal_platform.financial_reconciliation import build_rows_from_reconstruction
 from legal_platform import workflow
-from legal_platform.financial_forensics import normalise_claim_evaluation
+from legal_platform.financial_forensics import merge_part_updates, new_notebook, normalise_claim_evaluation, notebook_view
 from legal_platform import financial_facts as facts
 from legal_platform.arabic_text import fix_structure, fix_visual_arabic, is_visual_order
 from legal_platform.case_register import build_case_register, normalise_text, prioritise_pages_for_summary
@@ -522,6 +522,23 @@ again = workflow.merge_state(waiting, {"accounting_status": "needs_review"},
                              {"accounting": workflow.stage_patch(workflow.WAITING, detail="review_items")})
 check("repeating the same stage update changes nothing (timestamps kept)", again == waiting)
 check("count of uncertain facts", facts.count_uncertain(fact_rows) == 5)
+
+# --- reading a large ledger in parts: the notebook ----------------------------
+notebook = new_notebook(["C001"])
+merge_part_updates(notebook, [{"claim_ref": "C001", "supporting": [{"record_ids": ["A1", "B9"], "explanation": "pay"}],
+                               "note": "1,000 so far"}], {"A1", "A2"}, "part 1 of 2")
+check("only ids from the part just read are accepted", notebook["C001"]["supporting"][0]["record_ids"] == ["A1"])
+merge_part_updates(notebook, [{"claim_ref": "C001", "supporting": [{"record_ids": ["A1", "B1"], "explanation": "again"}],
+                               "contradicting": [{"record_ids": ["B2"], "explanation": "reversal"}]},
+                              {"claim_ref": "C999", "supporting": [{"record_ids": ["B1"]}]}], {"B1", "B2"}, "part 2 of 2")
+page = notebook["C001"]
+check("earlier findings kept, new ones added, no duplicates",
+      [e["record_ids"] for e in page["supporting"]] == [["A1"], ["B1"]] and page["contradicting"][0]["record_ids"] == ["B2"])
+check("findings remember which part they came from", page["contradicting"][0]["found_in"] == "part 2 of 2")
+check("unknown claims ignored", set(notebook) == {"C001"})
+view = notebook_view(notebook, {"A1": {"amount": "1,000.00", "currency": "SAR"}, "B1": {"paid_amount": "250", "currency": "SAR"}})
+check("amount found so far computed by code", view["C001"]["amount_found_so_far"] == {"SAR": "1,250.00"})
+check("notes carried forward", view["C001"]["notes"] == ["part 1 of 2: 1,000 so far"])
 
 print()
 if failures:

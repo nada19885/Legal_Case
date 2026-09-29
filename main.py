@@ -1845,6 +1845,8 @@ def accounting_synthesize():
         _set_phase(job_id, "analysing_claims", f"Comparing {len(claims)} claim(s) with the reviewed ledger…")
         result = run_claim_based_accounting_analysis(
             case_id, normalized_ledger, claims, instructions, claims_source=claims_source,
+            progress=lambda detail, current, total: _set_phase(
+                job_id, "analysing_claims", detail, current=current, total=total),
         )
 
         if session_id:

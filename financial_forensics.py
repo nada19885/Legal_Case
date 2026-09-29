@@ -11,7 +11,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import dataiku
 import pandas as pd
@@ -204,8 +204,12 @@ def run_claim_based_accounting_analysis(
     customer_claims: list[dict],
     instructions: str = "",
     claims_source: str = "",
+    progress: Optional[Callable[[str, int, int], None]] = None,
 ) -> dict:
     """Evaluate each financial claim against the reviewed ledger.
+    A ledger too large for one request is read in parts with a notebook
+    per claim (see _rolling_claim_analysis); progress(detail, current,
+    total) reports which part is being read.
 
     The user's instructions steer the scope and method of the analysis
     only; they are passed to the LLM as guidance and never modify the
@@ -244,7 +248,7 @@ def run_claim_based_accounting_analysis(
             evaluations = _call_text_llm(prompt).get("claim_evaluations") or []
             run_metadata["method"] = "single_call"
         else:
-            evaluations = _batched_claim_analysis(claims, compact_ledger, instructions, run_metadata)
+            evaluations = _rolling_claim_analysis(claims, compact_ledger, instructions, run_metadata, progress)
     except Exception as err:
         logger.warning(f"Accounting analysis failed: {err!r}")
         raise RuntimeError(f"The accounting analysis model call failed: {err}") from err
@@ -268,37 +272,63 @@ def run_claim_based_accounting_analysis(
 
 
 # -----------------------------------------------------------------------------
-# Large ledgers: search in parts, then analyse with the relevant facts only
+# Large ledgers: read the ledger in parts, keeping a notebook per claim
 # -----------------------------------------------------------------------------
-# A prompt above this size is split: the whole ledger of a many-page case
-# does not fit in one model request.
+# When the whole ledger does not fit in one request, it is read in parts, in
+# order. For every claim the code keeps a NOTEBOOK: the facts found so far that
+# support, partially support, contradict or leave the claim unclear, plus short
+# notes. Each part is read together with the notebook so far; the model reports
+# only what is NEW in that part, and the code adds it to the notebook, so
+# nothing found earlier can be lost or silently changed. After the last part,
+# a final step writes each claim's verdict and accounting position from the
+# complete notebook, the facts it cites and a whole-ledger summary.
 MAX_SINGLE_PROMPT_CHARS = 45000
-LEDGER_CHUNK_CHARS = 30000
-MAX_RECORDS_PER_ANALYSIS = 120
+LEDGER_CHUNK_CHARS = 25000
 CLAIMS_PER_ANALYSIS = 5
 ANALYSIS_WORKERS = 4
+MAX_NOTES_PER_CLAIM = 6
+MAX_FINAL_RECORDS_PER_CLAIM = 150
 
-EVIDENCE_SEARCH_PROMPT = r"""
-You are a forensic accountant. Below are the financial claims of a legal case and ONE PART of the case's
-reviewed financial ledger (atomic facts). For each claim, list the record_ids in THIS PART that bear on it in
-any way: supporting, partially supporting, contradicting, or ambiguous. Be inclusive: another step decides how
-each record bears on the claim. Use only record_ids from this part. Omit claims with no relevant records.
+NOTEBOOK_GROUPS = ("supporting", "partially_supporting", "contradicting", "unresolved")
+
+READ_PART_PROMPT = r"""
+You are a senior forensic accountant representing Banque Saudi Fransi (BSF). You are reading a large case
+ledger ONE PART AT A TIME. For every claim there is a notebook of what was found in the parts already read.
 
 Claims: {claims_json}
-Ledger part: {ledger_json}
-User analysis instructions (scope only): {instructions}
+Notebook so far (per claim: record_ids already found in each group, amounts found so far, notes):
+{notebook_json}
+User analysis instructions (they set scope and method, never the conclusion): {instructions}
+This part of the ledger ({part_label}): {ledger_json}
+
+TASK: for each claim, report ONLY what is NEW in THIS PART:
+- supporting: records in this part that establish the claim (or part of it);
+- partially_supporting: records that establish only part of it;
+- contradicting: records that cannot be true together with the claim;
+- unresolved: records whose relevance or meaning is ambiguous (e.g. INFERRED facts).
+Every entry cites record_ids FROM THIS PART and explains in one sentence how they bear on the claim.
+Add a short "note" updating the running picture (e.g. "350,000 of the claimed 500,000 found so far").
+A missing record is not a contradiction. Do not repeat records already in the notebook.
+Omit claims for which this part contains nothing new. Use only the ledger; never invent records or amounts.
 
 RETURN JSON ONLY:
-{"relevant": [{"claim_ref": "C001", "record_ids": ["..."]}]}
+{"updates": [{"claim_ref": "C001",
+  "supporting": [{"record_ids": ["..."], "explanation": "..."}],
+  "partially_supporting": [], "contradicting": [], "unresolved": [],
+  "note": "..."}]}
 """.strip()
 
 
-def _claims_prompt(claims: list, ledger: list, instructions: str, summary: Optional[dict] = None) -> str:
+def _claims_prompt(claims: list, ledger: list, instructions: str, summary: Optional[dict] = None,
+                   notebook: Optional[dict] = None) -> str:
     ledger_json = json.dumps(ledger, ensure_ascii=False)
     if summary is not None:
         ledger_json = json.dumps({
-            "note": "Only the records relevant to these claims are listed; ledger_summary covers the whole ledger.",
+            "note": ("The ledger was read in parts. 'evidence_found_while_reading' lists, per claim, what was "
+                     "found in every part; 'records' are the facts it cites; 'ledger_summary' covers the whole "
+                     "ledger. Base the verdict on all of it; echo each claim's claim_ref."),
             "ledger_summary": summary,
+            "evidence_found_while_reading": notebook or {},
             "records": ledger,
         }, ensure_ascii=False)
     return CLAIM_BASED_ACCOUNTING_PROMPT.replace("{claims_json}", json.dumps(claims, ensure_ascii=False)) \
@@ -320,21 +350,26 @@ def _chunks_by_size(records: list, max_chars: int) -> list:
     return chunks
 
 
+def _record_value(record: dict) -> tuple[Optional[str], Optional[Decimal]]:
+    for field in ("amount", "paid_amount", "remaining_amount", "amount_due", "balance", "debit", "credit"):
+        value = parse_amount(record.get(field))
+        if value is not None:
+            return field, value
+    return None, None
+
+
 def ledger_summary(records: list) -> dict:
-    """Whole-ledger overview sent with each batch: counts and totals per fact
-    type and currency, and the date range, so a batch that sees only the
-    relevant records still knows the overall picture."""
+    """Whole-ledger overview: counts and totals per fact type and currency,
+    and the date range."""
     by_type: dict = {}
     dates = []
     for record in records:
         key = f"{record.get('fact_type') or 'other'} ({record.get('currency') or 'no currency'})"
         entry = by_type.setdefault(key, {"count": 0, "total": Decimal(0)})
         entry["count"] += 1
-        for field in ("amount", "paid_amount", "remaining_amount", "amount_due", "balance", "debit", "credit"):
-            value = parse_amount(record.get(field))
-            if value is not None:
-                entry["total"] += value
-                break
+        _, value = _record_value(record)
+        if value is not None:
+            entry["total"] += value
         if record.get("date"):
             dates.append(str(record["date"]))
     return {
@@ -345,53 +380,135 @@ def ledger_summary(records: list) -> dict:
     }
 
 
-def _batched_claim_analysis(claims: list, ledger: list, instructions: str, run_metadata: dict) -> list:
-    """1) find, per claim, the relevant records in each ledger part (in
-    parallel); 2) analyse the claims in small groups with only their
-    relevant records plus the whole-ledger summary."""
-    chunks = _chunks_by_size(ledger, LEDGER_CHUNK_CHARS)
-    claim_refs = [claim["claim_ref"] for claim in claims]
+def new_notebook(claim_refs: list) -> dict:
+    return {ref: dict({group: [] for group in NOTEBOOK_GROUPS}, notes=[]) for ref in claim_refs}
+
+
+def merge_part_updates(notebook: dict, updates: list, part_ids: set, part_label: str) -> None:
+    """Add one part's findings to the notebook. Only ids that belong to the
+    part just read are accepted, and ids already in the notebook are not
+    added twice; existing entries are never changed or removed."""
+    for update in updates or []:
+        if not isinstance(update, dict) or update.get("claim_ref") not in notebook:
+            continue
+        page = notebook[update["claim_ref"]]
+        seen = {x for group in NOTEBOOK_GROUPS for entry in page[group] for x in entry["record_ids"]}
+        for group in NOTEBOOK_GROUPS:
+            for entry in update.get(group) or []:
+                if not isinstance(entry, dict):
+                    continue
+                ids = [str(x) for x in entry.get("record_ids") or [] if str(x) in part_ids and str(x) not in seen]
+                if ids:
+                    seen.update(ids)
+                    page[group].append({"record_ids": ids,
+                                        "explanation": str(entry.get("explanation") or "")[:400],
+                                        "found_in": part_label})
+        note = str(update.get("note") or "").strip()
+        if note:
+            page["notes"].append(f"{part_label}: {note[:300]}")
+            page["notes"] = page["notes"][-MAX_NOTES_PER_CLAIM:]
+
+
+def notebook_view(notebook: dict, by_id: dict) -> dict:
+    """What the model sees of the notebook: ids per group, amounts found so
+    far (computed here, per currency) and the latest notes."""
+    view = {}
+    for ref, page in notebook.items():
+        found: dict = {}
+        for group in ("supporting", "partially_supporting"):
+            for entry in page[group]:
+                for record_id in entry["record_ids"]:
+                    record = by_id.get(record_id) or {}
+                    _, value = _record_value(record)
+                    if value is not None:
+                        currency = record.get("currency") or "no currency"
+                        found[currency] = found.get(currency, Decimal(0)) + value
+        view[ref] = {
+            **{group: [x for entry in page[group] for x in entry["record_ids"]] for group in NOTEBOOK_GROUPS},
+            "amount_found_so_far": {currency: format_amount(total) for currency, total in found.items()},
+            "notes": page["notes"],
+        }
+    return view
+
+
+def _rolling_claim_analysis(claims: list, ledger: list, instructions: str, run_metadata: dict,
+                            progress: Optional[Callable[[str, int, int], None]] = None) -> list:
+    parts = _chunks_by_size(ledger, LEDGER_CHUNK_CHARS)
+    by_id = {str(record.get("record_id")): record for record in ledger}
     compact_claims = [
         {"claim_ref": claim["claim_ref"],
          "claim": str(claim.get("allegation_text") or claim.get("claim") or claim)[:600]}
         for claim in claims
     ]
+    notebook = new_notebook([claim["claim_ref"] for claim in claims])
 
-    def search(chunk):
-        prompt = EVIDENCE_SEARCH_PROMPT.replace("{claims_json}", json.dumps(compact_claims, ensure_ascii=False)) \
-                                       .replace("{ledger_json}", json.dumps(chunk, ensure_ascii=False)) \
-                                       .replace("{instructions}", instructions or "None provided.")
-        return _call_text_llm(prompt).get("relevant") or []
+    # 1) Read the parts in order; each one updates the notebook.
+    for number, part in enumerate(parts, start=1):
+        label = f"part {number} of {len(parts)}"
+        if progress:
+            progress(f"Reading the ledger: {label}…", number, len(parts))
+        prompt = READ_PART_PROMPT.replace("{claims_json}", json.dumps(compact_claims, ensure_ascii=False)) \
+                                 .replace("{notebook_json}", json.dumps(notebook_view(notebook, by_id), ensure_ascii=False)) \
+                                 .replace("{instructions}", instructions or "None provided.") \
+                                 .replace("{part_label}", label) \
+                                 .replace("{ledger_json}", json.dumps(part, ensure_ascii=False))
+        updates = _call_text_llm(prompt).get("updates") or []
+        merge_part_updates(notebook, updates, {str(r.get("record_id")) for r in part}, label)
 
-    relevant: dict = {ref: [] for ref in claim_refs}
-    with ThreadPoolExecutor(max_workers=ANALYSIS_WORKERS) as pool:
-        for found in pool.map(search, chunks):
-            for entry in found:
-                if isinstance(entry, dict) and entry.get("claim_ref") in relevant:
-                    relevant[entry["claim_ref"]].extend(str(x) for x in entry.get("record_ids") or [])
-
-    by_id = {str(record.get("record_id")): record for record in ledger}
+    # 2) Final verdict per group of claims, from the complete notebook.
     summary = ledger_summary(ledger)
     groups = [claims[i:i + CLAIMS_PER_ANALYSIS] for i in range(0, len(claims), CLAIMS_PER_ANALYSIS)]
+    if progress:
+        progress("Writing the accounting positions…", 0, len(groups))
 
-    def analyse(group):
-        ids = list(dict.fromkeys(x for claim in group for x in relevant[claim["claim_ref"]] if x in by_id))
-        records = [by_id[x] for x in ids[:MAX_RECORDS_PER_ANALYSIS]]
-        prompt = _claims_prompt(group, records, instructions, summary)
+    def cited(claim):
+        page = notebook[claim["claim_ref"]]
+        order = ("contradicting", "supporting", "partially_supporting", "unresolved")
+        ids = [x for group in order for entry in page[group] for x in entry["record_ids"]]
+        return list(dict.fromkeys(ids))[:MAX_FINAL_RECORDS_PER_CLAIM]
+
+    def finalise(group):
+        ids = list(dict.fromkeys(x for claim in group for x in cited(claim)))
+        records = [by_id[x] for x in ids if x in by_id]
+        pages = {claim["claim_ref"]: notebook[claim["claim_ref"]] for claim in group}
+        prompt = _claims_prompt(group, records, instructions, summary, pages)
         if len(prompt) > MAX_SINGLE_PROMPT_CHARS and len(group) > 1:
-            return [evaluation for claim in group for evaluation in analyse([claim])]
-        return _call_text_llm(prompt).get("claim_evaluations") or []
+            return [evaluation for claim in group for evaluation in finalise([claim])]
+        evaluations = _call_text_llm(prompt).get("claim_evaluations") or []
+        refs = [claim["claim_ref"] for claim in group]
+        for index, evaluation in enumerate(evaluations):
+            if isinstance(evaluation, dict) and evaluation.get("claim_ref") not in refs and len(evaluations) == len(refs):
+                evaluation["claim_ref"] = refs[index]
+        return evaluations
 
     evaluations: list = []
     with ThreadPoolExecutor(max_workers=ANALYSIS_WORKERS) as pool:
-        for result in pool.map(analyse, groups):
+        for result in pool.map(finalise, groups):
             evaluations.extend(result)
 
+    # 3) Nothing found while reading may be dropped by the final step.
+    for evaluation in evaluations:
+        page = notebook.get(evaluation.get("claim_ref")) if isinstance(evaluation, dict) else None
+        if not page:
+            continue
+        present = {str(x) for group in ("supporting_evidence", "partially_supporting_evidence",
+                                         "contradicting_evidence", "unresolved_evidence")
+                   for entry in (evaluation.get(group) or []) if isinstance(entry, dict)
+                   for x in entry.get("record_ids") or []}
+        for group in NOTEBOOK_GROUPS:
+            for entry in page[group]:
+                missing = [x for x in entry["record_ids"] if x not in present]
+                if missing:
+                    evaluation.setdefault(f"{group}_evidence", []).append(
+                        {"record_ids": missing, "explanation": entry["explanation"]})
+                    present.update(missing)
+
     run_metadata.update({
-        "method": "batched",
-        "ledger_parts": len(chunks),
+        "method": "read_in_parts",
+        "ledger_parts": len(parts),
         "claim_groups": len(groups),
-        "records_considered": len({x for ids in relevant.values() for x in ids}),
+        "records_cited": len({x for page in notebook.values() for group in NOTEBOOK_GROUPS
+                              for entry in page[group] for x in entry["record_ids"]}),
     })
     return evaluations
 
