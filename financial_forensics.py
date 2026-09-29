@@ -9,7 +9,9 @@ import json
 import logging
 import re
 import time
-from typing import Any
+from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
+from typing import Any, Optional
 
 import dataiku
 import pandas as pd
@@ -112,23 +114,45 @@ RETURN JSON ONLY:
 # -----------------------------------------------------------------------------
 # PARSING & UTILITIES
 # -----------------------------------------------------------------------------
-def _call_text_llm(prompt: str) -> dict:
-    """Executes completion on Dataiku LLM endpoint with robust JSON parsing."""
-    project = dataiku.api_client().get_default_project()
-    llm = project.get_llm(TEXT_MODEL_ENDPOINT)
-    completion = llm.new_completion()
-    try:
-        completion.settings["temperature"] = 0.0
-    except Exception:
-        pass
-    completion.with_message(prompt, role="user")
-    response = completion.execute()
+def _response_error(response: Any) -> str:
+    for name in ("error_message", "errorMessage"):
+        value = getattr(response, name, None)
+        if value:
+            return str(value)
+    raw = getattr(response, "_raw", None)
+    if isinstance(raw, dict):
+        for name in ("errorMessage", "error_message", "error"):
+            if raw.get(name):
+                return str(raw[name])
+    return ""
 
-    if getattr(response, "success", None) is False:
-        raise RuntimeError(str(getattr(response, "error_message", "LLM request failed.")))
 
-    text = getattr(response, "text", "") or ""
-    return parse_json_object(strip_think(text))
+def _call_text_llm(prompt: str, attempts: int = 2) -> dict:
+    """Executes completion on Dataiku LLM endpoint with robust JSON parsing.
+    Retries once; the error names the prompt size, since an over-long
+    prompt is the usual cause of a failure with no message."""
+    last_error = ""
+    for attempt in range(1, attempts + 1):
+        project = dataiku.api_client().get_default_project()
+        llm = project.get_llm(TEXT_MODEL_ENDPOINT)
+        completion = llm.new_completion()
+        try:
+            completion.settings["temperature"] = 0.0
+        except Exception:
+            pass
+        completion.with_message(prompt, role="user")
+        try:
+            response = completion.execute()
+        except Exception as error:
+            last_error = repr(error)
+        else:
+            if getattr(response, "success", None) is not False:
+                text = getattr(response, "text", "") or ""
+                return parse_json_object(strip_think(text))
+            last_error = _response_error(response) or "no error message returned"
+        if attempt < attempts:
+            time.sleep(2.0)
+    raise RuntimeError(f"LLM request failed ({last_error}; prompt of {len(prompt):,} characters).")
 
 
 # -----------------------------------------------------------------------------
@@ -207,28 +231,169 @@ def run_claim_based_accounting_analysis(
         return result
 
     compact_ledger = [compact_ledger_record(r) for r in normalized_ledger]
-
-    prompt = CLAIM_BASED_ACCOUNTING_PROMPT.replace("{claims_json}", json.dumps(customer_claims, ensure_ascii=False)) \
-                                          .replace("{ledger_json}", json.dumps(compact_ledger, ensure_ascii=False)) \
-                                          .replace("{instructions}", instructions or "None provided.")
+    claims = [
+        dict(claim, claim_ref=f"C{index + 1:03d}") if isinstance(claim, dict)
+        else {"claim_ref": f"C{index + 1:03d}", "allegation_text": str(claim)}
+        for index, claim in enumerate(customer_claims)
+    ]
 
     print("[forensic synthesis] Evaluating customer claims against financial ledger...", flush=True)
     try:
-        findings_result = _call_text_llm(prompt)
+        prompt = _claims_prompt(claims, compact_ledger, instructions)
+        if len(prompt) <= MAX_SINGLE_PROMPT_CHARS:
+            evaluations = _call_text_llm(prompt).get("claim_evaluations") or []
+            run_metadata["method"] = "single_call"
+        else:
+            evaluations = _batched_claim_analysis(claims, compact_ledger, instructions, run_metadata)
     except Exception as err:
         logger.warning(f"Accounting analysis failed: {err!r}")
         raise RuntimeError(f"The accounting analysis model call failed: {err}") from err
 
+    findings_result = {"claim_evaluations": evaluations}
     known_ids = {str(r.get("row_id")) for r in normalized_ledger}
     findings_result["claim_evaluations"] = [
         normalise_claim_evaluation(evaluation, known_ids, index)
         for index, evaluation in enumerate(findings_result.get("claim_evaluations") or [])
         if isinstance(evaluation, dict)
     ]
+    ids = [e["claim_id"] for e in findings_result["claim_evaluations"]]
+    if len(set(ids)) != len(ids):
+        # Claims analysed in separate groups can repeat ids: renumber.
+        for index, evaluation in enumerate(findings_result["claim_evaluations"]):
+            evaluation["claim_id"] = f"CLM_{index + 1:03d}"
 
     findings_result["run_metadata"] = run_metadata
     _persist_forensic_results(case_id, findings_result)
     return findings_result
+
+
+# -----------------------------------------------------------------------------
+# Large ledgers: search in parts, then analyse with the relevant facts only
+# -----------------------------------------------------------------------------
+# A prompt above this size is split: the whole ledger of a many-page case
+# does not fit in one model request.
+MAX_SINGLE_PROMPT_CHARS = 45000
+LEDGER_CHUNK_CHARS = 30000
+MAX_RECORDS_PER_ANALYSIS = 120
+CLAIMS_PER_ANALYSIS = 5
+ANALYSIS_WORKERS = 4
+
+EVIDENCE_SEARCH_PROMPT = r"""
+You are a forensic accountant. Below are the financial claims of a legal case and ONE PART of the case's
+reviewed financial ledger (atomic facts). For each claim, list the record_ids in THIS PART that bear on it in
+any way: supporting, partially supporting, contradicting, or ambiguous. Be inclusive: another step decides how
+each record bears on the claim. Use only record_ids from this part. Omit claims with no relevant records.
+
+Claims: {claims_json}
+Ledger part: {ledger_json}
+User analysis instructions (scope only): {instructions}
+
+RETURN JSON ONLY:
+{"relevant": [{"claim_ref": "C001", "record_ids": ["..."]}]}
+""".strip()
+
+
+def _claims_prompt(claims: list, ledger: list, instructions: str, summary: Optional[dict] = None) -> str:
+    ledger_json = json.dumps(ledger, ensure_ascii=False)
+    if summary is not None:
+        ledger_json = json.dumps({
+            "note": "Only the records relevant to these claims are listed; ledger_summary covers the whole ledger.",
+            "ledger_summary": summary,
+            "records": ledger,
+        }, ensure_ascii=False)
+    return CLAIM_BASED_ACCOUNTING_PROMPT.replace("{claims_json}", json.dumps(claims, ensure_ascii=False)) \
+                                        .replace("{ledger_json}", ledger_json) \
+                                        .replace("{instructions}", instructions or "None provided.")
+
+
+def _chunks_by_size(records: list, max_chars: int) -> list:
+    chunks, current, size = [], [], 0
+    for record in records:
+        length = len(json.dumps(record, ensure_ascii=False)) + 1
+        if current and size + length > max_chars:
+            chunks.append(current)
+            current, size = [], 0
+        current.append(record)
+        size += length
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def ledger_summary(records: list) -> dict:
+    """Whole-ledger overview sent with each batch: counts and totals per fact
+    type and currency, and the date range, so a batch that sees only the
+    relevant records still knows the overall picture."""
+    by_type: dict = {}
+    dates = []
+    for record in records:
+        key = f"{record.get('fact_type') or 'other'} ({record.get('currency') or 'no currency'})"
+        entry = by_type.setdefault(key, {"count": 0, "total": Decimal(0)})
+        entry["count"] += 1
+        for field in ("amount", "paid_amount", "remaining_amount", "amount_due", "balance", "debit", "credit"):
+            value = parse_amount(record.get(field))
+            if value is not None:
+                entry["total"] += value
+                break
+        if record.get("date"):
+            dates.append(str(record["date"]))
+    return {
+        "facts": len(records),
+        "by_type": {key: {"count": v["count"], "total": format_amount(v["total"])} for key, v in by_type.items()},
+        "first_date": min(dates) if dates else None,
+        "last_date": max(dates) if dates else None,
+    }
+
+
+def _batched_claim_analysis(claims: list, ledger: list, instructions: str, run_metadata: dict) -> list:
+    """1) find, per claim, the relevant records in each ledger part (in
+    parallel); 2) analyse the claims in small groups with only their
+    relevant records plus the whole-ledger summary."""
+    chunks = _chunks_by_size(ledger, LEDGER_CHUNK_CHARS)
+    claim_refs = [claim["claim_ref"] for claim in claims]
+    compact_claims = [
+        {"claim_ref": claim["claim_ref"],
+         "claim": str(claim.get("allegation_text") or claim.get("claim") or claim)[:600]}
+        for claim in claims
+    ]
+
+    def search(chunk):
+        prompt = EVIDENCE_SEARCH_PROMPT.replace("{claims_json}", json.dumps(compact_claims, ensure_ascii=False)) \
+                                       .replace("{ledger_json}", json.dumps(chunk, ensure_ascii=False)) \
+                                       .replace("{instructions}", instructions or "None provided.")
+        return _call_text_llm(prompt).get("relevant") or []
+
+    relevant: dict = {ref: [] for ref in claim_refs}
+    with ThreadPoolExecutor(max_workers=ANALYSIS_WORKERS) as pool:
+        for found in pool.map(search, chunks):
+            for entry in found:
+                if isinstance(entry, dict) and entry.get("claim_ref") in relevant:
+                    relevant[entry["claim_ref"]].extend(str(x) for x in entry.get("record_ids") or [])
+
+    by_id = {str(record.get("record_id")): record for record in ledger}
+    summary = ledger_summary(ledger)
+    groups = [claims[i:i + CLAIMS_PER_ANALYSIS] for i in range(0, len(claims), CLAIMS_PER_ANALYSIS)]
+
+    def analyse(group):
+        ids = list(dict.fromkeys(x for claim in group for x in relevant[claim["claim_ref"]] if x in by_id))
+        records = [by_id[x] for x in ids[:MAX_RECORDS_PER_ANALYSIS]]
+        prompt = _claims_prompt(group, records, instructions, summary)
+        if len(prompt) > MAX_SINGLE_PROMPT_CHARS and len(group) > 1:
+            return [evaluation for claim in group for evaluation in analyse([claim])]
+        return _call_text_llm(prompt).get("claim_evaluations") or []
+
+    evaluations: list = []
+    with ThreadPoolExecutor(max_workers=ANALYSIS_WORKERS) as pool:
+        for result in pool.map(analyse, groups):
+            evaluations.extend(result)
+
+    run_metadata.update({
+        "method": "batched",
+        "ledger_parts": len(chunks),
+        "claim_groups": len(groups),
+        "records_considered": len({x for ids in relevant.values() for x in ids}),
+    })
+    return evaluations
 
 
 CLAIM_RESULTS = (

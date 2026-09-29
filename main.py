@@ -59,7 +59,6 @@ from legal_platform.workflow import (
     WAITING,
     build_stage_overview,
     read_workflow_state,
-    restore_workflow_state as restore_state_from_frames,
     stage_patch,
     update_workflow_state,
 )
@@ -291,8 +290,9 @@ def load_case_data(case_id):
         "issues": case_rows("case_issues", case_id),
         "issue_candidates": case_rows("case_issue_candidates", case_id),
         "evidence": case_rows("case_evidence", case_id),
-        "approvals": case_rows("case_approvals", case_id),
-        "audit_events": case_rows("audit_events", case_id),
+        # Workflow state is read per case from its state file (see
+        # legal_platform.workflow); audit_events and case_approvals are not
+        # loaded here: they hold every case's history and are large.
         "financial_line_items": case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id),
         "financial_classifications": case_rows(FINANCIAL_DOCUMENT_CLASSIFICATION_DATASET, case_id),
     }
@@ -337,7 +337,7 @@ def best(data, approved_key, candidate_key):
 # jobs keep each other's results. Routes pass only the keys they change.
 # =============================================================================
 def restore_workflow_state(data):
-    return restore_state_from_frames(data.get("audit_events"), data.get("approvals"))
+    return read_workflow_state(str((data.get("case") or {}).get("case_id", "")))
 
 
 def invalidation_changes(reason):
