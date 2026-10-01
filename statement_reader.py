@@ -291,19 +291,40 @@ def dataiku_vision(model_id: Optional[str] = None, temperature: float = 0.0) -> 
     llm = dataiku.api_client().get_default_project().get_llm(model_id or MULTIMODAL_LLM_ID)
 
     def call(prompt: str, png: bytes) -> str:
-        completion = llm.new_completion()
+        import time
+        problem = ""
+        for attempt in range(3):                      # a busy endpoint often answers on a retry
+            if attempt:
+                time.sleep(3 * attempt)
+            completion = llm.new_completion()
+            try:
+                completion.settings["temperature"] = float(temperature)
+            except Exception:
+                pass
+            message = completion.new_multipart_message(role="user")
+            message.with_text(prompt)
+            message.with_inline_image(base64.b64encode(png).decode("ascii"), "image/png")
+            message.add()
+            try:
+                response = completion.execute()
+            except Exception as error:
+                problem = f"{type(error).__name__}: {error}"
+                continue
+            if getattr(response, "success", True) is not False:
+                return str(getattr(response, "text", "") or "")
+            raw = getattr(response, "_raw", None) or getattr(response, "raw", None) or {}
+            problem = str(getattr(response, "error_message", None) or
+                          (raw.get("errorMessage") if isinstance(raw, dict) else "") or raw or "no message")
+        size = ""
         try:
-            completion.settings["temperature"] = float(temperature)
+            import cv2
+            import numpy as np
+            image = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_UNCHANGED)
+            size = f"{image.shape[1]}x{image.shape[0]} px, "
         except Exception:
             pass
-        message = completion.new_multipart_message(role="user")
-        message.with_text(prompt)
-        message.with_inline_image(base64.b64encode(png).decode("ascii"), "image/png")
-        message.add()
-        response = completion.execute()
-        if getattr(response, "success", True) is False:
-            raise RuntimeError(str(getattr(response, "error_message", None) or "The vision request failed."))
-        return str(getattr(response, "text", "") or "")
+        raise RuntimeError(f"The vision request failed after 3 tries ({size}{len(png) // 1024} KB image, "
+                           f"model {model_id or MULTIMODAL_LLM_ID}): {problem}"[:1500])
 
     return call
 

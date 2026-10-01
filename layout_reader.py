@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from decimal import Decimal
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -240,12 +241,18 @@ def _sheet_groups(boxes: List[lb.Box], char_h: float = 24.0,
 
 def read_boxes(gray: np.ndarray, boxes: List[lb.Box], vision: VisionCall,
                images: Optional[list] = None, char_h: float = 24.0, prompt: str = READ_BOXES_PROMPT,
-               letter: int = SHEET_LETTER_HEIGHT, what: str = "", label: str = "reading sheet") -> Dict[int, str]:
+               letter: int = SHEET_LETTER_HEIGHT, what: str = "", label: str = "reading sheet",
+               errors: Optional[List[str]] = None) -> Dict[int, str]:
     """Text of every box, read in sheets of numbered pieces."""
     texts: Dict[int, str] = {}
     for group in _sheet_groups([b for b in boxes if readable(b, char_h)], char_h, letter):
         sheet = _sheet(gray, group, char_h, letter)
-        answer = vision(prompt.format(ids=", ".join(str(b.id) for b in group), what=what), it.to_png(sheet))
+        try:
+            answer = vision(prompt.format(ids=", ".join(str(b.id) for b in group), what=what), it.to_png(sheet))
+        except Exception as error:          # one failed sheet leaves its boxes empty, not the page
+            if errors is not None:
+                errors.append(f"{label} (boxes {group[0].id}-{group[-1].id}): {type(error).__name__}: {error}")
+            answer = ""
         found = _json(answer).get("boxes") or {}
         if images is not None:
             images.append({"name": f"{label} (boxes {group[0].id}-{group[-1].id})",
@@ -824,15 +831,19 @@ def read_image(image_bytes: bytes, vision: VisionCall, text_llm: TextLLM, debug:
                force: str = "") -> Dict[str, Any]:
     """Read one image (a page, a screenshot, a photo). force='table' or
     'text' overrides the page-type decision."""
+    started = time.time()
+    timings: Dict[str, float] = {}
     prepared = it.prepare_page(it.decode(image_bytes))
     images: List[dict] = []
     boxes, zones, box_info = lb.layout(prepared.find, prepared.digital)
+    timings["image processing"] = round(time.time() - started, 1)
     char_h = box_info["char_height"]
     kind = force or ("table" if any(z.kind == "table" for z in zones) else "text")
     result: Dict[str, Any] = {"cleaning": prepared.info, "boxes": len(boxes), "char_height": char_h,
                               "page_kind": kind,
                               "zones": [{"kind": z.kind, "box": list(z.box), "lines": len(z.lines),
-                                         "columns": len(z.columns)} for z in zones]}
+                                         "columns": len(z.columns)} for z in zones],
+                              "seconds": timings}
     if debug:
         result["images"] = images
         images.append({"name": "cleaned page", "png": it.to_png(prepared.read)})
@@ -843,16 +854,27 @@ def read_image(image_bytes: bytes, vision: VisionCall, text_llm: TextLLM, debug:
         factor = min(1.0, (TRANSCRIBE_MAX_PIXELS / (page.shape[0] * page.shape[1])) ** 0.5)
         if factor < 1.0:
             page = cv2.resize(page, None, fx=factor, fy=factor, interpolation=cv2.INTER_AREA)
+        started = time.time()
         answer = vision(TRANSCRIBE_PROMPT, it.to_png(page))
+        timings["reading"] = round(time.time() - started, 1)
         result["text"] = re.sub(r"<think>.*?</think>", "", answer, flags=re.S).strip()
         return result
 
-    texts = read_boxes(prepared.read, boxes, vision, images if debug else None, char_h)
+    errors: List[str] = []
+    started = time.time()
+    texts = read_boxes(prepared.read, boxes, vision, images if debug else None, char_h, errors=errors)
+    timings["reading"] = round(time.time() - started, 1)
+    if errors and not any(texts.values()):
+        raise RuntimeError("Every reading sheet failed. " + errors[0])
+    started = time.time()
     structure, notes = _structure(text_llm, boxes, texts, zones, prepared.read.shape[1],
                                   images if debug else None)
+    timings["structure"] = round(time.time() - started, 1)
     tables, context = build_tables(structure, texts, boxes)
+    started = time.time()
     texts, tables, context, reread = _reread(prepared, structure, texts, boxes, tables, context, vision,
                                              char_h, images if debug else None)
+    timings["read again"] = round(time.time() - started, 1)
     used = _placed(structure)
     text_ids = [i for i in structure.get("text_boxes") or [] if texts.get(i)]
     result.update(
@@ -860,7 +882,7 @@ def read_image(image_bytes: bytes, vision: VisionCall, text_llm: TextLLM, debug:
         text=" ".join(texts[i] for i in text_ids),
         unplaced=[{"box": b.id, "text": texts[b.id]} for b in boxes if texts.get(b.id) and b.id not in used],
         box_texts={str(k): v for k, v in texts.items()},
-        structure_notes=notes, re_read=reread,
+        structure_notes=notes, re_read=reread, reading_errors=errors,
     )
     return result
 
