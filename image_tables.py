@@ -452,6 +452,22 @@ def reading_sheet(gray: np.ndarray, table: Table, labels: List[str], y0: int, y1
     return sheet
 
 
+def draw_tables(gray: np.ndarray, tables: List[Table]) -> np.ndarray:
+    """The cleaned page with every region (red), header band (green) and
+    column boundary (blue) drawn on it, for checking what was found."""
+    picture = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    for number, table in enumerate(tables, start=1):
+        x0, y0, x1, y1 = table.box
+        cv2.rectangle(picture, (x0, y0), (x1, y1), (0, 0, 220), 5)
+        cv2.putText(picture, f"{number}", (x0 + 8, y0 + 45), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 220), 4)
+        if table.header:
+            cv2.rectangle(picture, (x0 + 6, table.header[0]), (x1 - 6, table.header[1]), (0, 150, 0), 4)
+        if len(table.columns) > 1:
+            for c0, c1 in table.columns:
+                cv2.line(picture, (c0 - 5, y0), (c0 - 5, y1), (220, 0, 0), 3)
+    return picture
+
+
 def crop(gray: np.ndarray, x0: int, y0: int, x1: int, y1: int, pad: int = 6) -> np.ndarray:
     height, width = gray.shape[:2]
     return gray[max(0, y0 - pad):min(height, y1 + pad), max(0, x0 - pad):min(width, x1 + pad)]

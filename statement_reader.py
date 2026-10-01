@@ -333,15 +333,26 @@ def _chunks(anchors: List[Tuple[int, int]], body: Tuple[int, int], size: int = R
     return chunks
 
 
-def read_page(image_bytes: bytes, vision: VisionCall) -> Dict[str, Any]:
+def read_page(image_bytes: bytes, vision: VisionCall, debug: bool = False) -> Dict[str, Any]:
     """Every table on one photographed/scanned page, read and checked.
 
     Returns {"page": cleaning info, "tables": [...]}; a statement table has
     kind "transactions", roles, rows (as read and as checked) and the
-    decimal places; other regions are "box" with pairs/text."""
+    decimal places; other regions are "box" with pairs/text. With debug,
+    result["images"] holds every picture made on the way (PNG bytes): the
+    cleaned page, the regions found, and each picture sent to the model
+    with the model's raw answer."""
     clean, info = it.clean_page(it.decode(image_bytes))
     result: Dict[str, Any] = {"page": info, "tables": []}
-    for number, table in enumerate(it.find_tables(clean), start=1):
+    images: List[Dict[str, Any]] = []
+    if debug:
+        result["images"] = images
+        images.append({"name": "cleaned page", "png": it.to_png(clean)})
+        vision = _recording(vision, images)
+    tables = it.find_tables(clean)
+    if debug:
+        images.append({"name": "regions found", "png": it.to_png(it.draw_tables(clean, tables))})
+    for number, table in enumerate(tables, start=1):
         entry: Dict[str, Any] = {"table": number, "box": list(table.box), "source": table.source}
         if len(table.columns) < 3 or table.header is None:
             sheet = it.crop(clean, *table.box)
@@ -386,6 +397,49 @@ def read_page(image_bytes: bytes, vision: VisionCall) -> Dict[str, Any]:
             entry.update(check_rows(rows, roles))
         result["tables"].append(entry)
     return result
+
+
+def _recording(vision: VisionCall, images: List[Dict[str, Any]]) -> VisionCall:
+    def call(prompt: str, png: bytes) -> str:
+        answer = vision(prompt, png)
+        images.append({"name": "sent to the model", "png": png, "prompt": prompt, "answer": answer})
+        return answer
+    return call
+
+
+def report(result: Dict[str, Any]) -> str:
+    """The extraction as readable text: every region, and for statement
+    tables every row with its check result."""
+    lines = [f"Page: {result.get('page')}"]
+    for table in result.get("tables", []):
+        lines.append("")
+        lines.append(f"=== Region {table['table']}: {table['kind']} ===")
+        if table["kind"] == "box":
+            for pair in table.get("pairs") or []:
+                lines.append(f"  {pair.get('label')}: {pair.get('value')}")
+            if table.get("text"):
+                lines.append("  " + str(table["text"])[:600])
+            continue
+        lines.append("  headers: " + " | ".join(table.get("headers") or []))
+        lines.append("  roles:   " + " | ".join(table.get("roles") or []))
+        lines.append(f"  rows counted on the page: {table.get('anchors')}, rows read: {len(table.get('rows_as_read') or [])}")
+        if table["kind"] != "transactions":
+            for row in table.get("rows_as_read") or []:
+                lines.append("  " + " | ".join(f"{k}={v}" for k, v in row.items() if not k.startswith("_")))
+            continue
+        decimals = table.get("decimals") or 2
+        lines.append(f"  decimals: {decimals}   check: {table.get('summary')}")
+        lines.append(f"  {'#':>3} {'date':<12} {'debit':>14} {'credit':>14} {'balance':>16}  status")
+        for index, row in enumerate(table.get("rows") or [], 1):
+            lines.append(f"  {index:>3} {str(row.get('date') or row.get('value_date') or ''):<12} "
+                         f"{fmt(row.get('debit'), decimals) or '':>14} {fmt(row.get('credit'), decimals) or '':>14} "
+                         f"{fmt(row.get('balance'), decimals) or '':>16}  {row['status']}")
+            if row.get("description"):
+                lines.append(f"      {str(row['description'])[:110]}")
+            for note in row.get("notes") or []:
+                if "First balance" not in note and "Confirmed by the next" not in note:
+                    lines.append(f"      ! {note}")
+    return "\n".join(lines)
 
 
 def check_rows(rows: List[Dict[str, Any]], roles: List[str]) -> Dict[str, Any]:
