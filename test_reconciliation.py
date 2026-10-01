@@ -51,6 +51,7 @@ from legal_platform import financial_facts as facts
 from legal_platform.arabic_text import fix_structure, fix_visual_arabic, is_visual_order
 from legal_platform.case_register import build_case_register, normalise_text, prioritise_pages_for_summary
 from legal_platform import pleading
+from legal_platform import statement_reader as sr
 from legal_platform.case_analysis import issue_has_authority, keep_retrieved_rules
 
 failures = []
@@ -724,6 +725,47 @@ except ValueError as error:
 check("unusable answer retried once with the key list, then a clear error",
       raised and len(empty_calls) == 2 and "required keys" in empty_calls[1]["previous_answer_problem"])
 pleading.complete_json = fake_complete_json
+
+# --- statements read from photographs ------------------------------------------
+check("column roles from Arabic and English headers",
+      sr.column_roles(["الرصيد", "حركة له", "حركة منه", "تاريخ الحق", "الإيضاحات", "التاريخ"])
+      == ["balance", "credit", "debit", "value_date", "description", "date"]
+      and sr.column_roles(["Date", "Description", "Debit", "Credit", "Balance"])
+      == ["date", "description", "debit", "credit", "balance"])
+check("three-decimal table detected", sr.table_decimals(["0.300", "1,482.034", "1.000", None]) == 3
+      and sr.table_decimals(["12.50", "1,250.00"]) == 2)
+check("1.000 is one unit in a three-decimal table, unreadable without it",
+      sr.parse_amount("1.000", 3) == Decimal("1.000") and sr.parse_amount("1.000", None) is None)
+check("amount with the wrong number of decimals is not accepted", sr.parse_amount("12.45", 3) is None)
+check("Arabic digits and thousands", sr.parse_amount("١٬٤٨٢٫٠٣٤", 3) == Decimal("1482.034"))
+
+def statement(*rows):
+    return [{"debit": sr.parse_amount(d, 3), "credit": sr.parse_amount(c, 3), "balance": sr.parse_amount(b, 3)}
+            for d, c, b in rows]
+good = statement((None, None, "145.847"), ("0.300", None, "145.547"), ("1.000", None, "144.547"),
+                 (None, "1,482.034", "1,626.581"), ("0.500", None, "1,626.081"))
+checked = sr.reconcile(good, 3)
+check("clean statement reconciles (first row confirmed by the second)",
+      [r["status"] for r in checked] == ["reconciled"] * 5)
+swapped = statement((None, None, "145.547"), ("1.000", None, "144.547"), ("1,482.034", None, "1,626.581"),
+                    ("0.500", None, "1,626.081"))
+row = sr.reconcile(swapped, 3)[2]
+check("debit/credit swap repaired", row["status"] == "repaired" and row["credit"] == Decimal("1482.034")
+      and row["debit"] is None and row["debit_as_read"] == Decimal("1482.034"))
+bad_balance = statement((None, None, "1,570.881"), ("177.583", None, "1,398.298"), ("369.957", None, "1,023.341"))
+row = sr.reconcile(bad_balance, 3)[1]
+check("misread balance repaired from both neighbours", row["status"] == "repaired"
+      and row["balance"] == Decimal("1393.298") and row["balance_as_read"] == Decimal("1398.298"))
+bad_amount = statement((None, None, "521.341"), ("9.826", None, "512.015"), ("0.400", None, "511.615"))
+row = sr.reconcile(bad_amount, 3)[1]
+check("misread amount repaired from the balances", row["status"] == "repaired" and row["debit"] == Decimal("9.326"))
+unprovable = statement((None, None, "100.000"), ("5.000", None, "90.000"), ("7.000", None, "80.000"))
+rows_checked = sr.reconcile(unprovable, 3)
+check("two errors in a row are not guessed", rows_checked[1]["status"] == "unconfirmed"
+      and rows_checked[1]["debit"] == Decimal("5.000") and "Does not add up" in rows_checked[1]["notes"][-1])
+last = statement((None, None, "100.000"), ("5.000", None, "90.000"))
+check("last row is never changed without a next row to confirm",
+      sr.reconcile(last, 3)[1]["status"] == "unconfirmed" and sr.reconcile(last, 3)[1]["debit"] == Decimal("5.000"))
 
 print()
 if failures:
