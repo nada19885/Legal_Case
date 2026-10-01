@@ -38,15 +38,19 @@ ROWS_PER_CHUNK = 8
 # Column roles from header words (Arabic and English)
 # ---------------------------------------------------------------------------
 ROLE_WORDS: List[Tuple[str, Tuple[str, ...]]] = [
-    ("value_date", ("تاريخ الحق", "تاريخ القيد", "تاريخ الاستحقاق", "value date", "val. date", "value")),
-    ("date", ("التاريخ", "تاريخ", "date", "posting")),
-    ("debit", ("حركة منه", "مدين", "منه", "سحب", "سحوبات", "مدفوعات", "debit", "dr", "withdrawal", "paid out")),
-    ("credit", ("حركة له", "دائن", "له", "ايداع", "إيداع", "إيداعات", "credit", "cr", "deposit", "paid in")),
+    ("value_date", ("تاريخ الحق", "تاريخ القيد", "تاريخ الاستحقاق", "تاريخ القيمه", "value date", "val. date",
+                    "value")),
+    ("date", ("التاريخ", "تاريخ", "date", "posting", "txn date", "transaction date")),
+    ("debit", ("حركة منه", "مدين", "مدينه", "منه", "سحب", "سحوبات", "مسحوبات", "مدفوعات", "debit", "debits", "dr",
+               "withdrawal", "withdrawals", "paid out", "money out")),
+    ("credit", ("حركة له", "دائن", "دائنه", "له", "ايداع", "إيداع", "إيداعات", "ايداعات", "credit", "credits",
+                "cr", "deposit", "deposits", "paid in", "money in")),
     ("balance", ("الرصيد", "رصيد", "balance", "bal")),
     ("amount", ("المبلغ", "مبلغ", "القيمة", "amount", "value")),
-    ("reference", ("المرجع", "مرجع", "رقم العملية", "reference", "ref", "cheque", "شيك")),
-    ("description", ("الإيضاحات", "الايضاحات", "البيان", "التفاصيل", "الوصف", "description", "details",
-                     "narration", "particulars")),
+    ("reference", ("المرجع", "مرجع", "رقم العملية", "رقم المستند", "المستند", "مسلسل", "رقم الشيك", "reference",
+                   "ref", "cheque", "check no", "document", "serial", "شيك")),
+    ("description", ("الإيضاحات", "الايضاحات", "البيان", "التفاصيل", "الوصف", "وصف", "description", "details",
+                     "narration", "narrative", "particulars", "remarks")),
 ]
 ROLE_LABELS = {
     "date": "DATE", "value_date": "VALUE DATE", "description": "DESCRIPTION", "debit": "DEBIT",
@@ -56,8 +60,12 @@ _TASHKEEL = re.compile(r"[ً-ْـ]")
 
 
 def _normal(text: str) -> str:
+    """Header text compared loosely: no diacritics or elongation, one alef,
+    final ta marbuta as ha and alef maqsura as ya (spelt either way on
+    statements), single spaces."""
     text = _TASHKEEL.sub("", str(text or "")).strip().lower()
-    return re.sub(r"\s+", " ", text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا"))
+    text = text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه").replace("ى", "ي")
+    return re.sub(r"\s+", " ", text)
 
 
 def column_role(header: str) -> str:

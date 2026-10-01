@@ -2,18 +2,25 @@
 Where the text is: boxes, lines and zones on a cleaned page image.
 Location: lib/python/legal_platform/layout_boxes.py
 
-Pure OpenCV, no reading and no model. On a cleaned greyscale page:
+Pure OpenCV, no reading and no model. On a page prepared by
+image_tables.prepare_page (letters about 24 px tall), all sizes below are
+measured in letter heights, so they hold for any page:
 
+  layout(gray)        the whole step: words, lines, zones, then whole boxes.
   find_boxes(gray)    one box per word / number / short phrase. Printed rules
-                      (solid or dotted) are removed first and a box never
-                      crosses a column rule, so neighbouring cells stay apart.
+                      (solid or dotted, thin and several lines long) and
+                      solid blocks (redactions) are removed first, a box
+                      never crosses a column rule, and lines that touch are
+                      cut apart at the faintest rows between them.
   group_lines(boxes)  boxes sharing a baseline form a line.
   find_zones(lines)   consecutive lines that hold several widely spaced
                       boxes aligned with each other form a TABLE zone; other
                       lines form TEXT zones (paragraphs).
-  column_guides(...)  for a table zone: the x-ranges where its boxes line
-                      up (right edges for numbers, left or right edges for
-                      text), i.e. the columns, found from alignment alone.
+  column_guides(...)  for a table zone: the x-ranges where its rows' boxes
+                      line up, i.e. the columns, found from alignment alone.
+  merge_boxes(...)    the words of one table cell, or of one text line up to
+                      a wide gap, joined into one box, so nothing is read in
+                      pieces.
 
 The boxes are later read by the vision model and arranged into JSON by the
 text model (see layout_reader.py); nothing here depends on how a bank
@@ -29,7 +36,11 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 
-from .image_tables import _ink, _line_masks
+from .image_tables import _line_masks, ink_height, text_ink
+
+
+MAX_BOX_WIDTH = 28             # letter heights: longer lines are read in pieces
+MIN_RULE_LENGTH = 8            # letter heights: shorter straight strokes are not rules
 
 
 @dataclass
@@ -41,6 +52,7 @@ class Box:
     y1: int
     line: int = -1
     kind: str = "text"          # text | figure (stamp, logo, signature)
+    parts: int = 1              # word pieces joined into this box
 
     @property
     def cx(self) -> float:
@@ -71,33 +83,28 @@ class Zone:
 # Boxes
 # ---------------------------------------------------------------------------
 def text_height(ink: np.ndarray) -> float:
-    """Typical character height on the page: the median height of
-    glyph-sized marks (grain and specks are too small to count)."""
-    count, _, stats, _ = cv2.connectedComponentsWithStats(ink, connectivity=8)
-    heights = [stats[i, cv2.CC_STAT_HEIGHT] for i in range(1, count)
-               if 10 <= stats[i, cv2.CC_STAT_HEIGHT] <= 120 and stats[i, cv2.CC_STAT_AREA] >= 40]
-    return float(median(heights)) if heights else 20.0
+    """Typical letter height on the page (grain and specks do not count)."""
+    return ink_height(ink) or 20.0
 
 
-def _text_ink(gray: np.ndarray) -> np.ndarray:
-    """Ink of the text only: smoothed so photo grain does not break letters
-    apart, and dark in absolute terms as well as darker than its
-    surroundings (faint shading and grain are not ink)."""
-    smooth = cv2.medianBlur(gray, 3)
-    local = cv2.adaptiveThreshold(smooth, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 31, 15)
-    level, _ = cv2.threshold(smooth, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    dark = (smooth < min(200, level + 25)).astype(np.uint8) * 255
-    return cv2.bitwise_and(local, dark)
-
-
-def find_boxes(gray: np.ndarray) -> Tuple[List[Box], dict]:
+def find_boxes(gray: np.ndarray, digital: bool = False) -> Tuple[List[Box], dict]:
     """Every word / number / short phrase on the page as a box, top to
-    bottom, right to left within a line; plus measurements used later."""
+    bottom, right to left within a line; plus measurements used later.
+    `digital` is True for screenshots (see image_tables.prepare_page)."""
     height, width = gray.shape
-    ink = _text_ink(gray)
-    horizontal, vertical = _line_masks(gray)
+    ink = text_ink(gray, digital)
+    first_h = text_height(ink)
+    # Rules are found in the same dark ink as the text: a faint watermark's
+    # tall letters are not column rules.
+    horizontal, vertical = _line_masks(gray, first_h, ink=ink)
+    horizontal, vertical = _thin(horizontal, first_h, False), _thin(vertical, first_h, True)
     rules = cv2.bitwise_or(horizontal, vertical)
     text = cv2.subtract(ink, rules)
+    # Solid blocks (a redaction bar, a filled logo) are not text, and must
+    # not join the text touching them into one big box.
+    core = max(3, int(0.6 * first_h))
+    solid = cv2.morphologyEx(text, cv2.MORPH_OPEN, np.ones((core, core), np.uint8))
+    text = cv2.subtract(text, cv2.dilate(solid, np.ones((5, 5), np.uint8)))
     char_h = text_height(text)
     # Drop specks (grain, dust, dotted-rule remnants): marks far smaller than
     # a dot on an i at this text size.
@@ -114,17 +121,29 @@ def find_boxes(gray: np.ndarray) -> Tuple[List[Box], dict]:
     joined = cv2.subtract(joined, cv2.dilate(vertical, np.ones((1, 5), np.uint8)))
 
     count, _, stats, _ = cv2.connectedComponentsWithStats(joined, connectivity=8)
-    boxes: List[Box] = []
+    pieces = []
     for i in range(1, count):
         x, y, w, h, area = stats[i]
+        if h > 1.7 * char_h:
+            # Lines touching through a descender, a watermark or a stamp:
+            # cut at the blank rows between them.
+            pieces += _split_lines(text, joined, (int(x), int(y), int(w), int(h)), char_h)
+        else:
+            pieces.append((int(x), int(y), int(w), int(h), int(area)))
+    boxes: List[Box] = []
+    for x, y, w, h, area in pieces:
         if h < 0.45 * char_h or w < 0.3 * char_h or area < 0.5 * char_h * char_h:
             continue
         if w > 0.97 * width:
             continue
+        # A tall thin stroke (the edge of the paper, a fold, a short rule)
+        # is not text.
+        if h > 2 * char_h and w < 0.8 * char_h:
+            continue
         # Text on the desk or the floor around the paper is not the document.
         pad = int(char_h)
         around = gray[max(0, y - pad):min(height, y + h + pad), max(0, x - pad):min(width, x + w + pad)]
-        if float(np.percentile(around, 75)) < 120:
+        if not digital and float(np.percentile(around, 75)) < 120:
             continue
         # A shaded field or a redaction with nothing written in it.
         inside = gray[y:y + h, x:x + w]
@@ -132,7 +151,74 @@ def find_boxes(gray: np.ndarray) -> Tuple[List[Box], dict]:
             continue
         kind = "figure" if h > 3.5 * char_h and w > 3 * char_h else "text"
         boxes.append(Box(0, int(x), int(y), int(x + w), int(y + h), kind=kind))
-    info = {"char_height": round(char_h, 1), "raw_boxes": len(boxes)}
+    info = {"char_height": round(char_h, 1), "raw_boxes": len(boxes),
+            "rules": _segments(vertical, height, char_h)}
+    return _number(boxes, char_h), info
+
+
+def _split_lines(text: np.ndarray, joined: np.ndarray, rect: Tuple[int, int, int, int],
+                 char_h: float) -> List[Tuple[int, int, int, int, int]]:
+    """A tall box cut into its text lines at the rows (almost) free of ink.
+    Thin bands (dots and marks above or below a line) stay with the nearest
+    line. A box with no such rows (a stamp, a logo) is kept whole."""
+    x, y, w, h = rect
+    ink = text[y:y + h, x:x + w] > 0
+    profile = ink.sum(axis=1)
+    # Rows with (almost) no ink: a faint watermark stroke or one touching
+    # descender may still cross the gap between two lines.
+    empty = profile <= max(1, 0.1 * np.percentile(profile, 90))
+    bands, start = [], None
+    for row, blank in enumerate(list(empty) + [True]):
+        if not blank and start is None:
+            start = row
+        elif blank and start is not None:
+            bands.append([start, row])
+            start = None
+    if len(bands) < 2:
+        return [(x, y, w, h, int(np.count_nonzero(joined[y:y + h, x:x + w])))]
+    # Fold thin bands (dots, diacritics, a stray mark) into the closest line.
+    while len(bands) > 1:
+        thin = [i for i, (a, b) in enumerate(bands) if b - a < 0.5 * char_h]
+        if not thin:
+            break
+        i = thin[0]
+        before = bands[i][0] - bands[i - 1][1] if i > 0 else 10 ** 9
+        after = bands[i + 1][0] - bands[i][1] if i + 1 < len(bands) else 10 ** 9
+        j = i - 1 if before <= after else i + 1
+        bands[min(i, j)] = [min(bands[i][0], bands[j][0]), max(bands[i][1], bands[j][1])]
+        del bands[max(i, j)]
+    if len(bands) < 2:
+        return [(x, y, w, h, int(np.count_nonzero(joined[y:y + h, x:x + w])))]
+    out = []
+    for a, b in bands:
+        columns = np.nonzero(ink[a:b].any(axis=0))[0]
+        if not len(columns):
+            continue
+        pad = int(0.35 * char_h)
+        x0, x1 = max(0, x + int(columns[0]) - pad), min(x + w, x + int(columns[-1]) + 1 + pad)
+        y0, y1 = y + a, y + b
+        out.append((x0, y0, x1 - x0, y1 - y0, int(np.count_nonzero(joined[y0:y1, x0:x1]))))
+    return out
+
+
+def _thin(mask: np.ndarray, char_h: float, vertical: bool) -> np.ndarray:
+    """Keep the thin strokes of a rule mask: a printed rule is a thin line,
+    the stroke of a large watermark or logo letter is thick."""
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    if count < 2:
+        return mask
+    length = stats[1:, cv2.CC_STAT_HEIGHT if vertical else cv2.CC_STAT_WIDTH].astype(float)
+    thickness = stats[1:, cv2.CC_STAT_AREA] / np.maximum(1, length)
+    keep = np.zeros(count, dtype=bool)
+    # The masks are widened by a few pixels to re-join broken rules. A rule
+    # also runs past several lines of text: letters that happen to line up
+    # on three or four consecutive lines are not a rule.
+    keep[1:] = (thickness <= max(8, 0.45 * char_h) + 4) & (length >= MIN_RULE_LENGTH * char_h)
+    return np.where(keep[labels], mask, 0).astype(np.uint8)
+
+
+def _number(boxes: List[Box], char_h: float) -> List[Box]:
+    """Number the boxes in reading order: text line by line, then figures."""
     lines = group_lines(boxes, char_h)
     ordered = [box for line in lines for box in line]
     for number, box in enumerate(ordered, start=1):
@@ -140,7 +226,7 @@ def find_boxes(gray: np.ndarray) -> Tuple[List[Box], dict]:
     figures = [b for b in boxes if b.kind == "figure"]
     for number, box in enumerate(figures, start=len(ordered) + 1):
         box.id = number
-    return ordered + figures, info
+    return ordered + figures
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +305,12 @@ def column_guides(zone: Zone, char_h: float, rules_x: Optional[List[float]] = No
     """Columns of a table zone, from alignment alone: the x-ranges covered
     by boxes on many of its table lines, separated by gaps that (almost) no
     line crosses. Right to left."""
+    # The body rows decide the columns; a title or an information line
+    # sitting just above the table (fewer, differently placed items) does not.
     table_lines = [line for line in zone.lines if len(line) >= 3]
+    if table_lines:
+        most = max(len(line) for line in table_lines)
+        table_lines = [line for line in table_lines if len(line) >= max(3, 0.6 * most)]
     boxes = [b for line in table_lines for b in line]
     if not boxes:
         return []
@@ -254,12 +345,92 @@ def column_guides(zone: Zone, char_h: float, rules_x: Optional[List[float]] = No
     return sorted(columns, key=lambda c: -c[1])
 
 
-def vertical_rules(gray: np.ndarray) -> List[float]:
-    """x-positions of the long vertical rules printed on the page."""
+def _segments(vertical: np.ndarray, height: int, char_h: Optional[float]) -> List[Tuple[float, float, float]]:
     from .image_tables import _fitted_lines, _position
-    _, vertical = _line_masks(gray)
-    height = gray.shape[0]
-    return [_position(l, (l[2] + l[3]) / 2) for l in _fitted_lines(vertical, True, 0.08 * height)]
+    shortest = MIN_RULE_LENGTH * char_h if char_h else 0.08 * height
+    return [(round(_position(l, (l[2] + l[3]) / 2), 1), l[2], l[3])
+            for l in _fitted_lines(vertical, True, shortest)]
+
+
+def vertical_rules(gray: np.ndarray, char_h: Optional[float] = None) -> List[float]:
+    """x-positions of the long vertical rules printed on the page."""
+    _, vertical = _line_masks(gray, char_h)
+    return [x for x, _, _ in _segments(vertical, gray.shape[0], char_h)]
+
+
+# ---------------------------------------------------------------------------
+# Whole cells and whole line segments
+# ---------------------------------------------------------------------------
+def _ruled_between(left: Box, right: Box, rules: List[Tuple[float, float, float]]) -> bool:
+    top, bottom = min(left.y0, right.y0), max(left.y1, right.y1)
+    return any(left.x1 - 2 <= x <= right.x0 + 2 and y0 < bottom and y1 > top for x, y0, y1 in rules)
+
+
+def _guide(box: Box, columns: List[Tuple[int, int]]) -> int:
+    for index, (c0, c1) in enumerate(columns):
+        if c0 - 2 <= box.cx <= c1 + 2:
+            return index
+    return -1
+
+
+def merge_boxes(zones: List[Zone], char_h: float,
+                rules: Optional[List[Tuple[float, float, float]]] = None) -> List[Box]:
+    """Join the pieces of one text into one box, so a word, a number or a
+    cell is never read in parts: in a TABLE zone, neighbouring boxes on a
+    line inside the same column; in a TEXT zone, the words of a line up to
+    a wide gap (a gap that separates two items, like "Account: 123" and
+    "Currency: SAR"). Never across a printed rule, and a long line is cut
+    at a word gap into pieces short enough to read at full size."""
+    merged: List[Box] = []
+    for zone in zones:
+        limit = (2.5 if zone.kind == "table" else 2.0) * char_h
+        # Columns from alignment alone (printed rules are checked with their
+        # real extent below, so a rule under the table does not split the
+        # title above it).
+        guides = column_guides(zone, char_h) if zone.kind == "table" else []
+        new_lines = []
+        for line in zone.lines:
+            pieces = sorted(line, key=lambda b: b.x0)
+            out = [Box(0, pieces[0].x0, pieces[0].y0, pieces[0].x1, pieces[0].y1, parts=1)]
+            for box in pieces[1:]:
+                last = out[-1]
+                gap = box.x0 - last.x1
+                # A space between two words of this text size joins them
+                # whatever the columns; a wider gap only inside one column.
+                word_space = gap <= 0.3 * min(last.h, box.h)
+                same_column = (not guides or _guide(Box(0, last.x1 - 1, last.y0, last.x1, last.y1), guides)
+                               == _guide(Box(0, box.x0, box.y0, box.x0 + 1, box.y1), guides))
+                same_cell = (gap <= limit and box.x1 - last.x0 <= MAX_BOX_WIDTH * char_h
+                             and not _ruled_between(last, box, rules or [])
+                             and (word_space or same_column))
+                if same_cell:
+                    last.x1, last.y0, last.y1 = max(last.x1, box.x1), min(last.y0, box.y0), max(last.y1, box.y1)
+                    last.parts += 1
+                else:
+                    out.append(Box(0, box.x0, box.y0, box.x1, box.y1, parts=1))
+            new_lines.append(out)
+            merged.extend(out)
+        zone.lines = new_lines
+    return merged
+
+
+def layout(gray: np.ndarray, digital: bool = False) -> Tuple[List[Box], List[Zone], dict]:
+    """Boxes (whole cells / line segments, numbered in reading order), the
+    zones they form, and measurements: the full box-finding step."""
+    words, info = find_boxes(gray, digital)
+    char_h = info["char_height"]
+    rules = info.pop("rules")
+    text_words = [b for b in words if b.kind == "text"]
+    lines = group_lines(text_words, char_h)
+    zones = find_zones(lines, char_h, gray.shape[1], [x for x, _, _ in rules])
+    boxes = merge_boxes(zones, char_h, rules)
+    figures = [Box(0, b.x0, b.y0, b.x1, b.y1, kind="figure") for b in words if b.kind == "figure"]
+    boxes = _number(boxes + figures, char_h)
+    # Zones keep their lines in reading order with the new numbers.
+    for zone in zones:
+        zone.lines = [sorted(line, key=lambda b: b.id) for line in zone.lines]
+    info.update(word_boxes=len(text_words), boxes=len(boxes), rules=len(rules))
+    return boxes, zones, info
 
 
 def draw_boxes(gray: np.ndarray, boxes: List[Box], zones: Optional[List[Zone]] = None,

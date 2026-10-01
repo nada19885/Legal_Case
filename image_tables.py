@@ -4,8 +4,15 @@ Location: lib/python/legal_platform/image_tables.py
 
 Pure image processing (OpenCV + NumPy), no model calls:
 
-  clean_page(image)        straighten the page (perspective + tilt), even out
-                           shadows, raise contrast, enlarge to a readable size.
+  prepare_page(image)      any page (screenshot, scan, phone photo) scaled so
+                           its letters are TARGET_TEXT_HEIGHT px tall; photos
+                           and scans also straightened and evened out, and
+                           light text on dark bands turned dark on light.
+                           Gives a smoothed copy for finding text and an
+                           unsmoothed one for reading it.
+  clean_page(image)        the older cleaning (fixed page width) used by
+                           statement_reader: straighten the page (perspective
+                           + tilt), even out shadows, raise contrast.
   find_tables(clean)       every table region on the page, each with its own
                            column boundaries (from the printed vertical lines,
                            or from the blank gaps between columns) and its
@@ -30,6 +37,9 @@ import numpy as np
 TARGET_WIDTH = 2000          # px: enough for small statement digits
 MIN_TABLE_AREA = 0.04        # a table covers at least 4% of the page
 MIN_TABLE_COLUMNS = 3
+TARGET_TEXT_HEIGHT = 24      # px: typical letter height after prepare_page
+MAX_SCALE = 4.0
+MAX_PIXELS = 16_000_000      # a larger page is scaled less (memory and time)
 
 
 @dataclass
@@ -90,20 +100,29 @@ def _warp(image: np.ndarray, corners: np.ndarray) -> np.ndarray:
 
 
 def _skew_angle(gray: np.ndarray) -> float:
-    """Tilt in degrees, measured on long near-horizontal strokes (table
-    lines and text baselines)."""
-    edges = cv2.Canny(gray, 50, 150)
-    width = gray.shape[1]
-    lines = cv2.HoughLinesP(edges, 1, np.pi / 720, threshold=120,
-                            minLineLength=width // 4, maxLineGap=15)
-    if lines is None:
+    """Tilt in degrees: the angle at which the rows of ink (text lines and
+    table rules) line up best, i.e. the horizontal ink profile is sharpest.
+    Searched coarse to fine within +-6 degrees on a reduced copy."""
+    ink = cv2.adaptiveThreshold(cv2.medianBlur(gray, 3), 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                cv2.THRESH_BINARY_INV, 31, 15)
+    factor = min(1.0, 1200 / max(ink.shape))
+    small = cv2.resize(ink, None, fx=factor, fy=factor, interpolation=cv2.INTER_AREA)
+    height, width = small.shape
+    centre = (width / 2, height / 2)
+
+    def sharpness(angle: float) -> float:
+        matrix = cv2.getRotationMatrix2D(centre, angle, 1.0)
+        rotated = cv2.warpAffine(small, matrix, (width, height), flags=cv2.INTER_NEAREST,
+                                 borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+        rows = rotated.sum(axis=1, dtype=np.float64)
+        return float(np.sum(np.diff(rows) ** 2))
+
+    if not small.any():
         return 0.0
-    angles = []
-    for x0, y0, x1, y1 in np.asarray(lines).reshape(-1, 4):
-        angle = np.degrees(np.arctan2(y1 - y0, x1 - x0))
-        if abs(angle) < 8:
-            angles.append(angle)
-    return float(np.median(angles)) if angles else 0.0
+    best = max(np.arange(-6, 6.01, 0.5), key=sharpness)
+    best = max(np.arange(best - 0.5, best + 0.51, 0.1), key=sharpness)
+    # No real tilt: keep the page as it is rather than resample it.
+    return float(round(best, 2)) if abs(sharpness(best) - sharpness(0.0)) > 0.02 * sharpness(0.0) else 0.0
 
 
 def _rotate(image: np.ndarray, angle: float) -> np.ndarray:
@@ -244,20 +263,187 @@ def clean_page(image: np.ndarray) -> Tuple[np.ndarray, dict]:
 
 
 # ---------------------------------------------------------------------------
+# 1b. Preparing any page: screenshots and photos, scaled by text size
+# ---------------------------------------------------------------------------
+@dataclass
+class Prepared:
+    find: np.ndarray        # cleaned (smoothed) page, for finding the boxes
+    read: np.ndarray        # same geometry, not smoothed, for reading the text
+    info: dict
+    digital: bool           # a screenshot / exported image rather than a photo or scan
+
+
+def ink_height(ink: np.ndarray) -> float:
+    """Typical letter height in a binary ink image, at any scale: the
+    median height of letter-like marks weighted by their ink, so grain and
+    specks (many, but tiny) do not count. 0 when there is no text."""
+    count, _, stats, _ = cv2.connectedComponentsWithStats(ink, connectivity=8)
+    if count < 2:
+        return 0.0
+    height, width = ink.shape
+    h, w, area = stats[1:, cv2.CC_STAT_HEIGHT], stats[1:, cv2.CC_STAT_WIDTH], stats[1:, cv2.CC_STAT_AREA]
+    keep = (h >= 4) & (h <= 0.1 * height) & (w <= 3 * h + 4) & (w <= 0.2 * width) & (area >= 6)
+    h, area = h[keep], area[keep]
+    if len(h) < 5:
+        return 0.0
+    order = np.argsort(h)
+    cumulative = np.cumsum(area[order])
+    return float(h[order][np.searchsorted(cumulative, cumulative[-1] / 2)])
+
+
+def text_ink(gray: np.ndarray, digital: bool = False) -> np.ndarray:
+    """Ink of the text. A screenshot has no grain, so anything clearly
+    darker than its surroundings is ink (grey labels included). On a photo
+    or scan the page is smoothed first and ink must also be dark in absolute
+    terms, so grain and faint shading are not taken for text."""
+    if digital:
+        return cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 31, 15)
+    smooth = cv2.medianBlur(gray, 3)
+    local = cv2.adaptiveThreshold(smooth, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 31, 15)
+    level, _ = cv2.threshold(smooth, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    dark = (smooth < min(200, level + 25)).astype(np.uint8) * 255
+    return cv2.bitwise_and(local, dark)
+
+
+def is_digital(gray: np.ndarray) -> bool:
+    """A screenshot or an exported image: nearly everywhere a pixel equals
+    its neighbours (flat backgrounds of any shade), and one background
+    shade dominates. Photos and scans carry grain, which JPEG only partly
+    smooths away."""
+    sample = gray[::2, ::2]
+    kernel = np.ones((3, 3), np.uint8)
+    spread = cv2.dilate(sample, kernel).astype(np.int16) - cv2.erode(sample, kernel)
+    mode = int(np.bincount(sample.ravel(), minlength=256).argmax())
+    background = float(np.mean(np.abs(sample.astype(np.int16) - mode) <= 2))
+    return float(np.mean(spread <= 1)) >= 0.7 and background >= 0.3
+
+
+def _invert_dark_parts(gray: np.ndarray, digital: bool) -> Tuple[np.ndarray, List[str]]:
+    """Light text on a dark background (a dark-mode screenshot, a header
+    bar printed in a dark colour) becomes dark text on light, like the rest."""
+    done: List[str] = []
+    sample = gray[::2, ::2]
+    if int(np.bincount(sample.ravel(), minlength=256).argmax()) < 100:
+        return 255 - gray, ["whole page (dark background)"]
+    height, width = gray.shape
+    char_h = ink_height(text_ink(gray, digital)) or 12
+    dark = (gray < 100).astype(np.uint8) * 255
+    size = max(3, int(1.5 * char_h))
+    dark = cv2.morphologyEx(dark, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (size, size)))
+    contours, _ = cv2.findContours(dark, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    out = gray
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if h < 1.2 * char_h or w < 4 * char_h or h > 0.35 * height:
+            continue
+        if cv2.contourArea(contour) < 0.85 * w * h:
+            continue                     # not a filled rectangle
+        if not digital and (x <= 1 or y <= 1 or x + w >= width - 1 or y + h >= height - 1):
+            continue                     # the desk around a photographed page
+        inside = gray[y:y + h, x:x + w]
+        light = float(np.mean(inside > 170))
+        # Mostly dark, with some light text in it (bold dark text on a light
+        # shade is not a dark band).
+        if float(np.median(inside)) < 100 and 0.02 <= light <= 0.5:
+            if out is gray:
+                out = gray.copy()
+            out[y:y + h, x:x + w] = 255 - inside
+            done.append(f"dark band at y={y}")
+    return out, done
+
+
+def _text_scale(gray: np.ndarray, digital: bool) -> float:
+    measured = ink_height(text_ink(gray, digital))
+    if not measured:
+        return min(MAX_SCALE, TARGET_WIDTH / gray.shape[1]) if gray.shape[1] < TARGET_WIDTH else 1.0
+    return TARGET_TEXT_HEIGHT / measured
+
+
+def _resize(gray: np.ndarray, scale: float) -> np.ndarray:
+    if abs(scale - 1) <= 0.05:
+        return gray
+    return cv2.resize(gray, None, fx=scale, fy=scale,
+                      interpolation=cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA)
+
+
+def prepare_page(image: np.ndarray) -> Prepared:
+    """Any page image made ready for finding and reading text.
+
+    The page is scaled so its letters are about TARGET_TEXT_HEIGHT pixels
+    tall whatever the image size (a large screenshot with small text is
+    enlarged, never shrunk). Screenshots are only scaled: they are already
+    sharp and straight, and smoothing them would blur thin strokes like
+    decimal points. Photos and scans are also straightened (page edges,
+    table frame, tilt) and evened out; the smoothed copy is used to find
+    the boxes and the unsmoothed one to read them."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image.copy()
+    digital = is_digital(gray)
+    info: dict = {"original_size": [int(gray.shape[1]), int(gray.shape[0])],
+                  "source": "screenshot / digital" if digital else "photo / scan"}
+    gray, inverted = _invert_dark_parts(gray, digital)
+    if inverted:
+        info["inverted"] = inverted
+
+    if not digital:
+        corners = _page_outline(gray)
+        if corners is not None:
+            gray = _warp(gray, corners)
+            info["perspective"] = "page edges"
+
+    # Scale by text size, measured twice: blurred small text measures a
+    # little short, so the first estimate is checked on the scaled page.
+    limit = min(MAX_SCALE, (MAX_PIXELS / max(1, gray.shape[0] * gray.shape[1])) ** 0.5)
+    scale = min(limit, max(0.4, _text_scale(gray, digital)))
+    check = ink_height(text_ink(_resize(gray, scale), digital))
+    if check and not 0.8 * TARGET_TEXT_HEIGHT <= check <= 1.25 * TARGET_TEXT_HEIGHT:
+        scale = min(limit, max(0.4, scale * TARGET_TEXT_HEIGHT / check))
+    gray = _resize(gray, scale)
+    info["scale"] = round(scale, 3)
+
+    if not digital:
+        gray = _even_light(gray)
+        frame = _table_frame(gray) if "perspective" not in info else None
+        warped = _warp_page_by(gray, frame) if frame is not None else None
+        if warped is not None:
+            gray = warped
+            info["perspective"] = "table frame"
+
+    angle = _skew_angle(gray)
+    if abs(angle) > 0.15:
+        gray = _rotate(gray, angle)
+        info["deskew_degrees"] = round(angle, 2)
+
+    find = gray if digital else cv2.fastNlMeansDenoising(gray, None, h=7, templateWindowSize=7, searchWindowSize=21)
+    info["size"] = [int(gray.shape[1]), int(gray.shape[0])]
+    return Prepared(find=find, read=gray, info=info, digital=digital)
+
+
+# ---------------------------------------------------------------------------
 # 2. Tables
 # ---------------------------------------------------------------------------
 def _ink(gray: np.ndarray) -> np.ndarray:
     return cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 31, 15)
 
 
-def _line_masks(gray: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    ink = _ink(gray)
+def _line_masks(gray: np.ndarray, char_h: Optional[float] = None,
+                ink: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+    """Printed horizontal and vertical rules. With the letter height known,
+    the sizes follow the text (a rule is several letters long, so a tall
+    letter or a stack of 'l's is never taken for one); otherwise they
+    follow the page size."""
+    ink = _ink(gray) if ink is None else ink
     height, width = gray.shape
-    horizontal = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (width // 25, 1)))
+    if char_h:
+        across = int(max(5 * char_h, min(width // 25, 12 * char_h)))
+        down = int(max(3 * char_h, min(height // 30, 8 * char_h)))
+        gap = max(5, int(0.5 * char_h))
+    else:
+        across, down, gap = width // 25, height // 30, 11
+    horizontal = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (across, 1)))
     # Dotted or dashed column rules: join the dots first (a short vertical
     # closing does not merge stacked text lines, which are further apart).
-    dotted = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1, 11)))
-    vertical = cv2.morphologyEx(dotted, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, height // 30)))
+    dotted = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1, gap)))
+    vertical = cv2.morphologyEx(dotted, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, down)))
     # Re-join line pieces broken by faint print or the photo.
     horizontal = cv2.dilate(horizontal, cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3)))
     vertical = cv2.dilate(vertical, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 15)))
