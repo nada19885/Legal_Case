@@ -499,6 +499,8 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-issue { border: 1px solid var(--line); border-radius: var(--radius); padding: .9rem 1rem; margin: .7rem 0; background: var(--surface); box-shadow: var(--shadow-1); }
 .bsf-issue h4 { font-family: var(--font-serif); margin: 0 0 .5rem; color: var(--bsf-green-700); }
 .bsf-issue code { background: var(--surface-2); padding: .05rem .35rem; border-radius: 4px; font-size: .82rem; }
+.bsf-issue-unsupported { background: var(--surface-2); border-style: dashed; box-shadow: none; }
+.bsf-issue-unsupported h4 { color: var(--ink-soft); }
 
 /* ---------------- Accounting / forensic analysis ---------------- */
 .bsf-doc-picker { display: flex; flex-direction: column; gap: .35rem; margin: .5rem 0 .9rem; }
@@ -546,6 +548,12 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-pleading-body { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.4rem 1.6rem; box-shadow: var(--shadow-1); margin: .8rem 0; }
 .bsf-pleading-body h2 { font-family: var(--font-serif); color: var(--bsf-green-700); }
 .bsf-pleading-body h3, .bsf-pleading-body h4 { font-family: var(--font-serif); color: var(--bsf-green); }
+.bsf-pleading-body p { line-height: 1.75; text-align: justify; }
+.bsf-pleading-body p, .bsf-pleading-body li, .bsf-pleading-body td, .bsf-pleading-body h3, .bsf-pleading-body h4 { unicode-bidi: plaintext; }
+.bsf-pleading-body h2 { text-align: center; }
+.bsf-pleading-body ol, .bsf-pleading-body ul { padding-inline-start: 1.4rem; }
+.bsf-pleading-body .bsf-table td, .bsf-pleading-body .bsf-table th { text-align: start; }
+.bsf-pleading-lang { max-width: 20rem; }
 
 /* Job / progress */
 .bsf-job { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .8rem 1rem; margin: .7rem 0; }
@@ -657,3 +665,8 @@ button.step-card:hover { border-color: var(--bsf-green); }
   unicode-bidi: plaintext;
   text-align: start;
 }
+
+/* Review list paging and in-flight decisions. */
+.bsf-review-pager { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin: .6rem 0; font-size: .88rem; }
+.bsf-review-pager .bsf-btn-primary { margin-inline-start: auto; }
+.bsf-review-item.is-saving { opacity: .45; pointer-events: none; transition: opacity .2s; }

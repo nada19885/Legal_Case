@@ -113,6 +113,33 @@ def _compact_evidence(evidence: list[dict]) -> list[dict]:
     return compact
 
 
+def keep_retrieved_rules(analysis: dict, allowed_ids: set) -> None:
+    """Keep only rule citations whose node ids were actually retrieved,
+    drop rules left without any, and mark each issue with has_authority."""
+    for issue in analysis.get("issues") or []:
+        if not isinstance(issue, dict):
+            continue
+        rules = []
+        for rule in issue.get("applicable_rules") or []:
+            if not isinstance(rule, dict):
+                continue
+            ids = [str(x) for x in rule.get("node_ids") or [] if str(x) in allowed_ids]
+            if ids:
+                rules.append({**rule, "node_ids": ids})
+        issue["applicable_rules"] = rules
+        issue["has_authority"] = bool(rules)
+
+
+def issue_has_authority(issue: Any) -> bool:
+    """True when the issue cites at least one retrieved authority node.
+    Analyses saved before has_authority existed are judged by their rules."""
+    if not isinstance(issue, dict):
+        return False
+    if "has_authority" in issue:
+        return bool(issue["has_authority"])
+    return any(isinstance(rule, dict) and rule.get("node_ids") for rule in issue.get("applicable_rules") or [])
+
+
 def analyse_case(
     case_record: dict,
     facts: list[dict],
@@ -163,6 +190,7 @@ def analyse_case(
     result.setdefault("issues", [])
     result.setdefault("overall_posture", "unresolved")
     result.setdefault("executive_summary", "")
+    keep_retrieved_rules(result, {node["node_id"] for node in compact_authorities if node["node_id"]})
     # Deterministic, not LLM-reported: the frontend metric must match what
     # was actually supplied, not a number the model might miscount.
     result["knowledge_base_authority_count"] = len(compact_authorities)

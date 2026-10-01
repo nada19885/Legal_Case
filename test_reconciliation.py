@@ -46,10 +46,13 @@ from legal_platform.financial_fields import effective_value, pending_fields
 from legal_platform.financial_normalizer import build_normalized_ledger, normalize_currency
 from legal_platform.financial_reconciliation import build_rows_from_reconstruction
 from legal_platform import workflow
-from legal_platform.financial_forensics import normalise_claim_evaluation
+from legal_platform.financial_forensics import merge_part_updates, new_notebook, normalise_claim_evaluation, notebook_view
 from legal_platform import financial_facts as facts
 from legal_platform.arabic_text import fix_structure, fix_visual_arabic, is_visual_order
 from legal_platform.case_register import build_case_register, normalise_text, prioritise_pages_for_summary
+from legal_platform import pleading
+from legal_platform import statement_reader as sr
+from legal_platform.case_analysis import issue_has_authority, keep_retrieved_rules
 
 failures = []
 
@@ -514,6 +517,255 @@ old_fields = json.loads(old_row["fields_json"])
 old_fields["fact"]["description"] = "ةفاضملا ةميقلا ةبيرض :موسرلا ليصافت - موسر"
 old_row["fields_json"] = json.dumps(old_fields, ensure_ascii=False)
 check("facts stored earlier are fixed when read", facts.build_fact_ledger([old_row])[0][0]["description"].startswith("رسوم - تفاصيل"))
+
+# --- no-op workflow updates are not re-written -------------------------------
+waiting = workflow.merge_state(workflow.blank_workflow_state(), {"accounting_status": "needs_review"},
+                               {"accounting": workflow.stage_patch(workflow.WAITING, detail="review_items")})
+again = workflow.merge_state(waiting, {"accounting_status": "needs_review"},
+                             {"accounting": workflow.stage_patch(workflow.WAITING, detail="review_items")})
+check("repeating the same stage update changes nothing (timestamps kept)", again == waiting)
+check("count of uncertain facts", facts.count_uncertain(fact_rows) == 5)
+
+# --- reading a large ledger in parts: the notebook ----------------------------
+notebook = new_notebook(["C001"])
+merge_part_updates(notebook, [{"claim_ref": "C001", "supporting": [{"record_ids": ["A1", "B9"], "explanation": "pay"}],
+                               "note": "1,000 so far"}], {"A1", "A2"}, "part 1 of 2")
+check("only ids from the part just read are accepted", notebook["C001"]["supporting"][0]["record_ids"] == ["A1"])
+merge_part_updates(notebook, [{"claim_ref": "C001", "supporting": [{"record_ids": ["A1", "B1"], "explanation": "again"}],
+                               "contradicting": [{"record_ids": ["B2"], "explanation": "reversal"}]},
+                              {"claim_ref": "C999", "supporting": [{"record_ids": ["B1"]}]}], {"B1", "B2"}, "part 2 of 2")
+page = notebook["C001"]
+check("earlier findings kept, new ones added, no duplicates",
+      [e["record_ids"] for e in page["supporting"]] == [["A1"], ["B1"]] and page["contradicting"][0]["record_ids"] == ["B2"])
+check("findings remember which part they came from", page["contradicting"][0]["found_in"] == "part 2 of 2")
+check("unknown claims ignored", set(notebook) == {"C001"})
+view = notebook_view(notebook, {"A1": {"amount": "1,000.00", "currency": "SAR"}, "B1": {"paid_amount": "250", "currency": "SAR"}})
+check("amount found so far computed by code", view["C001"]["amount_found_so_far"] == {"SAR": "1,250.00"})
+check("notes carried forward", view["C001"]["notes"] == ["part 1 of 2: 1,000 so far"])
+
+# --- legal analysis: only retrieved authorities count -------------------------
+analysis = {"issues": [
+    {"issue_title": "Late charges", "applicable_rules": [{"proposition": "p", "node_ids": ["N1", "X9"]}]},
+    {"issue_title": "Reputation", "applicable_rules": [{"proposition": "q", "node_ids": ["X9"]}]},
+    {"issue_title": "Jurisdiction", "applicable_rules": []},
+]}
+keep_retrieved_rules(analysis, {"N1"})
+check("invented node ids removed from rules", analysis["issues"][0]["applicable_rules"][0]["node_ids"] == ["N1"])
+check("issue whose only rule cited an invented id has no authority",
+      [issue_has_authority(i) for i in analysis["issues"]] == [True, False, False])
+check("older analyses judged by their rules",
+      issue_has_authority({"applicable_rules": [{"node_ids": ["N1"]}]}) and not issue_has_authority({"applicable_rules": []}))
+
+# --- written pleading ---------------------------------------------------------
+part_a_raw = {
+    "heading": {"authority": "Banking Disputes Committee", "claimant": "Johar", "title": "First Statement of Defence",
+                "submitted_by": "Banque Saudi Fransi – Defendant", "against": "Johar – Claimant", "subject": "Personal Financing Dispute"},
+    "introduction": ["Banque Saudi Fransi submits this Statement of Defence."],
+    "claims_summary": [{"number": 7, "title": "Incorrect balance", "allegation": "The balance is wrong.", "claim_ids": ["C001"]},
+                       {"title": "", "allegation": ""}],
+    "chronology": [{"date": "2023-08-29", "event": "Agreement | executed", "evidence": "Agreement.pdf — page 1"}],
+    "chronology_narrative": ["The agreement was executed first."],
+    "contractual_provisions": [{"heading": "Financing Amount", "clause": "Clause 3", "content": "SAR 84,000 over 60 months",
+                                "source": "Agreement.pdf — page 2"}],
+    "legal_framework": [{"heading": "Consumer protection", "authority": "SAMA principles", "node_ids": ["N1", "FAKE"], "content": "Fair treatment."},
+                        {"heading": "Invented", "authority": "Some law", "node_ids": ["FAKE"], "content": "x"}],
+    "accounting_findings": [{"heading": "Financing Amount", "points": [{"label": "Contractual amount", "value": "SAR 84,000"}],
+                             "evidence": ["Agreement.pdf — page 2"], "finding": "Consistent with the ledger.", "outcome": "Consistent"}],
+}
+part_b_raw = {
+    "claim_responses": [{"title": "Incorrect balance", "allegation": "The balance is wrong.", "bank_position": "It is right.",
+                         "evidence": ["Statement.pdf — page 4"], "accounting_finding": "Supported.", "applicable_provision": "Clause 3",
+                         "node_ids": ["N1", "FAKE"], "analysis": ["Reasoning."], "conclusion": "The record does not support the allegation."}],
+    "procedural_defences": [{"heading": "Missing promissory notes", "basis": "", "analysis": "x"}],
+    "substantive_defences": [{"heading": "Accuracy of the amounts", "reasoning": ["The ledger matches."], "node_ids": ["N1"]}],
+    "unresolved_matters": ["The record does not show whether fees were waived."],
+    "relief_requested": {"introduction": "", "items": ["Dismiss the claims.", "Confirm the amounts."]},
+    "documents_relied_upon": ["Personal Financing Agreement", "Account statements"],
+    "signature": {"party": "Banque Saudi Fransi"},
+    "attorney_checks": ["Verify the case number."],
+}
+notes = []
+part_a = pleading.normalise_part(part_a_raw, {"N1"}, notes)
+check("pleading: framework keeps only retrieved authorities",
+      [f["node_ids"] for f in part_a["legal_framework"]] == [["N1"]] and any("Some law" in n for n in notes))
+check("pleading: claims renumbered, empty claims dropped",
+      [(c["number"], c["title"]) for c in part_a["claims_summary"]] == [(1, "Incorrect balance")])
+check("pleading: unknown heading fields become placeholders", part_a["heading"]["case_number"] == pleading.PLACEHOLDER)
+check("pleading: outcome normalised", part_a["accounting_findings"][0]["outcome"] == "consistent")
+part_b = pleading.normalise_part(part_b_raw, {"N1"}, notes)
+check("pleading: procedural defence without a factual basis removed", part_b["procedural_defences"] == [])
+check("pleading: invented node ids removed from responses", part_b["claim_responses"][0]["node_ids"] == ["N1"])
+check("pleading: part B does not invent part A keys", "heading" not in part_b)
+
+record = pleading.build_drafting_record(
+    {"case_id": "c1", "case_number": "445", "nan_field": "nan"},
+    {"matter_overview_en": "Overview", "allegations": ["Fees were unlawful"]},
+    {"issues": [{"issue_title": "Fees", "applicable_rules": [{"node_ids": ["N1"]}]}, {"issue_title": "Venue", "applicable_rules": []}]},
+    {"authority_nodes": [{"node_id": "N1", "heading_path": "SAMA", "canonical_text": "Rule"}]},
+    {"documents": [{"case_document_id": "D1", "original_filename": "Financing Agreement.pdf", "document_type": "contract"},
+                   {"case_document_id": "D2", "original_filename": "Statement.pdf", "document_type": "bank_statement"}],
+     "pages": [{"case_document_page_id": "P1", "case_document_id": "D1", "page_text": "Clause 3: SAR 84,000", "document_type": "contract"},
+               {"case_document_page_id": "P2", "case_document_id": "D2", "page_text": "Opening balance", "document_type": "bank_statement"}],
+     "forensic_findings": {"claim_evaluations": [{"claim_id": "CLM_001", "claim": "Fees unlawful", "result": "NOT_SUPPORTED",
+                                                   "contradicting_evidence": [{"record_ids": ["R1"], "explanation": "Fee per clause"}]}]}},
+    {"parties": [{"name": "Johar", "role": "claimant", "page_labels": ["Statement.pdf — page 1"]}],
+     "events": [{"date": "2023-08-29", "event": "Agreement signed", "page_labels": ["Financing Agreement.pdf — page 1"]}]},
+    {"P1": "Financing Agreement.pdf — page 1", "P2": "Statement.pdf — page 1"},
+    [{"row_id": "R1", "page_id": "P2", "fact_type": "fee", "value": "500.00", "currency": "SAR"}],
+    {"facts": 1},
+    "Stress the contract.",
+)
+check("drafting record: only contract pages give full text",
+      [p["source"] for p in record["contract_pages"]] == ["Financing Agreement.pdf — page 1"])
+check("drafting record: claim evidence carries source pages",
+      record["claimant_claims"][0]["contradicting_evidence"][0]["sources"] == ["Statement.pdf — page 1"])
+check("drafting record: ledger samples carry source pages", record["accounting"]["key_ledger_records"][0]["source"] == "Statement.pdf — page 1")
+check("drafting record: issues split by retrieved authority",
+      [i["issue_title"] for i in record["legal_analysis"]["issues_with_retrieved_authority"]] == ["Fees"]
+      and record["legal_analysis"]["issues_without_retrieved_authority"] == ["Venue"])
+check("drafting record: court case number kept, internal id and blanks dropped",
+      record["case_identification"] == {"case_number": "445"})
+check("internal record ids removed from evidence and documents",
+      pleading.normalise_part({"claim_responses": [{"evidence": ["Stmt.pdf — page 2", "FLI_612229CF38D054F034AA"]}],
+                               "documents_relied_upon": ["FLI_9E1C9D794EAED3E90208", "Agreement"]}, set())
+      ["documents_relied_upon"] == ["Agreement"])
+
+calls = []
+AR_HEADING = {**part_a_raw["heading"], "title": "مذكرة جوابية", "submitted_by": "البنك السعودي الفرنسي – المدعى عليه"}
+def fake_complete_json(prompt, payload, temperature=0.0):
+    calls.append((prompt, payload))
+    arabic = prompt.endswith(pleading.LANGUAGE_RULES["ar"])
+    if prompt.startswith(pleading.PART_A_PROMPT):
+        return {**part_a_raw, "heading": AR_HEADING} if arabic else part_a_raw
+    if prompt.startswith(pleading.PART_B_PROMPT):
+        return part_b_raw
+    if prompt.startswith(pleading.REVISION_PROMPT):
+        return {"changed_sections": {"introduction": ["Revised introduction by Banque Saudi Fransi."], "bogus": 1},
+                "change_notes": ["Introduction shortened."], "rejected_changes": []}
+    raise AssertionError("unexpected prompt")
+
+pleading.complete_json = fake_complete_json
+record = {
+    "authorities": [{"node_id": "N1", "title": "SAMA principles", "text": "x" * 5000}],
+    "parties": [], "case_identification": {"case_id": "c1"}, "contract_pages": [], "page_summaries": [{"source": "p", "summary": "s"}] * 200,
+    "dated_events": [], "claimant_claims": [], "accounting": {"key_ledger_records": [], "ledger_overview": {}},
+}
+progress_messages = []
+memo = pleading.draft_pleading(record, "en", progress=progress_messages.append)
+check("pleading: drafted in two calls, only in the chosen language",
+      len(calls) == 2 and all(c[0].endswith(pleading.LANGUAGE_RULES["en"]) for c in calls)
+      and memo["language"] == "en" and "pleading_ar" not in memo)
+check("pleading: second half sees the first half and not the page texts",
+      calls[1][1]["pleading_so_far"]["claims_summary"][0]["title"] == "Incorrect balance"
+      and "contract_pages" not in calls[1][1] and "page_summaries" not in calls[1][1])
+check("pleading: record shrunk to the budget", len(json.dumps(calls[0][1], ensure_ascii=False)) <= pleading.RECORD_BUDGET_CHARS)
+check("pleading: full format", pleading.is_full_pleading(memo) and memo["pleading_en"]["claim_responses"][0]["conclusion"])
+check("pleading: attorney checks include removals and missing contract",
+      any("Some law" in c for c in memo["attorney_checks"]) and any("contract" in c.lower() for c in memo["attorney_checks"]))
+check("pleading: progress reported", len(progress_messages) == 2)
+
+markdown_en = pleading.pleading_to_markdown(memo, "ar")
+check("pleading shown in the language it was drafted in", "Preliminary Statement" in markdown_en)
+for heading in ("Preliminary Statement", "I. Summary of the Claimant's Allegations", "II. Factual Background and Chronology",
+                "III. Relevant Contractual Provisions", "IV. Applicable Legal and Regulatory Framework",
+                "V. Accounting and Financial Findings", "VI. Response to the Claimant's Allegations",
+                "VII. Substantive Defences", "VIII. Matters Not Conclusively Established", "IX. Relief Requested",
+                "X. Documents Relied Upon"):
+    check(f"English pleading has section: {heading}", heading in markdown_en)
+check("empty procedural section omitted and numbering continues", "Procedural Defences" not in markdown_en)
+check("chronology rendered as a table, pipes escaped", "| 2023-08-29 | Agreement / executed | Agreement.pdf — page 1 |" in markdown_en)
+check("claim response laid out with labels",
+      all(label in markdown_en for label in ("**Claimant's allegation:**", "**Bank's position:**", "**Relevant evidence:**",
+                                             "**Accounting finding:**", "**Applicable provision:**", "**Analysis:**", "**Conclusion:**")))
+check("relief numbered with default introduction",
+      "respectfully requests that the competent authority:" in markdown_en and "1. Dismiss the claims." in markdown_en)
+
+calls.clear()
+memo_ar = pleading.draft_pleading(record, "ar")
+check("Arabic pleading drafted directly in Arabic (two calls, Arabic language rules)",
+      len(calls) == 2 and all(c[0].endswith(pleading.LANGUAGE_RULES["ar"]) for c in calls)
+      and memo_ar["language"] == "ar" and "pleading_en" not in memo_ar
+      and memo_ar["pleading_ar"]["heading"]["title"] == "مذكرة جوابية")
+markdown_ar = pleading.pleading_to_markdown(memo_ar, "en")
+check("Arabic pleading opens with the basmala", markdown_ar.startswith("بسم الله الرحمن الرحيم"))
+for heading in ("أولاً: مقدمة وتمهيد", "ثانياً: ملخص ادعاءات المدعي", "ثالثاً: الوقائع والتسلسل الزمني للقضية",
+                "سابعاً: الرد على ادعاءات المدعي", "الحادي عشر: المستندات والمرفقات المؤيدة", "الثاني عشر: الخاتمة والتوقيع"):
+    check(f"Arabic pleading has section: {heading}", heading in markdown_ar)
+old_memo = {"format": pleading.PLEADING_FORMAT, "pleading_en": memo["pleading_en"], "pleading_ar": memo_ar["pleading_ar"]}
+check("older two-language pleadings still show the requested language",
+      pleading.pleading_to_markdown(old_memo, "ar").startswith("بسم الله")
+      and "Preliminary Statement" in pleading.pleading_to_markdown(old_memo, "en"))
+
+calls.clear()
+revised = pleading.revise_pleading(memo, "Shorten the introduction", record)
+check("revision rewrites only the changed section, in one call",
+      revised["pleading_en"]["introduction"] == ["Revised introduction by Banque Saudi Fransi."]
+      and revised["pleading_en"]["claim_responses"] == memo["pleading_en"]["claim_responses"] and len(calls) == 1)
+check("revision ignores unknown sections", "bogus" not in revised["pleading_en"])
+
+# --- answers that come back wrapped or unusable -------------------------------
+def wrapped_llm(prompt, payload, temperature=0.0):
+    if prompt.startswith(pleading.PART_A_PROMPT):
+        return {"arabic_part": {**part_a_raw, "heading": AR_HEADING}}
+    return {"result": [part_b_raw]}
+pleading.complete_json = wrapped_llm
+fixed = pleading.draft_pleading(record, "ar")
+check("wrapped answers are unwrapped", fixed["pleading_ar"]["heading"]["title"] == "مذكرة جوابية"
+      and fixed["pleading_ar"]["claim_responses"])
+empty_calls = []
+def empty_llm(prompt, payload, temperature=0.0):
+    empty_calls.append(payload)
+    return {"مقدمة": "نص"}
+pleading.complete_json = empty_llm
+try:
+    pleading.draft_pleading(record, "ar")
+    raised = False
+except ValueError as error:
+    raised = "expected form" in str(error)
+check("unusable answer retried once with the key list, then a clear error",
+      raised and len(empty_calls) == 2 and "required keys" in empty_calls[1]["previous_answer_problem"])
+pleading.complete_json = fake_complete_json
+
+# --- statements read from photographs ------------------------------------------
+check("column roles from Arabic and English headers",
+      sr.column_roles(["الرصيد", "حركة له", "حركة منه", "تاريخ الحق", "الإيضاحات", "التاريخ"])
+      == ["balance", "credit", "debit", "value_date", "description", "date"]
+      and sr.column_roles(["Date", "Description", "Debit", "Credit", "Balance"])
+      == ["date", "description", "debit", "credit", "balance"])
+check("three-decimal table detected", sr.table_decimals(["0.300", "1,482.034", "1.000", None]) == 3
+      and sr.table_decimals(["12.50", "1,250.00"]) == 2)
+check("1.000 is one unit in a three-decimal table, unreadable without it",
+      sr.parse_amount("1.000", 3) == Decimal("1.000") and sr.parse_amount("1.000", None) is None)
+check("amount with the wrong number of decimals is not accepted", sr.parse_amount("12.45", 3) is None)
+check("Arabic digits and thousands", sr.parse_amount("١٬٤٨٢٫٠٣٤", 3) == Decimal("1482.034"))
+
+def statement(*rows):
+    return [{"debit": sr.parse_amount(d, 3), "credit": sr.parse_amount(c, 3), "balance": sr.parse_amount(b, 3)}
+            for d, c, b in rows]
+good = statement((None, None, "145.847"), ("0.300", None, "145.547"), ("1.000", None, "144.547"),
+                 (None, "1,482.034", "1,626.581"), ("0.500", None, "1,626.081"))
+checked = sr.reconcile(good, 3)
+check("clean statement reconciles (first row confirmed by the second)",
+      [r["status"] for r in checked] == ["reconciled"] * 5)
+swapped = statement((None, None, "145.547"), ("1.000", None, "144.547"), ("1,482.034", None, "1,626.581"),
+                    ("0.500", None, "1,626.081"))
+row = sr.reconcile(swapped, 3)[2]
+check("debit/credit swap repaired", row["status"] == "repaired" and row["credit"] == Decimal("1482.034")
+      and row["debit"] is None and row["debit_as_read"] == Decimal("1482.034"))
+bad_balance = statement((None, None, "1,570.881"), ("177.583", None, "1,398.298"), ("369.957", None, "1,023.341"))
+row = sr.reconcile(bad_balance, 3)[1]
+check("misread balance repaired from both neighbours", row["status"] == "repaired"
+      and row["balance"] == Decimal("1393.298") and row["balance_as_read"] == Decimal("1398.298"))
+bad_amount = statement((None, None, "521.341"), ("9.826", None, "512.015"), ("0.400", None, "511.615"))
+row = sr.reconcile(bad_amount, 3)[1]
+check("misread amount repaired from the balances", row["status"] == "repaired" and row["debit"] == Decimal("9.326"))
+unprovable = statement((None, None, "100.000"), ("5.000", None, "90.000"), ("7.000", None, "80.000"))
+rows_checked = sr.reconcile(unprovable, 3)
+check("two errors in a row are not guessed", rows_checked[1]["status"] == "unconfirmed"
+      and rows_checked[1]["debit"] == Decimal("5.000") and "Does not add up" in rows_checked[1]["notes"][-1])
+last = statement((None, None, "100.000"), ("5.000", None, "90.000"))
+check("last row is never changed without a next row to confirm",
+      sr.reconcile(last, 3)[1]["status"] == "unconfirmed" and sr.reconcile(last, 3)[1]["debit"] == Decimal("5.000"))
 
 print()
 if failures:

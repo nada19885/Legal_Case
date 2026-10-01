@@ -123,7 +123,6 @@ const I18N = {
     "attorney_decision": "Attorney decision",
     "attorney_note": "Attorney note",
     "automatic_classification": "Automatic classification with attorney confirmation",
-    "available_evidence": "Available evidence",
     "back_to_case_library": "Back to case library",
     "badge_ai_extracted": "AI-extracted",
     "badge_attorney_flagged": "Attorney-flagged",
@@ -171,12 +170,8 @@ const I18N = {
     "column_chronology_basis": "Chronology basis",
     "column_date": "Date",
     "column_event": "Event",
-    "column_evidence": "Evidence",
-    "column_limitations": "Limitations",
     "column_name": "Name",
-    "column_original_pages": "Original document pages",
     "column_related_evidence_pages": "Related evidence pages",
-    "column_relevance": "Relevance",
     "column_role": "Role",
     "column_status": "Status",
     "compare_with_current": "Compare with current draft",
@@ -187,7 +182,6 @@ const I18N = {
     "confirm_classification": "Confirm classification",
     "confirm_classification_first": "Confirm the agreement type, relationship, and represented party first.",
     "consolidated_attorney_review": "Consolidated attorney review",
-    "contradiction_caption": "These items may result from OCR, extraction, translation, or inconsistent source records. They are not treated as legal findings until an attorney verifies the original pages.",
     "correction_or_note": "Correction / note",
     "correction_placeholder": "Add a correction or note attorneys should see…",
     "counterparty": "Counterparty",
@@ -224,7 +218,10 @@ const I18N = {
     "documents_caption": "Upload all available material here. The system will extract, classify, and map it into the case record.",
     "docx_export_missing": "Word export needs `python-docx` in this code environment — add it to the environment's package list to enable this button.",
     "download_arabic_pleading": "Download Arabic pleading (.md)",
-    "download_combined_pleading": "Download combined pleading (.docx)",
+    "download_pleading_docx": "Download pleading (.docx)",
+    "pleading_language": "Pleading language",
+    "pleading_language_en": "English",
+    "pleading_language_ar": "Arabic — العربية",
     "download_english_pleading": "Download English pleading (.md)",
     "enter_clear_file_name": "Enter a clear file name",
     "essential_case_summary": "Essential case summary",
@@ -248,7 +245,6 @@ const I18N = {
     "hit_discussion": "Discussion",
     "hit_evidence": "Evidence",
     "hit_fact": "Fact",
-    "impact_level": "Impact level: ",
     "initial_pleading_draft": "Initial pleading draft",
     "item_fallback": "Item {number}",
     "iterative_attorney_review": "Iterative attorney review",
@@ -270,7 +266,6 @@ const I18N = {
     "locked_reason": "Locked — {reason}",
     "main_parties": "Main parties",
     "mark_final": "Mark final",
-    "material_contradictions": "Legally material contradictions",
     "metric_critical_points": "Critical points",
     "metric_cross_clause_conflicts": "Cross-clause conflicts",
     "metric_cross_document_conflicts": "Cross-document conflicts",
@@ -301,22 +296,21 @@ const I18N = {
     "next_review_new_material": "Review the newly added material before relying on earlier work",
     "next_summary": "Prepare and approve the consolidated attorney review",
     "no_arabic_summary": "A separate Arabic summary was not generated. Refresh the attorney summary.",
-    "no_citable_rule": "No citable knowledge-base rule supports this issue; it remains unresolved.",
+    "no_issue_with_authority": "No issue is supported by retrieved knowledge-base text yet.",
+    "issues_without_authority": "Issues without retrieved authority ({count})",
+    "issues_without_authority_note": "No retrieved text or authority nodes were found for these issues, so they are not analysed legally here and remain for attorney review.",
     "no_clause_text": "No text captured for this clause.",
     "no_dated_events": "No dated events were identified.",
     "no_english_summary": "A separate English summary was not generated. Refresh the attorney summary.",
-    "no_evidence_recorded": "No evidence list was recorded in the current summary.",
     "no_exposure_points": "No legal exposure points recorded.",
     "no_facts_extracted": "No facts have been extracted yet. Process documents above first.",
     "no_matching_agreements": "No matching agreement files",
     "no_matching_cases": "No matching litigation cases",
-    "no_material_contradiction": "No legally material contradiction affecting the bank's position was identified.",
     "no_negotiation_position": "No negotiation position was generated for this review yet — re-run the review above once clause reviews are available.",
     "no_pages_extracted": "No pages were extracted from {name}.",
     "no_parties_confirmed": "No parties were confirmed in the current summary.",
     "no_search_matches": "No matches yet — try a different term.",
     "no_summary_generated": "No consolidated summary has been generated in this session.",
-    "no_verification_alerts": "No separate source-verification alerts were recorded.",
     "none_retrieved": "None retrieved",
     "note": "Note",
     "note_recorded": "Note recorded in the case audit log.",
@@ -419,7 +413,6 @@ const I18N = {
     "source_ids_used": "Source IDs:",
     "source_page": "Source page",
     "source_policy_kb_only": "Source policy: knowledge base only",
-    "source_verification_alerts": "Source verification alerts",
     "start_by_preparing_review": "Start by preparing the review. Only the essential case summary will remain visible; supporting details will be available in closed sections.",
     "status_analysis": "Legal analysis",
     "status_default": "Intake",
@@ -577,7 +570,6 @@ const I18N = {
     "attorney_decision": "قرار المحامي",
     "attorney_note": "ملاحظة المحامي",
     "automatic_classification": "التصنيف الآلي مع تأكيد المحامي",
-    "available_evidence": "الأدلة المتاحة",
     "back_to_case_library": "العودة إلى المكتبة",
     "badge_ai_extracted": "مستخرج آلياً",
     "badge_attorney_flagged": "معلّم من المحامي",
@@ -625,12 +617,8 @@ const I18N = {
     "column_chronology_basis": "أساس الترتيب",
     "column_date": "التاريخ",
     "column_event": "الحدث",
-    "column_evidence": "الدليل",
-    "column_limitations": "القيود",
     "column_name": "الاسم",
-    "column_original_pages": "صفحات المستند الأصلي",
     "column_related_evidence_pages": "صفحات الأدلة المرتبطة",
-    "column_relevance": "الصلة",
     "column_role": "الصفة",
     "column_status": "الحالة",
     "compare_with_current": "مقارنة بالمسودة الحالية",
@@ -641,7 +629,6 @@ const I18N = {
     "confirm_classification": "تأكيد التصنيف",
     "confirm_classification_first": "أكّد نوع الاتفاقية والعلاقة والطرف الممثَّل أولاً.",
     "consolidated_attorney_review": "المراجعة الموحدة للمحامي",
-    "contradiction_caption": "قد تنتج هذه العناصر عن التعرف الضوئي أو الاستخراج أو الترجمة أو تباين السجلات المصدرية. ولا تُعد نتائج قانونية حتى يتحقق المحامي من الصفحات الأصلية.",
     "correction_or_note": "تصحيح أو ملاحظة",
     "correction_placeholder": "أضف تصحيحاً أو ملاحظة يطّلع عليها المحامون…",
     "counterparty": "الطرف المقابل",
@@ -678,7 +665,10 @@ const I18N = {
     "documents_caption": "ارفع هنا كل المواد المتاحة. سيقوم النظام باستخراجها وتصنيفها وربطها بسجل القضية.",
     "docx_export_missing": "يتطلب التصدير إلى Word حزمة `python-docx` في بيئة التنفيذ — أضفها إلى قائمة حزم البيئة لتفعيل هذا الزر.",
     "download_arabic_pleading": "تنزيل المرافعة العربية (.md)",
-    "download_combined_pleading": "تنزيل المرافعة الكاملة (.docx)",
+    "download_pleading_docx": "تنزيل المذكرة (.docx)",
+    "pleading_language": "لغة المذكرة",
+    "pleading_language_en": "English — الإنجليزية",
+    "pleading_language_ar": "العربية",
     "download_english_pleading": "تنزيل المرافعة الإنجليزية (.md)",
     "enter_clear_file_name": "أدخل اسماً واضحاً للملف",
     "essential_case_summary": "الملخص الأساسي للقضية",
@@ -702,7 +692,6 @@ const I18N = {
     "hit_discussion": "المناقشة",
     "hit_evidence": "الدليل",
     "hit_fact": "واقعة",
-    "impact_level": "درجة التأثير: ",
     "initial_pleading_draft": "المسودة الأولى للمرافعة",
     "item_fallback": "العنصر {number}",
     "iterative_attorney_review": "المراجعة التفاعلية للمحامي",
@@ -724,7 +713,6 @@ const I18N = {
     "locked_reason": "مقفل — {reason}",
     "main_parties": "الأطراف الرئيسية",
     "mark_final": "اعتماد نهائي",
-    "material_contradictions": "التعارضات ذات الأثر القانوني",
     "metric_critical_points": "نقاط حرجة",
     "metric_cross_clause_conflicts": "تعارضات بين البنود",
     "metric_cross_document_conflicts": "تعارضات بين المستندات",
@@ -755,22 +743,21 @@ const I18N = {
     "next_review_new_material": "راجع المواد الجديدة قبل الاعتماد على العمل السابق",
     "next_summary": "أعد المراجعة الموحدة واعتمدها",
     "no_arabic_summary": "لم يتم إنشاء ملخص عربي مستقل. أعد إعداد ملخص المحامي.",
-    "no_citable_rule": "لا توجد قاعدة قابلة للاستشهاد في قاعدة المعرفة تسند هذه المسألة؛ تبقى غير محسومة.",
+    "no_issue_with_authority": "لا توجد مسألة يسندها نص مسترجع من قاعدة المعرفة حتى الآن.",
+    "issues_without_authority": "مسائل بلا سند نظامي مسترجع ({count})",
+    "issues_without_authority_note": "لم يُعثر على نصوص مسترجعة أو عُقد سند نظامي لهذه المسائل، لذا لا تُحلل قانونياً هنا وتبقى لمراجعة المحامي.",
     "no_clause_text": "لم يُلتقط نص لهذا البند.",
     "no_dated_events": "لم تُحدد أي أحداث مؤرخة.",
     "no_english_summary": "لم يتم إنشاء ملخص إنجليزي مستقل. أعد إعداد ملخص المحامي.",
-    "no_evidence_recorded": "لم تُسجل قائمة أدلة في الملخص الحالي.",
     "no_exposure_points": "لا توجد نقاط تعرض قانوني مسجلة.",
     "no_facts_extracted": "لم تُستخرج أي وقائع بعد. عالج المستندات أعلاه أولاً.",
     "no_matching_agreements": "لا توجد ملفات اتفاقيات مطابقة",
     "no_matching_cases": "لا توجد قضايا مطابقة",
-    "no_material_contradiction": "لم يتم تحديد تعارض جوهري يؤثر قانونياً في موقف البنك.",
     "no_negotiation_position": "لم يُنشأ موقف تفاوضي لهذه المراجعة بعد — أعد تشغيل المراجعة أعلاه بعد توفر مراجعات البنود.",
     "no_pages_extracted": "لم تُستخرج أي صفحات من {name}.",
     "no_parties_confirmed": "لم تُعتمد أي أطراف في الملخص الحالي.",
     "no_search_matches": "لا توجد نتائج مطابقة — جرّب مصطلحاً آخر.",
     "no_summary_generated": "لم يُنشأ ملخص موحد في هذه الجلسة.",
-    "no_verification_alerts": "لا توجد تنبيهات تحقق منفصلة في الملخص الحالي.",
     "none_retrieved": "لم يُستخرج أي مرجع",
     "note": "ملاحظة",
     "note_recorded": "تم تسجيل الملاحظة في سجل تدقيق القضية.",
@@ -873,7 +860,6 @@ const I18N = {
     "source_ids_used": "معرّفات المصادر:",
     "source_page": "صفحة المصدر",
     "source_policy_kb_only": "سياسة المصدر: قاعدة المعرفة فقط",
-    "source_verification_alerts": "تنبيهات التحقق من المصدر",
     "start_by_preparing_review": "ابدأ بإعداد المراجعة. سيبقى الملخص الأساسي للقضية ظاهراً فقط، وتبقى التفاصيل المساندة في أقسام مغلقة.",
     "status_analysis": "التحليل القانوني",
     "status_default": "الاستلام",
@@ -1142,6 +1128,11 @@ Object.assign(I18N.en, {
   fact_explaining: "Applying your explanation…",
   fact_saved: "Decision saved.",
   fact_ignore_confirm: "Leave this fact out of the ledger?",
+  review_prev: "‹ Previous",
+  review_next: "Next ›",
+  review_page_of: "Page {page} of {pages} · {total} fact(s) to review",
+  review_confirm_page: "Confirm all on this page ({count})",
+  review_confirm_page_prompt: "Confirm the {count} fact(s) on this page exactly as the AI interpreted them?",
   ledger_note: "Note: {note}",
   claim_parent: "From claim: {text}",
   claimed_amount_label: "Claimed",
@@ -1325,6 +1316,11 @@ Object.assign(I18N.ar, {
   fact_explaining: "جارٍ تطبيق شرحك…",
   fact_saved: "تم حفظ القرار.",
   fact_ignore_confirm: "استبعاد هذه الواقعة من السجل المالي؟",
+  review_prev: "‹ السابق",
+  review_next: "التالي ›",
+  review_page_of: "صفحة {page} من {pages} · {total} واقعة للمراجعة",
+  review_confirm_page: "تأكيد كل ما في هذه الصفحة ({count})",
+  review_confirm_page_prompt: "تأكيد {count} واقعة في هذه الصفحة كما فسّرها الذكاء الاصطناعي؟",
   ledger_note: "ملاحظة: {note}",
   claim_parent: "من المطالبة: {text}",
   claimed_amount_label: "المطالب به",
@@ -1368,6 +1364,7 @@ const S = {
   uploads: { documents: [], agreement: [] },
   jobs: {},                    // region -> { detail, current, total }
   accountingSelectedDocs: null, // Set of case_document_id, lazily defaulted to "all" per case
+  reviewPage: 0,               // page of the uncertain-facts review list
 };
 
 /* ============================================================
@@ -1478,6 +1475,22 @@ function renderMarkdown(text) {
       return;
     }
     flush();
+    if (block === "---") { out.push('<hr class="bsf-divider">'); return; }
+    const lines = block.split("\n");
+    if (lines.every((line) => /^\s*\|/.test(line))) {
+      const cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
+      const rows = lines.filter((line) => !/^\s*\|?\s*-{3,}/.test(line)).map(cells);
+      const [head, ...rest] = rows;
+      out.push(`<div class="bsf-table-scroll"><table class="bsf-table">
+        <thead><tr>${head.map((cell) => `<th>${inline(cell)}</th>`).join("")}</tr></thead>
+        <tbody>${rest.map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table></div>`);
+      return;
+    }
+    if (lines.every((line) => /^\d+\.\s+/.test(line))) {
+      out.push(`<ol>${lines.map((line) => `<li>${inline(line.replace(/^\d+\.\s+/, ""))}</li>`).join("")}</ol>`);
+      return;
+    }
     out.push(`<p>${inline(block).replace(/\n/g, "<br>")}</p>`);
   });
   flush();
@@ -1521,6 +1534,7 @@ function memoPlainText(memo, lang) {
     if (Array.isArray(value)) { value.forEach(push); return; }
     if (typeof value === "object") { Object.values(value).forEach(push); }
   };
+  if (memo.format === "full_v2") { push(section); return chunks.filter(Boolean).join("\n\n"); }
   ["court_heading", "case_details", "party_heading", "subject", "opening", "facts",
    "procedural_defences", "substantive_defences", "response_to_opponent", "requests",
    "evidence_reservations", "reservations", "closing"].forEach((key) => push(section[key]));
@@ -1821,6 +1835,7 @@ async function openCase(caseId) {
     S.caseId = caseId;
     S.snapshot = snapshot;
     S.compareVersion = null;
+    S.pleadingLang = null;
     S.accountingSelectedDocs = null;
     // Every matter opens on its first tab, whatever was selected last time.
     S.tab = "home";
@@ -2419,6 +2434,7 @@ const FACT_FIELD_ORDER = [
   "fact_type", "date", "description", "amount", "currency", "debit", "credit", "balance",
   "amount_due", "paid_amount", "remaining_amount", "account_number", "transaction_reference", "counterparty",
 ];
+const REVIEW_PAGE_SIZE = 10;
 const FACT_AMOUNT_FIELDS = ["amount", "debit", "credit", "balance", "amount_due", "paid_amount", "remaining_amount"];
 const FACT_STATUS_KIND = {
   EXTRACTED: "verified", CALCULATED: "ai", INFERRED: "provisional", UNCERTAIN: "review",
@@ -2498,7 +2514,7 @@ function renderAccountingConflicts(items) {
     const review = item.review || {};
     const check = (item.calculation && item.calculation.check) || null;
     return `
-      <details class="bsf-expander bsf-review-item" open>
+      <details class="bsf-expander bsf-review-item" data-row-id="${esc(item.row_id)}" open>
         <summary>${esc(t("fact_item_title", {
           page: item.page_label || `${t("page_label")} ${item.page_number || "—"}`,
           type: factTypeLabel(item.fact.fact_type),
@@ -2552,10 +2568,28 @@ function renderAccountingConflicts(items) {
       </details>`;
   };
 
+  // Ten facts at a time: fewer cards (and page images) to load at once.
+  const pages = Math.max(1, Math.ceil(items.length / REVIEW_PAGE_SIZE));
+  S.reviewPage = Math.min(Math.max(0, S.reviewPage || 0), pages - 1);
+  const shown = items.slice(S.reviewPage * REVIEW_PAGE_SIZE, (S.reviewPage + 1) * REVIEW_PAGE_SIZE);
+  const pager = () => `
+    <div class="bsf-review-pager">
+      <button type="button" class="bsf-btn" data-action="review-page" data-step="-1" ${S.reviewPage === 0 ? "disabled" : ""}>
+        ${esc(t("review_prev"))}</button>
+      <span>${esc(t("review_page_of", { page: S.reviewPage + 1, pages, total: items.length }))}</span>
+      <button type="button" class="bsf-btn" data-action="review-page" data-step="1" ${S.reviewPage >= pages - 1 ? "disabled" : ""}>
+        ${esc(t("review_next"))}</button>
+      <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-confirm-page"
+              data-row-ids="${esc(shown.map((item) => item.row_id).join(","))}">
+        ${esc(t("review_confirm_page", { count: shown.length }))}</button>
+    </div>`;
+
   html(target, `
     <h4 class="bsf-subsection">${esc(t("fact_review_heading"))}</h4>
     ${alertBox(t("fact_review_count", { count: items.length }), "warn")}
-    ${items.map(card).join("")}`);
+    ${pager()}
+    ${shown.map(card).join("")}
+    ${shown.length > 3 ? pager() : ""}`);
 }
 
 function renderAccountingLedger(ledger, hasLineItems, hasPendingReview, withheld) {
@@ -2800,9 +2834,6 @@ function renderReviewTab() {
     ${exposureMarkup(summary)}
     ${partiesMarkup(support)}
     ${chronologyMarkup(support)}
-    ${evidenceMarkup(support)}
-    ${contradictionsMarkup(summary)}
-    ${alertsMarkup(summary)}
 
     <hr class="bsf-divider">
     <form data-form="approve-summary">
@@ -2952,70 +2983,6 @@ function chronologyBasis(item) {
   return t("basis_dated_source");
 }
 
-function evidenceMarkup(support) {
-  const rows = support.ordered_evidence || [];
-  return `
-    <details class="bsf-expander">
-      <summary>${esc(t("available_evidence"))}</summary>
-      <div class="bsf-expander-body">
-        ${rows.length ? `
-          <table class="bsf-table">
-            <thead><tr>
-              <th>${esc(t("column_evidence"))}</th><th>${esc(t("column_relevance"))}</th>
-              <th>${esc(t("column_limitations"))}</th><th>${esc(t("column_original_pages"))}</th>
-            </tr></thead>
-            <tbody>${rows.map(({ item, page_ids, page_labels }) => `
-              <tr>
-                <td>${esc(item.evidence || item.title || "")}</td>
-                <td>${esc(item.relevance || "")}</td>
-                <td>${esc(item.limitations || item.limitation || "")}</td>
-                <td>${sourceLinks(page_ids, page_labels)}</td>
-              </tr>`).join("")}</tbody>
-          </table>` : `<p class="bsf-caption">${esc(t("no_evidence_recorded"))}</p>`}
-      </div>
-    </details>`;
-}
-
-function contradictionsMarkup(summary) {
-  const ar = isRTL();
-  const rows = summary.legal_contradictions || [];
-  return `
-    <details class="bsf-expander">
-      <summary>${esc(t("material_contradictions"))}</summary>
-      <div class="bsf-expander-body">
-        ${rows.length ? rows.slice(0, 10).map((item, index) => {
-          const issue = ar ? item.issue_ar : item.issue_en;
-          const relevance = ar ? item.legal_relevance_ar : item.legal_relevance_en;
-          if (!issue) return "";
-          return `<div class="bsf-issue">
-            <h4>${index + 1}. ${esc(issue)}</h4>
-            ${relevance ? `<div class="bsf-kv">${esc(relevance)}</div>` : ""}
-            <p class="bsf-caption">${esc(t("impact_level"))}${esc(severityLabel(item.impact))}</p>
-          </div>`;
-        }).join("") : `<p class="bsf-caption">${esc(t("no_material_contradiction"))}</p>`}
-        <p class="bsf-caption">${esc(t("contradiction_caption"))}</p>
-      </div>
-    </details>`;
-}
-
-function alertsMarkup(summary) {
-  const ar = isRTL();
-  const rows = summary.source_verification_alerts || [];
-  return `
-    <details class="bsf-expander">
-      <summary>${esc(t("source_verification_alerts"))}</summary>
-      <div class="bsf-expander-body">
-        ${rows.length ? rows.slice(0, 12).map((item, index) => {
-          const alert = ar ? item.alert_ar : item.alert_en;
-          const reason = ar ? item.reason_ar : item.reason_en;
-          if (!alert) return "";
-          return `<div class="bsf-item"><strong>${index + 1}. ${esc(alert)}</strong>
-            ${reason ? `<div class="bsf-kv">${esc(reason)}</div>` : ""}</div>`;
-        }).join("") : `<p class="bsf-caption">${esc(t("no_verification_alerts"))}</p>`}
-      </div>
-    </details>`;
-}
-
 /* ============================================================
    Legal analysis tab
    ============================================================ */
@@ -3040,20 +3007,7 @@ function renderAnalysisTab() {
       </div>
       <p class="bsf-caption">${esc(t("source_policy_kb_only"))}</p>
       <div>${renderMarkdown(analysis.executive_summary || "")}</div>
-      ${(analysis.issues || []).map((item) => `
-        <div class="bsf-issue">
-          <h4>${esc(item.issue_title || "")}</h4>
-          ${(item.applicable_rules || []).length
-            ? `<div class="bsf-kv"><strong>${esc(t("kb_rules"))}</strong></div>
-               <ul>${item.applicable_rules.map((rule) => `
-                 <li>${esc(rule.proposition || "")} <code>[${esc((rule.node_ids || []).join(", "))}]</code></li>`).join("")}</ul>`
-            : alertBox(t("no_citable_rule"), "warn")}
-          <div class="bsf-kv"><strong>${esc(t("our_position"))}</strong> ${esc(item.our_position || "")}</div>
-          <div class="bsf-kv"><strong>${esc(t("opponent_position"))}</strong> ${esc(item.opponent_position || "")}</div>
-          <div class="bsf-kv"><strong>${esc(t("response_label"))}</strong> ${esc(item.response || "")}</div>
-          <div class="bsf-kv"><strong>${esc(t("conclusion_label"))}</strong> ${conclusionBadge(item.conclusion)}</div>
-          <div class="bsf-kv"><strong>${esc(t("residual_risk_label"))}</strong> ${esc(item.residual_risk || "")}</div>
-        </div>`).join("")}
+      ${analysisIssuesMarkup(analysis.issues || [])}
 
       <div class="bsf-btn-row">
         <button type="button" class="bsf-btn" data-action="defence-plan"
@@ -3071,6 +3025,39 @@ function renderAnalysisTab() {
     <ul>${(strategy.actions || []).map((action) => `
       <li><strong>${esc(action.action_type || t("action_fallback"))}</strong> — ${esc(action.description || "")}
         (${esc(t("priority_label", { value: action.priority || "medium" }))})</li>`).join("")}</ul>`);
+}
+
+/* Issues backed by at least one retrieved authority node are shown in
+   full; the others are listed together, stating that no knowledge-base
+   text supports them. */
+function issueHasAuthority(item) {
+  if (item && Object.prototype.hasOwnProperty.call(item, "has_authority")) return Boolean(item.has_authority);
+  return (item.applicable_rules || []).some((rule) => (rule.node_ids || []).length);
+}
+
+function analysisIssuesMarkup(issues) {
+  const supported = issues.filter(issueHasAuthority);
+  const unsupported = issues.filter((item) => !issueHasAuthority(item));
+  return `
+    ${supported.map((item) => `
+      <div class="bsf-issue">
+        <h4>${esc(item.issue_title || "")}</h4>
+        <div class="bsf-kv"><strong>${esc(t("kb_rules"))}</strong></div>
+        <ul>${item.applicable_rules.filter((rule) => (rule.node_ids || []).length).map((rule) => `
+          <li>${esc(rule.proposition || "")} <code>[${esc((rule.node_ids || []).join(", "))}]</code></li>`).join("")}</ul>
+        <div class="bsf-kv"><strong>${esc(t("our_position"))}</strong> ${esc(item.our_position || "")}</div>
+        <div class="bsf-kv"><strong>${esc(t("opponent_position"))}</strong> ${esc(item.opponent_position || "")}</div>
+        <div class="bsf-kv"><strong>${esc(t("response_label"))}</strong> ${esc(item.response || "")}</div>
+        <div class="bsf-kv"><strong>${esc(t("conclusion_label"))}</strong> ${conclusionBadge(item.conclusion)}</div>
+        <div class="bsf-kv"><strong>${esc(t("residual_risk_label"))}</strong> ${esc(item.residual_risk || "")}</div>
+      </div>`).join("")}
+    ${!supported.length ? alertBox(t("no_issue_with_authority"), "info") : ""}
+    ${unsupported.length ? `
+      <div class="bsf-issue bsf-issue-unsupported">
+        <h4>${esc(t("issues_without_authority", { count: unsupported.length }))}</h4>
+        <p class="bsf-caption">${esc(t("issues_without_authority_note"))}</p>
+        <ul>${unsupported.map((item) => `<li>${esc(item.issue_title || "")}</li>`).join("")}</ul>
+      </div>` : ""}`;
 }
 
 function conclusionBadge(value) {
@@ -3153,22 +3140,27 @@ if (canDraft) {
   );
 }
 
+  const languageSelect = $("#pleading-language");
+  if (languageSelect) languageSelect.value = preferredPleadingLanguage();
+
   const body = region("pleading-body");
   if (!memo) { html(body, ""); return; }
 
-  const lang = S.lang;
+  // The pleading is drafted in one language, chosen before generating.
+  const lang = pleadingLanguage(memo);
   const downloadKey = lang === "ar" ? "download_arabic_pleading" : "download_english_pleading";
 
   html(body, `
-    <div class="bsf-pleading-body ${lang === "ar" ? "arabic-block" : "english-block"}"
-         data-region="pleading-markdown">${esc(t("loading"))}</div>
-
     <div class="bsf-btn-row">
       <button type="button" class="bsf-btn" data-action="download" data-fmt="md" data-lang="${lang}">
         ${esc(t(downloadKey))}</button>
       <button type="button" class="bsf-btn" data-action="download" data-fmt="docx" data-lang="${lang}">
-        ${esc(t("download_combined_pleading"))}</button>
+        ${esc(t("download_pleading_docx"))}</button>
     </div>
+
+    <div class="bsf-pleading-body ${lang === "ar" ? "arabic-block" : "english-block"}"
+         dir="${lang === "ar" ? "rtl" : "ltr"}" lang="${lang}"
+         data-region="pleading-markdown">${esc(t("loading"))}</div>
 
     <details class="bsf-expander">
       <summary>${esc(t("attorney_checks"))}</summary>
@@ -3229,6 +3221,24 @@ async function loadPleadingMarkdown(lang) {
   }
 }
 
+/* Language a stored pleading was drafted in (older pleadings held both
+   languages and follow the interface language). */
+function pleadingLanguage(memo) {
+  if (memo && (memo.language === "ar" || memo.language === "en")) return memo.language;
+  if (memo && memo.pleading_en && memo.pleading_ar) return S.lang;
+  return memo && memo.pleading_ar && !memo.pleading_en ? "ar" : "en";
+}
+
+/* Language the next pleading is drafted in: the one picked on the tab,
+   else the case's preferred language. */
+function preferredPleadingLanguage() {
+  const preferred = String(((S.snapshot && S.snapshot.case) || {}).preferred_language || "").toLowerCase();
+  if (S.pleadingLang) return S.pleadingLang;
+  if (preferred === "ar" || preferred === "en") return preferred;
+  const memo = S.snapshot && S.snapshot.workflow_state && S.snapshot.workflow_state.memo;
+  return memo ? pleadingLanguage(memo) : S.lang;
+}
+
 function versionHistoryMarkup(versions) {
   if (versions.length < 2) return "";
   const selected = S.compareVersion || versions[0].version;
@@ -3253,8 +3263,8 @@ function versionHistoryMarkup(versions) {
           <summary>${esc(t("compare_with_current"))}</summary>
           <div class="bsf-expander-body">
             <p class="bsf-caption">${esc(t("redline_caption", { old: selected, new: current.version }))}</p>
-            <div class="bsf-diff ${isRTL() ? "arabic-block" : "english-block"}">
-              ${renderDiff(memoPlainText(chosen.draft, S.lang), memoPlainText(current.draft, S.lang))}
+            <div class="bsf-diff ${pleadingLanguage(current.draft) === "ar" ? "arabic-block" : "english-block"}">
+              ${renderDiff(memoPlainText(chosen.draft, pleadingLanguage(current.draft)), memoPlainText(current.draft, pleadingLanguage(current.draft)))}
             </div>
           </div>
         </details>` : ""}
@@ -3662,29 +3672,72 @@ function closeModal() {
 /* ============================================================
    Action handlers, wired through one delegated click listener.
    ============================================================ */
-/* Save the user's decision on one uncertain fact. When it was the last one,
-   continue the accounting analysis from where it stopped, with the
-   instructions on screen (or the ones last used). */
-async function resolveFact(el, body) {
-  let saved;
-  el.disabled = true;
-  try {
-    saved = await apiPost("/accounting/fact/resolve", Object.assign({ case_id: S.caseId, row_id: el.dataset.rowId }, body));
-    toast(t("fact_saved"), "ok");
-  } catch (error) {
-    el.disabled = false;
-    fail(error);
-    return;
-  }
-  if (saved.ready_for_analysis) {
-    const box = $("#accounting-instructions");
-    const instructions = (box && box.value.trim()) || saved.instructions || "";
-    toast(t("accounting_continue_auto"), "ok");
-    await refreshCase();
-    await ACTIONS["accounting-synthesize"](null, instructions);
-    return;
-  }
-  await refreshCase();
+/* Decisions on uncertain facts are sent one at a time, in order, so quick
+   clicks never pile up parallel requests on the backend. A decided card is
+   removed at once; the full case refresh happens once, after the user
+   pauses. When the last fact is decided, the accounting analysis continues
+   automatically with the instructions on screen (or the ones last used). */
+let decisionQueue = Promise.resolve();
+let decisionsInFlight = 0;
+let reviewRefreshTimer = null;
+
+function setCardsSaving(rowIds, saving) {
+  rowIds.forEach((rowId) => {
+    const card = document.querySelector(`.bsf-review-item[data-row-id="${CSS.escape(rowId)}"]`);
+    if (!card) return;
+    card.classList.toggle("is-saving", saving);
+    card.querySelectorAll("button, input, textarea").forEach((control) => { control.disabled = saving; });
+  });
+}
+
+function dropReviewItems(rowIds, pendingCount) {
+  const acc = (S.snapshot && S.snapshot.accounting) || null;
+  if (!acc) return;
+  acc.review_items = (acc.review_items || []).filter((item) => !rowIds.includes(item.row_id));
+  acc.pending_conflicts = acc.review_items;
+  acc.pending_count = typeof pendingCount === "number" ? pendingCount : acc.review_items.length;
+  acc.pending_field_count = acc.pending_count;
+  acc.has_pending_review = acc.pending_count > 0;
+  renderAccountingConflicts(acc.review_items);
+  renderStageStrips();
+  renderAttention();
+}
+
+function scheduleReviewRefresh() {
+  clearTimeout(reviewRefreshTimer);
+  reviewRefreshTimer = setTimeout(() => { if (!decisionsInFlight) refreshCase(); }, 1500);
+}
+
+function queueDecision(rowIds, send) {
+  setCardsSaving(rowIds, true);
+  decisionsInFlight += 1;
+  decisionQueue = decisionQueue.then(async () => {
+    try {
+      const saved = await send();
+      dropReviewItems(rowIds, saved.pending_count);
+      if (saved.ready_for_analysis) {
+        clearTimeout(reviewRefreshTimer);
+        const box = $("#accounting-instructions");
+        const instructions = (box && box.value.trim()) || saved.instructions || "";
+        toast(t("accounting_continue_auto"), "ok");
+        await refreshCase();
+        await ACTIONS["accounting-synthesize"](null, instructions);
+      }
+    } catch (error) {
+      setCardsSaving(rowIds, false);
+      fail(error);
+    } finally {
+      decisionsInFlight -= 1;
+      if (!decisionsInFlight) scheduleReviewRefresh();
+    }
+  });
+  return decisionQueue;
+}
+
+function resolveFact(el, body) {
+  const rowId = el.dataset.rowId;
+  return queueDecision([rowId], () =>
+    apiPost("/accounting/fact/resolve", Object.assign({ case_id: S.caseId, row_id: rowId }, body)));
 }
 
 const ACTIONS = {
@@ -3751,7 +3804,8 @@ const ACTIONS = {
   "generate-pleading": async () => {
     const instructions = ($("#pleading-instructions") || {}).value || "";
     try {
-      await runJob(apiPost("/pleading/generate", { case_id: S.caseId, instructions }), "pleading-job");
+      const language = ($("#pleading-language") || {}).value || preferredPleadingLanguage();
+      await runJob(apiPost("/pleading/generate", { case_id: S.caseId, instructions, language }), "pleading-job");
       await refreshCase();
     } catch (error) {
       await refreshCase();
@@ -3854,6 +3908,20 @@ const ACTIONS = {
   },
 
   "fact-accept-proposal": (el) => resolveFact(el, { action: "accept_proposal" }),
+
+  "fact-confirm-page": (el) => {
+    const rowIds = (el.dataset.rowIds || "").split(",").filter(Boolean);
+    if (!rowIds.length || !window.confirm(t("review_confirm_page_prompt", { count: rowIds.length }))) return;
+    return queueDecision(rowIds, () =>
+      apiPost("/accounting/fact/resolve_bulk", { case_id: S.caseId, row_ids: rowIds, action: "confirm" }));
+  },
+
+  "review-page": (el) => {
+    S.reviewPage = (S.reviewPage || 0) + Number(el.dataset.step || 0);
+    renderAccountingConflicts(((S.snapshot && S.snapshot.accounting) || {}).review_items || []);
+    const target = region("accounting-conflicts");
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  },
 
   "fact-explain": async (el) => {
     const box = el.closest(".bsf-fact-explain").querySelector("[data-fact-explanation]");
@@ -4112,6 +4180,12 @@ function wireEvents() {
       addUploadFiles(kind, fileInput.files);
       // Clearing lets the picker re-offer a file the user removed.
       fileInput.value = "";
+      return;
+    }
+
+    const pleadingLang = event.target.closest('[data-action="select-pleading-lang"]');
+    if (pleadingLang) {
+      S.pleadingLang = pleadingLang.value;
       return;
     }
 

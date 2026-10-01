@@ -13,25 +13,37 @@ finished, and why it failed if it did. The heavy outputs (analysis, memo,
 ledger rows...) stay where they already live; this module only tracks
 progress and decides what the user sees.
 
-Persistence is append-only (one audit_events row per update) and every
-update is a merge applied to the *latest* stored state under a process
-lock, so two background jobs finishing at the same time can no longer
-overwrite each other's results.
+Persistence: each case's state is one small JSON file in the case
+documents managed folder (workflow_state/<case_id>.json), read and written
+per case. audit_events receives a short entry per change (what changed,
+stage statuses), never the full state: the state holds the legal research,
+analysis and pleading versions and can be several MB, and appending it on
+every update made audit_events grow to GBs that every read had to scan.
+Cases saved the old way are migrated on first read.
+
+Every update is a merge applied to the *latest* stored state under a
+process lock, so two background jobs finishing at the same time can no
+longer overwrite each other's results.
 """
 
 from __future__ import annotations
 
 import copy
 import json
+import re
 import threading
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import pandas as pd
 
+import dataiku
+
 from .audit import audit
-from .config import APPROVALS_DATASET, AUDIT_DATASET
+from .config import APPROVALS_DATASET, AUDIT_DATASET, CASE_DOCUMENT_FOLDER_ID
 from .storage import case_rows
+
+STATE_FOLDER_DIR = "workflow_state"
 
 # -----------------------------------------------------------------------------
 # Stage vocabulary
@@ -191,11 +203,70 @@ def _normalise(state: dict) -> dict:
     return state
 
 
+_STATE_CACHE: dict = {}
+
+
+def _state_path(case_id: str) -> str:
+    return f"/{STATE_FOLDER_DIR}/{re.sub(r'[^A-Za-z0-9_.-]', '_', str(case_id))}.json"
+
+
+def _load_state_file(case_id: str) -> Optional[dict]:
+    try:
+        folder = dataiku.Folder(CASE_DOCUMENT_FOLDER_ID)
+        with folder.get_download_stream(_state_path(case_id)) as stream:
+            payload = json.loads(stream.read().decode("utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _save_state_file(case_id: str, state: dict) -> bool:
+    try:
+        folder = dataiku.Folder(CASE_DOCUMENT_FOLDER_ID)
+        data = json.dumps({key: state.get(key) for key in WORKFLOW_KEYS}, ensure_ascii=False, default=str)
+        folder.upload_data(_state_path(case_id), data.encode("utf-8"))
+        return True
+    except Exception as error:
+        print(f"[workflow state] could not save state file for {case_id}: {error!r}", flush=True)
+        return False
+
+
 def read_workflow_state(case_id: str) -> dict:
-    return restore_workflow_state(
-        case_rows(AUDIT_DATASET, case_id),
-        case_rows(APPROVALS_DATASET, case_id),
-    )
+    """Latest state for one case: process cache -> state file -> legacy
+    audit/approvals rows (read once, then migrated to the state file)."""
+    case_id = str(case_id)
+    with _STATE_LOCK:
+        cached = _STATE_CACHE.get(case_id)
+        if cached is not None:
+            return copy.deepcopy(cached)
+
+        payload = _load_state_file(case_id)
+        if payload is not None:
+            state = blank_workflow_state()
+            state.update({key: payload[key] for key in WORKFLOW_KEYS if key in payload})
+            state = _normalise(state)
+        else:
+            state = restore_workflow_state(
+                case_rows(AUDIT_DATASET, case_id),
+                case_rows(APPROVALS_DATASET, case_id),
+            )
+            _save_state_file(case_id, state)
+
+        _STATE_CACHE[case_id] = copy.deepcopy(state)
+        return state
+
+
+def _audit_summary(before: dict, after: dict) -> dict:
+    """What an update changed, small enough for audit_events."""
+    changed = [key for key in WORKFLOW_KEYS if key != "stages" and before.get(key) != after.get(key)]
+    stages = {
+        key: {field: record.get(field) for field in ("status", "phase", "detail", "error")}
+        for key, record in (after.get("stages") or {}).items()
+        if record != (before.get("stages") or {}).get(key)
+    }
+    small = {key: after.get(key) for key in changed
+             if isinstance(after.get(key), (str, int, float, bool)) or after.get(key) is None}
+    return {"changed_keys": changed, "stages": stages, "values": small}
 
 
 # -----------------------------------------------------------------------------
@@ -214,6 +285,8 @@ def merge_state(state: dict, changes: Optional[dict] = None, stages: Optional[di
     all_stages = merged.setdefault("stages", {})
     for key, patch in (stages or {}).items():
         record = dict(all_stages.get(key) or {})
+        if patch and all(record.get(field) == value for field, value in patch.items()):
+            continue  # nothing new: keep the record (and its timestamps) as is
         record.update(patch or {})
         status = record.get("status")
         record["updated_at"] = now
@@ -241,20 +314,27 @@ def update_workflow_state(
 
     Only the keys in `changes` (and the stage records in `stages`) are
     touched, so concurrent jobs that each update their own keys keep
-    each other's results.
+    each other's results. An update that changes nothing is not written.
+
+    The full state goes to the case's state file; audit_events only gets a
+    summary of what changed. If the state file cannot be written, the full
+    state is written to audit_events as before, so nothing is lost.
     """
+    case_id = str(case_id)
     with _STATE_LOCK:
         current = read_workflow_state(case_id)
         merged = merge_state(current, changes, stages)
-        audit(
-            case_id,
-            "case_workflow",
-            case_id,
-            action,
-            actor=actor,
-            new_value={key: merged.get(key) for key in WORKFLOW_KEYS},
-            reason=reason,
-        )
+        if all(merged.get(key) == current.get(key) for key in WORKFLOW_KEYS):
+            return current
+
+        if _save_state_file(case_id, merged):
+            audit_value = _audit_summary(current, merged)
+            entity = "case_workflow_change"
+        else:
+            audit_value = {key: merged.get(key) for key in WORKFLOW_KEYS}
+            entity = "case_workflow"
+        _STATE_CACHE[case_id] = copy.deepcopy(merged)
+        audit(case_id, entity, case_id, action, actor=actor, new_value=audit_value, reason=reason)
         return merged
 
 

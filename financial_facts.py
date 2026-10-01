@@ -626,6 +626,12 @@ def build_fact_ledger(rows: list[dict], corrections: Optional[dict] = None,
     return ledger, withheld
 
 
+def count_uncertain(rows: list[dict], corrections: Optional[dict] = None,
+                    resolutions: Optional[dict] = None) -> int:
+    """Number of facts still waiting for the user (cheap: no page text)."""
+    return sum(1 for row in rows if effective_fact(row, corrections, resolutions)["status"] == UNCERTAIN)
+
+
 def _page_excerpt(page_text: str, needles: list[str], width: int = 260) -> str:
     text = str(page_text or "")
     if not text:
