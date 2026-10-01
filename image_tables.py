@@ -186,6 +186,9 @@ def _warp_page_by(gray: np.ndarray, corners: np.ndarray) -> Optional[np.ndarray]
     rectangle (a flat sheet photographed at an angle is one plane, so the
     same correction straightens everything printed on it)."""
     tl, tr, br, bl = corners
+    # Already an upright rectangle (a scan, a screenshot): nothing to correct.
+    if max(abs(tl[0] - bl[0]), abs(tr[0] - br[0]), abs(tl[1] - tr[1]), abs(bl[1] - br[1])) < 6:
+        return None
     rect_w = float(max(np.linalg.norm(tr - tl), np.linalg.norm(br - bl)))
     rect_h = float(max(np.linalg.norm(bl - tl), np.linalg.norm(br - tr)))
     if rect_w < 50 or rect_h < 50:
@@ -251,7 +254,10 @@ def _line_masks(gray: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     ink = _ink(gray)
     height, width = gray.shape
     horizontal = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (width // 25, 1)))
-    vertical = cv2.morphologyEx(ink, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, height // 30)))
+    # Dotted or dashed column rules: join the dots first (a short vertical
+    # closing does not merge stacked text lines, which are further apart).
+    dotted = cv2.morphologyEx(ink, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1, 11)))
+    vertical = cv2.morphologyEx(dotted, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, height // 30)))
     # Re-join line pieces broken by faint print or the photo.
     horizontal = cv2.dilate(horizontal, cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3)))
     vertical = cv2.dilate(vertical, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 15)))
