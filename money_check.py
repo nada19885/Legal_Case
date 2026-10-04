@@ -389,6 +389,27 @@ def apply(text: str, data: dict, result: dict, mark: bool = False) -> Tuple[str,
     return text, applied
 
 
+def table(data: dict, rows: List[dict]) -> List[dict]:
+    """The restated table after the corrections, one record per row (for a
+    DataFrame), with the opening / closing balances and totals as rows."""
+    out = []
+    if data.get("opening_balance"):
+        out.append({"date": "", "description": "opening balance", "balance": data["opening_balance"]})
+    for row in rows:
+        record = {"date": row.get("date", ""), "description": row.get("description_start", "")}
+        for field in ("amount", "debit", "credit", "balance", "quantity", "unit_price", "line_total"):
+            if row.get(field):
+                record[field] = row[field]
+        if row.get("description_amounts"):
+            record["amounts in description"] = ", ".join(str(a) for a in row["description_amounts"])
+        out.append(record)
+    for name in ("closing_balance", "total_debit", "total_credit", "total_amount", "subtotal", "tax", "grand_total"):
+        if data.get(name):
+            out.append({"date": "", "description": name.replace("_", " "),
+                        "balance" if name == "closing_balance" else "amount": data[name]})
+    return out
+
+
 # ---------------------------------------------------------------------------
 # The page
 # ---------------------------------------------------------------------------
@@ -402,6 +423,6 @@ def run(text: str, text_llm: TextLLM, mark: bool = False) -> dict:
     result = check_and_correct(data)
     new_text, applied = apply(text, data, result, mark)
     return {"text": new_text, "corrections": applied, "unresolved": result["unresolved"],
-            "checks": result["checks"], "data": data,
+            "checks": result["checks"], "data": data, "table": table(data, result["rows"]),
             "summary": {"checks": len(result["checks"]), "passed": sum(c["ok"] for c in result["checks"]),
                         "corrected": sum(c["applied"] for c in applied), "unresolved": len(result["unresolved"])}}

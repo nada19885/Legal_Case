@@ -487,7 +487,7 @@ def process_page(page: dict, vision: VisionCall, text_llm: TextLLM, document_so_
            "document_type": final["document_type"], "headings": final["headings"],
            "has_text_layer": bool(page.get("text_layer")), "text_layer_quality": quality, "errors": errors,
            "vision_calls": len(jobs) + extra_calls, "seconds": round(time.time() - started, 1),
-           "calculator": {k: calculator[k] for k in ("corrections", "unresolved", "checks", "summary")
+           "calculator": {k: calculator[k] for k in ("table", "corrections", "unresolved", "checks", "summary")
                           if k in calculator} if calculator else None}
     if debug:
         out["pictures"] = {(f"{name} / {variant_name}" if len(page["regions"]) > 1 else variant_name): _png(picture)

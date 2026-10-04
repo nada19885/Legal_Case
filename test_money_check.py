@@ -84,6 +84,10 @@ check("correct values are left alone",
       "SAR250.00" in out["text"] and "| ٣٠٠.٠٠ | ٣٠٠.٠٩" in out["text"] and "٢٤/١٠/١٢" in out["text"])
 check("after the corrections every check passes (balance, totals, opening -> closing)",
       all(c["ok"] for c in out["checks"] if c["check"] != "amount in description") and not out["unresolved"])
+check("the restated table is returned with the corrected values, one row per transaction",
+      [r.get("amount") for r in out["table"] if r["date"]] == ["٣٠٠.٠٠", "٢٥٠.٠٠", "-٣٠٠.٠٠"]
+      and out["table"][0]["description"] == "opening balance"
+      and out["table"][3]["amounts in description"] == "SAR300.00")
 check("every correction keeps what was read and why",
       all(c["read"] and c["reason"] and c["applied"] for c in out["corrections"]))
 
