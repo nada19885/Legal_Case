@@ -152,3 +152,47 @@ def photo_statement(seed: int = 1) -> Tuple[np.ndarray, List[dict]]:
 
 def scale_truth(truth: List[dict], factor: float) -> List[dict]:
     return [dict(item, box=tuple(int(v * factor) for v in item["box"])) for item in truth]
+
+
+# ---------------------------------------------------------------------------
+# A stand-in vision model for the multi-view financial reader: it answers in
+# the format each view is asked for, with known misreadings injected.
+# ---------------------------------------------------------------------------
+import json  # noqa: E402
+
+TRUE = [list(r) for r in STATEMENT]          # date, description, debit, credit, balance
+ARABIC = str.maketrans("0123456789,.", "٠١٢٣٤٥٦٧٨٩٬٫")
+
+
+def rows_for(style):
+    rows = [list(r) for r in TRUE]
+    if style == "json_rows":                     # original: Arabic-Indic digits for every figure
+        rows = [[c.translate(ARABIC) if any(ch.isdigit() for ch in c) else c for c in r] for r in rows]
+        rows[4][4] = "٩٬٦٤٤٫٥٠"                  # Rent balance 9,614.50 misread as 9,644.50
+    if style == "lines":
+        rows[3][3] = "8,750.00"                  # Salary credit misread in this view only
+        rows[4][4] = "9,814.50"                  # Rent balance: a third different reading
+        del rows[6]                              # Utility bill row skipped
+    if style == "json_named":
+        rows[4][4] = "9,614.50"
+    for r in rows:
+        if r[1] == "Interest":
+            r[3] = "12.75"                       # all three views read 12.25 as 12.75
+    return rows
+
+
+def statement_stand_in(prompt, png_bytes):
+    if "describe its layout" in prompt:
+        return json.dumps({"financial": True, "kind": "bank statement", "currency": "SAR",
+                           "tables": [{"columns": list(STATEMENT_HEADERS)}]})
+    if "one line per row" in prompt:
+        lines = [" | ".join(["T1", "transaction"] + r) for r in rows_for("lines")]
+        return "\n".join(lines + ["CONTEXT | Account | 0123456789"])
+    if '"values"' in prompt:
+        return json.dumps({"rows": [{"table": 1, "type": "transaction",
+                                     "values": dict(zip(STATEMENT_HEADERS, r))} for r in rows_for("json_named")],
+                           "context": {"Account": "0123456789"}})
+    return json.dumps({"rows": [{"table": 1, "type": "transaction", "cells": r} for r in rows_for("json_rows")],
+                       "context": {"account": "٠١٢٣٤٥٦٧٨٩"}})
+
+

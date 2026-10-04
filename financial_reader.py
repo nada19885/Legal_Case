@@ -565,11 +565,11 @@ def read_financial_page(image_bytes: bytes, vision: VisionCall, views: Tuple[str
     for view in names:
         cuts = strips(pictures[view], lines_per_strip)
         for number, (y0, y1) in enumerate(cuts, start=1):
-            jobs.append((view, number, len(cuts), pictures[view][y0:y1]))
+            jobs.append((view, number, len(cuts), pictures[view][y0:y1], (y0, y1, pictures[view].shape[0])))
     started = time.time()
 
     def run(job):
-        view, number, total, picture = job
+        view, number, total, picture, _ = job
         style = VIEW_STYLES.get(view, "json_rows")
         prompt = read_prompt(style, tables, f"{number} of {total}")
         try:
@@ -584,10 +584,12 @@ def read_financial_page(image_bytes: bytes, vision: VisionCall, views: Tuple[str
     per_view: Dict[str, List[List[dict]]] = {v: [] for v in names}
     contexts: Dict[str, Dict[str, str]] = {v: {} for v in names}
     errors = []
-    for (view, number, total, picture), answer, error in answers:
+    for (view, number, total, picture, (y0, y1, height)), answer, error in answers:
         if error:
             errors.append(f"{view} part {number}: {error}")
         rows, context = parse_reading(VIEW_STYLES.get(view, "json_rows"), answer, tables)
+        for index, row in enumerate(rows):       # where the row was read: phase 2 crops it from there
+            row["where"] = {"strip": number, "pos": index, "of": len(rows), "y0": y0, "y1": y1, "height": height}
         per_view[view].append(rows)
         for name, value in context.items():
             contexts[view].setdefault(name, value)
@@ -614,7 +616,8 @@ def read_financial_page(image_bytes: bytes, vision: VisionCall, views: Tuple[str
             cells = [vote({v: r["cells"][i] for v, r in slot.items() if i < len(r["cells"])}, names)
                      for i in range(width)]
             rows.append({"type": types["raw"] or "transaction", "cells": cells,
-                         "seen_in": [v for v in names if v in slot]})
+                         "seen_in": [v for v in names if v in slot],
+                         "where": {v: r["where"] for v, r in slot.items() if "where" in r}})
         decimals = table_decimals([canon(c["raw"]) for r in rows for c in r["cells"]]) or 2
         roles, notes = _roles(headers, rows, decimals)
         for row in rows:
@@ -633,7 +636,7 @@ def read_financial_page(image_bytes: bytes, vision: VisionCall, views: Tuple[str
                     if fact["raw"]:
                         fact["status"] = "needs_check"
                         fact["reasons"].append("row not seen in " + ", ".join(missing))
-            facts_rows.append({"type": row["type"], "seen_in": row["seen_in"],
+            facts_rows.append({"type": row["type"], "seen_in": row["seen_in"], "where": row["where"],
                                "arithmetic": row.get("arithmetic"), "notes": row.get("notes", []), "facts": facts})
         out_tables.append({"headers": headers, "roles": roles, "decimals": decimals, "check": check,
                            "notes": notes, "rows": facts_rows})
@@ -675,9 +678,16 @@ def facts_table(page: Dict[str, Any], table: int = 0) -> List[dict]:
         record: Dict[str, Any] = {"#": number, "type": row["type"]}
         for role, fact in row["facts"].items():
             record[role] = fact["raw"]
-        flagged = {role: fact for role, fact in row["facts"].items() if fact["status"] != "verified"}
-        record["status"] = "verified" if not flagged else "check: " + "; ".join(
-            f"{role} ({', '.join(fact['reasons'])})" for role, fact in flagged.items())
+        flagged = {role: fact for role, fact in row["facts"].items()
+                   if fact["raw"] and fact["status"] not in ("verified", "reverified")}
+        changed = [role for role, fact in row["facts"].items() if fact["status"] == "reverified"]
+        if flagged:
+            record["status"] = "; ".join(
+                f"{role}: {fact['status'].replace('_', ' ')} "
+                f"({(fact.get('verification') or {}).get('decision') or ', '.join(fact['reasons'])})"
+                for role, fact in flagged.items())
+        else:
+            record["status"] = "verified" + (f" (re-read: {', '.join(changed)})" if changed else "")
         records.append(record)
     return records
 
