@@ -189,6 +189,25 @@ pp.consolidate({"original": "x"}, clean, recording_llm, "digital")
 check("the consolidation is told when the text layer's numbers are exact",
       seen_payloads[-1][1]["text_layer_quality"] == "clean" and "18 -10 -2024" in seen_payloads[-1][1]["pdf_text_layer"])
 
+# --- the calculator runs on the final text of money pages -------------------------------
+import test_money_check as tmc                            # noqa: E402
+
+
+def merge_then_structure(prompt, payload):
+    if "Copy the money figures" in prompt:
+        return tmc.DATA_26
+    return {"text": tmc.PAGE_26, "uncertain": [], "corrections": [], "document_type": "bank statement",
+            "headings": []}
+
+
+calc_page = pp.process_page(page, statement_vision, merge_then_structure)
+check("on a money page the calculator corrects the merged text (-٢٠٠٫٠٠ -> -٣٠٠٫٠٠)",
+      "-٣٠٠.٠٠ | ٢٥٠.٠٩" in calc_page["final_text"] and calc_page["calculator"]["summary"]["corrected"] == 3)
+check("calculator corrections are listed with what was read",
+      any(c["from"] == "-٢٠٠.٠٠" and c["why"].startswith("calculator") for c in calc_page["corrections"]))
+no_calc = pp.process_page(page, statement_vision, merge_then_structure, calculate=False)
+check("the calculator can be switched off", "-٢٠٠.٠٠" in no_calc["final_text"] and no_calc["calculator"] is None)
+
 print()
 if failures:
     print(f"{len(failures)} check(s) failed: {failures}")

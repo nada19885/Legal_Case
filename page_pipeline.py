@@ -25,6 +25,10 @@ Location: lib/python/legal_platform/page_pipeline.py
                  words and sentences may be repaired; numbers, dates, IDs and
                  IBANs are only chosen from what was read, never invented;
                  values the readings disagree on are listed as uncertain.
+  6. calculator  On pages with money figures, money_check verifies the final
+                 text by arithmetic (running balance, totals, amounts in
+                 descriptions, invoices) and writes in only the corrections
+                 the arithmetic proves; the rest is listed as uncertain.
 
 The models are passed in: vision(prompt, png) -> text and
 text_llm(system_prompt, payload) -> dict (legal_platform.llm.complete_json).
@@ -310,19 +314,20 @@ def numbers_pass(picture: np.ndarray, vision: VisionCall, bands: int = 3) -> Tup
     height = picture.shape[0]
     overlap = int(0.06 * height)
     step = height // bands
-    out, errors = [], []
-    for number in range(bands):
+
+    def read_band(number: int) -> Tuple[int, str, str]:
         top, bottom = max(0, number * step - overlap), min(height, (number + 1) * step + overlap)
-        band = picture[top:bottom]
-        band = cv2.resize(band, None, fx=1.6, fy=1.6, interpolation=cv2.INTER_CUBIC)
+        band = cv2.resize(picture[top:bottom], None, fx=1.6, fy=1.6, interpolation=cv2.INTER_CUBIC)
         try:
             answer = vision(NUMBERS_PROMPT.format(band=f"band {number + 1} of {bands}, top to bottom"), _png(band))
-            answer = re.sub(r"<think>.*?</think>", "", str(answer or ""), flags=re.S).strip()
-            if answer and answer.upper() != "NONE":
-                out.append(f"[band {number + 1}]\n{answer}")
+            return number, re.sub(r"<think>.*?</think>", "", str(answer or ""), flags=re.S).strip(), ""
         except Exception as error:
-            errors.append(f"numbers band {number + 1}: {type(error).__name__}: {error}")
-    return "\n".join(out), errors
+            return number, "", f"numbers band {number + 1}: {type(error).__name__}: {error}"
+
+    with ThreadPoolExecutor(max_workers=bands) as pool:          # the bands are read at the same time
+        answers = sorted(pool.map(read_band, range(bands)))
+    out = [f"[band {n + 1}]\n{a}" for n, a, _ in answers if a and a.upper() != "NONE"]
+    return "\n".join(out), [e for _, _, e in answers if e]
 
 
 # ---------------------------------------------------------------------------
@@ -396,7 +401,8 @@ def consolidate(readings: Dict[str, str], text_layer: str, text_llm: TextLLM, ki
 # The document
 # ---------------------------------------------------------------------------
 def process_page(page: dict, vision: VisionCall, text_llm: TextLLM, document_so_far: str = "",
-                 parallel: int = 3, photo_variants: int = 1, debug: bool = False, numbers: bool = True) -> dict:
+                 parallel: int = 3, photo_variants: int = 1, debug: bool = False, numbers: bool = True,
+                 calculate: bool = True, mark_calculated: bool = False) -> dict:
     """One page: every region classified, prepared, read in each variant,
     then the page consolidated."""
     started = time.time()
@@ -460,11 +466,29 @@ def process_page(page: dict, vision: VisionCall, text_llm: TextLLM, document_so_
         final = consolidate(readings, page.get("text_layer", ""), text_llm, regions_out[0]["kind"])
         if final.get("error"):
             errors.append(final["error"])
+    # The calculator: on pages with money figures, the arithmetic checks the
+    # final text and corrects only what it proves.
+    calculator = None
+    if calculate and looks_financial([final["text"]]):
+        from . import money_check
+        try:
+            calculator = money_check.run(final["text"], text_llm, mark=mark_calculated)
+            final["text"] = calculator["text"]
+            final["corrections"] = list(final["corrections"]) + [
+                {"from": c["read"], "to": c["corrected"], "why": "calculator: " + c["reason"]}
+                for c in calculator["corrections"] if c.get("applied")]
+            final["uncertain"] = list(final["uncertain"]) + [
+                {"value": u.get("read"), "readings": [u.get("arithmetic_says")] if u.get("arithmetic_says") else [],
+                 "reason": "calculator: " + u["reason"]} for u in calculator["unresolved"]]
+        except Exception as error:
+            errors.append(f"calculator: {type(error).__name__}: {error}")
     out = {"page": page["page"], "regions": regions_out, "readings": readings, "final_text": final["text"],
            "uncertain": final["uncertain"], "corrections": final["corrections"],
            "document_type": final["document_type"], "headings": final["headings"],
            "has_text_layer": bool(page.get("text_layer")), "text_layer_quality": quality, "errors": errors,
-           "vision_calls": len(jobs) + extra_calls, "seconds": round(time.time() - started, 1)}
+           "vision_calls": len(jobs) + extra_calls, "seconds": round(time.time() - started, 1),
+           "calculator": {k: calculator[k] for k in ("corrections", "unresolved", "checks", "summary")
+                          if k in calculator} if calculator else None}
     if debug:
         out["pictures"] = {(f"{name} / {variant_name}" if len(page["regions"]) > 1 else variant_name): _png(picture)
                            for (name, kind, variant_name, picture), _, _ in results}
@@ -474,7 +498,7 @@ def process_page(page: dict, vision: VisionCall, text_llm: TextLLM, document_so_
 def process_pdf(data: bytes, filename: str, vision: VisionCall, text_llm: TextLLM,
                 pages: Optional[List[int]] = None, parallel: int = 3, photo_variants: int = 1,
                 debug: bool = False, progress: Optional[Callable[[dict], None]] = None,
-                numbers: bool = True) -> List[dict]:
+                numbers: bool = True, calculate: bool = True, mark_calculated: bool = False) -> List[dict]:
     """Every page of a PDF (or one image file); progress(page_result) is
     called after each page."""
     results = []
@@ -482,7 +506,7 @@ def process_pdf(data: bytes, filename: str, vision: VisionCall, text_llm: TextLL
     for page in pdf_pages(data, filename, pages):
         try:
             result = process_page(page, vision, text_llm, "\n".join(seen[-12:]), parallel, photo_variants, debug,
-                                  numbers)
+                                  numbers, calculate, mark_calculated)
         except Exception as error:
             result = {"page": page["page"], "error": f"{type(error).__name__}: {error}", "final_text": "",
                       "uncertain": [], "corrections": [], "readings": {}, "regions": []}
