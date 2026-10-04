@@ -130,8 +130,10 @@ Return JSON only:
   "subtotal": "", "tax": "", "grand_total": ""
 }
 Rows are in page order; one entry per transaction or invoice line (a
-description spread over several lines is one row). Leave a field empty when
-the page does not show it.
+description spread over several lines is one row). The opening / previous
+balance, the closing / final balance and total lines are NOT rows: put them
+in opening_balance, closing_balance and the total fields. Leave a field empty
+when the page does not show it.
 """.strip()
 
 
@@ -143,7 +145,7 @@ def structure(text: str, text_llm: TextLLM) -> dict:
     if not isinstance(answer, dict):
         return {"rows": []}
     answer["rows"] = [r for r in answer.get("rows") or [] if isinstance(r, dict)]
-    return answer
+    return lift_summary_rows(answer)
 
 
 # ---------------------------------------------------------------------------
@@ -167,9 +169,41 @@ def _set(row: dict, field: str, value: Decimal) -> None:
     row[field] = write_like(value, raw)
 
 
+_OPENING = re.compile(r"(رصيد\s*(ال)?افتتاح|(ال)?رصيد\s*(ال)?سابق|(ال)?رصيد\s*(ال)?مدور|opening\s*balance|"
+                      r"previous\s*balance|brought\s*forward|balance\s*b/?f)", re.I)
+_CLOSING = re.compile(r"((ال)?رصيد\s*(ال)?(نهائي|ختامي|حالي|اقفال|إقفال)|closing\s*balance|"
+                      r"carried\s*forward|balance\s*c/?f|ending\s*balance)", re.I)
+_TOTAL = re.compile(r"(مجموع|الإجمالي|الاجمالي|إجمالي|اجمالي|^\s*total|\btotal\b)", re.I)
+
+
+def lift_summary_rows(data: dict) -> dict:
+    """Opening / closing balances and totals that the copy put among the
+    transactions are taken out of the rows and used as such (whatever the
+    language), so they are never checked or corrected as movements."""
+    data = dict(data)
+    rows = []
+    for row in data.get("rows") or []:
+        text = f"{row.get('description_start', '')} {row.get('date', '')}"
+        value = row.get("balance") or row.get("amount") or row.get("credit") or row.get("debit")
+        if _OPENING.search(text):
+            if not data.get("opening_balance") and value:
+                data["opening_balance"] = value
+            continue
+        if _CLOSING.search(text):
+            if not data.get("closing_balance") and value:
+                data["closing_balance"] = value
+            continue
+        if _TOTAL.search(text) and not row.get("date"):
+            continue                                   # a total line; totals are read from their own fields
+        rows.append(row)
+    data["rows"] = rows
+    return data
+
+
 def check_and_correct(data: dict) -> dict:
     """Run every check, make the proven corrections, list the rest.
     Returns {checks, corrections, unresolved, rows}."""
+    data = lift_summary_rows(data)
     rows = [dict(r) for r in data.get("rows") or []]
     checks: List[dict] = []
     corrections: List[dict] = []
@@ -228,7 +262,8 @@ def check_and_correct(data: dict) -> dict:
             needed = after - before
             where = rows[i].get("description_start", "")
             # (a) the movement was misread: the balances on both sides are confirmed.
-            if field and confirmed_before(i) and confirmed_after(i):
+            # A movement of zero is never a correction: such a row is not a transaction.
+            if field and needed != 0 and confirmed_before(i) and confirmed_after(i):
                 if field == "amount":
                     value = abs(needed) if unsigned else needed
                 elif field == "debit" and needed < 0:
@@ -368,7 +403,7 @@ def _row_spans(text: str, rows: List[dict]) -> List[Tuple[int, int]]:
 def apply(text: str, data: dict, result: dict, mark: bool = False) -> Tuple[str, List[dict]]:
     """The page text with the proven corrections written in place; each
     correction records whether it was found in the text."""
-    rows = data.get("rows") or []
+    rows = lift_summary_rows(data).get("rows") or []
     spans = _row_spans(text, rows)
     applied = []
     for correction in result["corrections"]:
@@ -392,6 +427,8 @@ def apply(text: str, data: dict, result: dict, mark: bool = False) -> Tuple[str,
 def table(data: dict, rows: List[dict]) -> List[dict]:
     """The restated table after the corrections, one record per row (for a
     DataFrame), with the opening / closing balances and totals as rows."""
+    data = lift_summary_rows(dict(data, rows=rows))
+    rows = data["rows"]
     out = []
     if data.get("opening_balance"):
         out.append({"date": "", "description": "opening balance", "balance": data["opening_balance"]})

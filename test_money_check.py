@@ -91,6 +91,20 @@ check("the restated table is returned with the corrected values, one row per tra
 check("every correction keeps what was read and why",
       all(c["read"] and c["reason"] and c["applied"] for c in out["corrections"]))
 
+# --- the copy puts the opening balance and a total among the rows (as the real model did) ----
+import copy                                                     # noqa: E402
+messy = copy.deepcopy(DATA_26)
+messy["opening_balance"] = ""
+messy["rows"].insert(0, {"date": "", "description_start": "رصيد الافتتاح", "amount": "٠.٠٩", "balance": "٠.٠٩"})
+messy["rows"].append({"date": "", "description_start": "١ مجموع الحركات المدينة", "amount": "-٣٠٠.٠٠"})
+out = mc.run(PAGE_26, stand_in(messy))
+fixes = {(c["field"], c["read"]): c["corrected"] for c in out["corrections"]}
+check("an opening balance put among the rows is used as the opening balance, never 'corrected'",
+      ("amount", "٠.٠٩") not in fixes and out["table"][0] == {"date": "", "description": "opening balance",
+                                                               "balance": "٠.٠٩"})
+check("the real corrections are still made with a messy copy",
+      fixes.get(("amount", "-٢٠٠.٠٠")) == "-٣٠٠.٠٠" and not out["unresolved"])
+
 # --- a debit / credit statement in Latin digits, a misread balance ------------------------
 STATEMENT = """Date Description Debit Credit Balance
 01/03/2024 Opening deposit  5,000.00 5,000.00
