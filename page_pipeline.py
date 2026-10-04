@@ -232,11 +232,36 @@ image, never copy a value from here that is not visible):
 """.strip()
 
 
-def _context_text(text_layer: str, document_so_far: str) -> str:
+# Characters that never occur in normal Arabic text: a PDF font with a broken
+# character map (its numbers are usually stored reversed as well).
+_BROKEN_GLYPHS = re.compile(r"[ʄʈȊɢɲ؈ݍݏݝࢭڲ٭ڈٰܵ]")
+
+
+def text_layer_quality(text: str) -> str:
+    """'none', 'clean' (its numbers are exact) or 'damaged' (broken glyphs:
+    its numbers may be reversed or scrambled, only its words are a hint)."""
+    if not text or len(text.split()) < 5:
+        return "none"
+    broken = len(_BROKEN_GLYPHS.findall(text))
+    return "damaged" if broken >= 3 or broken > 0.002 * len(text) else "clean"
+
+
+def hint_text(text: str, quality: str) -> str:
+    """The text layer as it may be shown to the models: a damaged layer has
+    its digits masked, so a reversed number can never be copied from it."""
+    if quality == "damaged":
+        return re.sub(r"[0-9٠-٩۰-۹]", "#", text)
+    return text
+
+
+def _context_text(text_layer: str, document_so_far: str, quality: str = "clean") -> str:
     parts_: List[str] = []
-    if text_layer:
-        parts_.append("The PDF's own text for this page (may have broken letters or reversed numbers):\n"
-                      + text_layer[:CONTEXT_CHARS])
+    if text_layer and quality != "none":
+        label = ("The PDF's own text for this page. Its numbers are exact copies of the document; "
+                 "its Arabic words may have letters swapped:" if quality == "clean" else
+                 "The PDF's own text for this page, with garbled letters; its digits are hidden (#) because "
+                 "they are stored reversed. Use it for words only and read every number from the image:")
+        parts_.append(label + "\n" + hint_text(text_layer, quality)[:CONTEXT_CHARS])
     if document_so_far:
         parts_.append("Headings and document type seen on earlier pages:\n" + document_so_far[:1200])
     return CONTEXT_BLOCK.format(context="\n\n".join(parts_)) if parts_ else ""
@@ -258,14 +283,66 @@ def read_variant(picture: np.ndarray, vision: VisionCall, context: str) -> Tuple
     return ("\n\n".join(t for t in texts if t), errors) if len(pieces) > 1 else (texts[0], errors)
 
 
+NUMBERS_PROMPT = """
+This image is one band of a financial document page ({band}). Read ONLY the
+lines that contain a date, an amount or a balance, top to bottom, including
+small numbers standing alone at the edge of the page (an opening balance, a
+total). For each such line write one line:
+<date as printed> | <first words of the description> | <every number on the line, as printed, separated by ;>
+Copy digits exactly (Arabic-Indic digits stay Arabic-Indic, keep separators,
+signs and leading zeros). Each line has its own date: never repeat a date
+from another line. Use "?" for a character you cannot read. If the band has
+no such line, answer NONE.
+""".strip()
+
+_MONEY = re.compile(r"[0-9٠-٩][0-9٠-٩,٬]*[.٫][0-9٠-٩]{2,3}(?![0-9٠-٩])")
+
+
+def looks_financial(texts: List[str]) -> bool:
+    """A reading with several money figures (1,250.00 / ٣٠٠٫٠٠): the page
+    gets the extra numbers pass."""
+    return max((len(_MONEY.findall(t or "")) for t in texts), default=0) >= 3
+
+
+def numbers_pass(picture: np.ndarray, vision: VisionCall, bands: int = 3) -> Tuple[str, List[str]]:
+    """Dates and amounts re-read on enlarged horizontal bands: small,
+    isolated figures that a full-page transcription skips are read here."""
+    height = picture.shape[0]
+    overlap = int(0.06 * height)
+    step = height // bands
+    out, errors = [], []
+    for number in range(bands):
+        top, bottom = max(0, number * step - overlap), min(height, (number + 1) * step + overlap)
+        band = picture[top:bottom]
+        band = cv2.resize(band, None, fx=1.6, fy=1.6, interpolation=cv2.INTER_CUBIC)
+        try:
+            answer = vision(NUMBERS_PROMPT.format(band=f"band {number + 1} of {bands}, top to bottom"), _png(band))
+            answer = re.sub(r"<think>.*?</think>", "", str(answer or ""), flags=re.S).strip()
+            if answer and answer.upper() != "NONE":
+                out.append(f"[band {number + 1}]\n{answer}")
+        except Exception as error:
+            errors.append(f"numbers band {number + 1}: {type(error).__name__}: {error}")
+    return "\n".join(out), errors
+
+
 # ---------------------------------------------------------------------------
 # 5. Consolidation and correction
 # ---------------------------------------------------------------------------
 CONSOLIDATE_PROMPT = """
+/no_think
 You consolidate the transcriptions of ONE page of a legal / financial case file.
 The payload gives several readings of the same page (the same image prepared in
-different ways) and, when available, the PDF's own text layer (often garbled:
-broken Arabic letters, reversed numbers - use it only as supporting evidence).
+different ways) and, when available, the PDF's own text layer:
+- text_layer_quality "clean": its NUMBERS are exact copies of the document
+  (dates, IDs, amounts, phone numbers): when a reading differs from it on a
+  number, use the text layer's value. Its Arabic words may have letters
+  swapped (e.g. "املدعي" for "المدعي"): take words from the readings.
+- text_layer_quality "damaged": its digits are hidden (#); use it for words
+  only.
+A reading named "numbers" is a focused re-read of dates and amounts on
+enlarged bands of the image: for dates, amounts and balances it is the most
+reliable reading; use it to fill numbers the full readings missed (an opening
+balance, a total) and to correct row dates.
 
 Produce one final, faithful text of the page:
 - Keep the page's content and order; tables stay markdown tables.
@@ -295,8 +372,9 @@ Return JSON only:
 
 
 def consolidate(readings: Dict[str, str], text_layer: str, text_llm: TextLLM, kind: str) -> dict:
-    payload = {"page_kind": kind, "readings": readings,
-               "pdf_text_layer": text_layer[:CONTEXT_CHARS] if text_layer else ""}
+    quality = text_layer_quality(text_layer)
+    payload = {"page_kind": kind, "readings": readings, "text_layer_quality": quality,
+               "pdf_text_layer": hint_text(text_layer, quality)[:CONTEXT_CHARS] if quality != "none" else ""}
     try:
         answer = text_llm(CONSOLIDATE_PROMPT, payload)
     except Exception as error:
@@ -318,11 +396,12 @@ def consolidate(readings: Dict[str, str], text_layer: str, text_llm: TextLLM, ki
 # The document
 # ---------------------------------------------------------------------------
 def process_page(page: dict, vision: VisionCall, text_llm: TextLLM, document_so_far: str = "",
-                 parallel: int = 3, photo_variants: int = 1, debug: bool = False) -> dict:
+                 parallel: int = 3, photo_variants: int = 1, debug: bool = False, numbers: bool = True) -> dict:
     """One page: every region classified, prepared, read in each variant,
     then the page consolidated."""
     started = time.time()
-    context = _context_text(page.get("text_layer", ""), document_so_far)
+    quality = text_layer_quality(page.get("text_layer", ""))
+    context = _context_text(page.get("text_layer", ""), document_so_far, quality)
     jobs = []
     regions_out = []
     for name, image in page["regions"]:
@@ -346,6 +425,22 @@ def process_page(page: dict, vision: VisionCall, text_llm: TextLLM, document_so_
         key = variant_name if len(page["regions"]) == 1 else f"{name} / {variant_name}"
         readings[key] = text
         errors += [f"{key}: {p}" for p in problems]
+
+    # Money tables: dates and amounts re-read on enlarged bands of the first variant.
+    extra_calls = 0
+    if numbers:
+        for region in regions_out:
+            own = [t for (n, _, _, _), t, _ in results if n == region["region"]]
+            if not looks_financial(own):
+                continue
+            first = next(p for (n, _, _, p), _, _ in results if n == region["region"])
+            text, problems = numbers_pass(first, vision)
+            extra_calls += 3
+            key = "numbers" if len(page["regions"]) == 1 else f"{region['region']} / numbers"
+            if text:
+                readings[key] = text
+            errors += problems
+            region["numbers_pass"] = True
     if len(page["regions"]) > 1:
         # Several pictures: consolidate each picture's variants, keep page order.
         texts, uncertain, corrections, types, headings = [], [], [], [], []
@@ -368,8 +463,8 @@ def process_page(page: dict, vision: VisionCall, text_llm: TextLLM, document_so_
     out = {"page": page["page"], "regions": regions_out, "readings": readings, "final_text": final["text"],
            "uncertain": final["uncertain"], "corrections": final["corrections"],
            "document_type": final["document_type"], "headings": final["headings"],
-           "has_text_layer": bool(page.get("text_layer")), "errors": errors,
-           "vision_calls": len(jobs), "seconds": round(time.time() - started, 1)}
+           "has_text_layer": bool(page.get("text_layer")), "text_layer_quality": quality, "errors": errors,
+           "vision_calls": len(jobs) + extra_calls, "seconds": round(time.time() - started, 1)}
     if debug:
         out["pictures"] = {(f"{name} / {variant_name}" if len(page["regions"]) > 1 else variant_name): _png(picture)
                            for (name, kind, variant_name, picture), _, _ in results}
@@ -378,14 +473,16 @@ def process_page(page: dict, vision: VisionCall, text_llm: TextLLM, document_so_
 
 def process_pdf(data: bytes, filename: str, vision: VisionCall, text_llm: TextLLM,
                 pages: Optional[List[int]] = None, parallel: int = 3, photo_variants: int = 1,
-                debug: bool = False, progress: Optional[Callable[[dict], None]] = None) -> List[dict]:
+                debug: bool = False, progress: Optional[Callable[[dict], None]] = None,
+                numbers: bool = True) -> List[dict]:
     """Every page of a PDF (or one image file); progress(page_result) is
     called after each page."""
     results = []
     seen: List[str] = []
     for page in pdf_pages(data, filename, pages):
         try:
-            result = process_page(page, vision, text_llm, "\n".join(seen[-12:]), parallel, photo_variants, debug)
+            result = process_page(page, vision, text_llm, "\n".join(seen[-12:]), parallel, photo_variants, debug,
+                                  numbers)
         except Exception as error:
             result = {"page": page["page"], "error": f"{type(error).__name__}: {error}", "final_text": "",
                       "uncertain": [], "corrections": [], "readings": {}, "regions": []}

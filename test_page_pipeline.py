@@ -139,6 +139,56 @@ check("a failed consolidation keeps the longest reading and says so",
 image_only = pp.process_pdf(png(email), "shot.png", vision, text_llm)
 check("an image file is one page", len(image_only) == 1 and image_only[0]["regions"][0]["kind"] == "digital")
 
+# --- text layers: clean numbers are exact, damaged numbers are hidden ---------------
+damaged = ("قرارات الدائرة الأوڲʄ لݏجنة المنازعات المصرفية رقم القرار ٥١٥/٥٢٠٢/د Ȋسم الله الرحمن الرحيم "
+           "اݍحمد ھلل رب العالم؈ن مبلغٍ مقـداره (٠٥٢) رʈـال ࢭʏ حسابها")
+clean = "صحيفة دعوى املدعي هدى رقم الهوية 1027476025 تاريخ بداية التجميد 18 -10 -2024 املبلغ محل التجميد 250"
+check("a text layer with broken glyphs is damaged, an ordinary one clean",
+      pp.text_layer_quality(damaged) == "damaged" and pp.text_layer_quality(clean) == "clean"
+      and pp.text_layer_quality("") == "none")
+check("a damaged layer's digits are hidden from the models (a reversed number cannot be copied)",
+      "٥٢٠٢" not in pp.hint_text(damaged, "damaged") and "#" in pp.hint_text(damaged, "damaged")
+      and "18 -10 -2024" in pp.hint_text(clean, "clean"))
+check("the reader is told a clean layer's numbers are exact, a damaged layer's are hidden",
+      "exact copies" in pp._context_text(clean, "", "clean") and "digits are hidden" in pp._context_text(damaged, "", "damaged"))
+
+# --- the numbers pass on money tables ------------------------------------------------
+statement = cv2.cvtColor(tp.photo_statement()[0], cv2.COLOR_BGR2GRAY)
+calls = []
+
+
+def statement_vision(prompt, picture):
+    calls.append(prompt)
+    if "is one band" in prompt:
+        return "13/10 | transfer | 300.00; 300.09"
+    return "Date Description Amount Balance\n13/10 transfer 300.00 300.09\n18/10 transfer 250.00 550.09\n22/10 ATM -300.00 250.09"
+
+
+seen_payloads = []
+
+
+def recording_llm(prompt, payload):
+    seen_payloads.append((prompt, payload))
+    return {"text": "statement", "uncertain": [], "corrections": [], "document_type": "bank statement", "headings": []}
+
+
+page = {"page": 1, "image": cv2.cvtColor(statement, cv2.COLOR_GRAY2BGR), "text_layer": "",
+        "regions": [("whole page", cv2.cvtColor(statement, cv2.COLOR_GRAY2BGR))]}
+done = pp.process_page(page, statement_vision, recording_llm)
+check("a page with money figures gets the numbers pass on three enlarged bands",
+      sum("is one band" in c for c in calls) == 3 and done["regions"][0].get("numbers_pass"))
+check("the numbers reading goes to the consolidation, which is told to prefer it for figures",
+      "numbers" in seen_payloads[-1][1]["readings"] and "most" in seen_payloads[-1][0]
+      and "reliable reading" in seen_payloads[-1][0])
+check("the consolidation runs without hidden thinking", seen_payloads[-1][0].startswith("/no_think"))
+calls.clear()
+plain_page = {"page": 2, "image": page["image"], "text_layer": "", "regions": page["regions"]}
+pp.process_page(plain_page, lambda p, b: (calls.append(p), "A letter with no figures.")[1], recording_llm)
+check("a page without money figures skips the numbers pass", not any("is one band" in c for c in calls))
+pp.consolidate({"original": "x"}, clean, recording_llm, "digital")
+check("the consolidation is told when the text layer's numbers are exact",
+      seen_payloads[-1][1]["text_layer_quality"] == "clean" and "18 -10 -2024" in seen_payloads[-1][1]["pdf_text_layer"])
+
 print()
 if failures:
     print(f"{len(failures)} check(s) failed: {failures}")
