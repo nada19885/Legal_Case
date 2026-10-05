@@ -2194,6 +2194,7 @@ async function openCase(caseId) {
     S.compareVersion = null;
     S.pleadingLang = null;
     S.accountingSelectedDocs = null;
+    S.accountingKnownDocs = null;
     // Every matter opens on its first tab, whatever was selected last time.
     S.tab = "home";
     S.agreementTab = "package";
@@ -2804,6 +2805,15 @@ function renderAccountingDocPicker(documents) {
   if (!S.accountingSelectedDocs) {
     S.accountingSelectedDocs = new Set(documents.map((doc) => doc.case_document_id));
   }
+  // Documents uploaded since the list was first shown are selected too, so
+  // a new PDF is never silently left out of the accounting.
+  if (!S.accountingKnownDocs) S.accountingKnownDocs = new Set(S.accountingSelectedDocs);
+  documents.forEach((doc) => {
+    if (!S.accountingKnownDocs.has(doc.case_document_id)) {
+      S.accountingKnownDocs.add(doc.case_document_id);
+      S.accountingSelectedDocs.add(doc.case_document_id);
+    }
+  });
 
   if (!documents.length) {
     html(target, `<p class="bsf-caption">${esc(t("no_documents_stored"))}</p>`);
