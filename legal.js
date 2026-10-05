@@ -1339,6 +1339,169 @@ const LANGUAGES = { en: "English", ar: "العربية" };
 const SESSION_ID = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
 /// END ///
 
+/* Personal workspace: dashboard and case workspace. */
+Object.assign(I18N.en, {
+  nav_dashboard: "My dashboard",
+  back_to_dashboard: "Back to my dashboard",
+  signed_in_with_dataiku: "Signed in",
+  sign_in_required: "Please sign in to Dataiku to use the workbench.",
+  dash_title: "My workspace",
+  dash_welcome: "Welcome, {user}",
+  dash_caption: "Your litigation cases and contract reviews. Only you can see them.",
+  dash_metric_cases: "Active cases",
+  dash_metric_attention: "Waiting for your review",
+  dash_metric_completed: "Completed",
+  dash_metric_contracts: "Contract reviews",
+  my_litigation_cases: "My litigation cases",
+  my_contract_reviews: "My contract reviews",
+  new_litigation_case: "+ New litigation case",
+  new_contract_review: "+ New contract review",
+  filter_all_statuses: "All stages",
+  show_archived: "Show archived",
+  progress_new: "New",
+  progress_documents_uploaded: "Documents uploaded",
+  progress_processing: "Processing",
+  progress_accounting_review: "Accounting review",
+  progress_legal_analysis: "Legal analysis",
+  progress_attorney_review: "Attorney review",
+  progress_ready_for_pleading: "Ready for pleading",
+  progress_completed: "Completed",
+  col_case_name: "Case name",
+  col_case_number: "Case number",
+  col_parties: "Client / opposing party",
+  col_case_type: "Case type",
+  col_last_updated: "Last updated",
+  col_stage: "Stage",
+  col_status: "Status",
+  col_contract_name: "Contract name",
+  col_contract_type: "Contract type",
+  col_counterparty: "Counterparty",
+  continue_case: "Continue",
+  continue_review: "Continue",
+  archive_case: "Archive",
+  restore_case: "Restore",
+  archive_confirm: "Archive this case? It leaves your dashboard and can be restored from \"Show archived\".",
+  case_archived: "Case archived.",
+  case_restored: "Case restored.",
+  no_cases_yet: "No litigation cases yet. Create one to start.",
+  no_archived_cases: "No archived cases.",
+  no_contracts_yet: "No contract reviews yet.",
+  no_archived_contracts: "No archived contract reviews.",
+  field_case_number: "Case number",
+  field_client: "Client",
+  field_opposing_party: "Opposing party",
+  field_description_optional: "Description (optional)",
+  create_case_and_upload: "Create case and add documents",
+  create_contract_review: "Create contract review",
+  last_updated_at: "Last updated {at}",
+  case_progress: "Case progress",
+  go_there: "Go",
+  metric_financial_pages: "Financial documents (pages)",
+  metric_financial_claims: "Financial claims",
+  metric_atomic_facts: "Atomic financial facts",
+  metric_pending_reviews: "Pending reviews",
+  col_file: "File",
+  col_pages: "Pages",
+  col_document_type: "Document type",
+  col_reading: "Reading",
+  col_accounting: "Used in accounting",
+  doc_pages_failed: "{count} page(s) could not be read",
+  doc_pages_to_check: "{count} page(s) to check",
+  doc_read_ok: "Read",
+  doc_not_checked_yet: "Not checked yet",
+  doc_financial_pages: "{count} financial page(s), {facts} fact(s)",
+  doc_no_financial_records: "No financial records",
+  preview: "Preview",
+  tab_home: "Overview",
+  tab_documents: "Documents & facts",
+  tab_accounting: "Accounting analysis",
+  tab_attorney_review: "Attorney review",
+  tab_legal_analysis: "Legal analysis",
+  tab_written_pleading: "Written pleading",
+  tab_case_discussion: "Case assistant",
+});
+
+Object.assign(I18N.ar, {
+  nav_dashboard: "لوحتي",
+  back_to_dashboard: "العودة إلى لوحتي",
+  signed_in_with_dataiku: "مسجّل الدخول",
+  sign_in_required: "يرجى تسجيل الدخول إلى Dataiku لاستخدام المنصة.",
+  dash_title: "مساحة عملي",
+  dash_welcome: "مرحبًا، {user}",
+  dash_caption: "قضاياك ومراجعات عقودك. لا يراها أحد غيرك.",
+  dash_metric_cases: "القضايا النشطة",
+  dash_metric_attention: "بانتظار مراجعتك",
+  dash_metric_completed: "مكتملة",
+  dash_metric_contracts: "مراجعات العقود",
+  my_litigation_cases: "قضاياي",
+  my_contract_reviews: "مراجعات عقودي",
+  new_litigation_case: "+ قضية جديدة",
+  new_contract_review: "+ مراجعة عقد جديدة",
+  filter_all_statuses: "جميع المراحل",
+  show_archived: "عرض المؤرشفة",
+  progress_new: "جديدة",
+  progress_documents_uploaded: "تم رفع المستندات",
+  progress_processing: "قيد المعالجة",
+  progress_accounting_review: "المراجعة المحاسبية",
+  progress_legal_analysis: "التحليل القانوني",
+  progress_attorney_review: "مراجعة المحامي",
+  progress_ready_for_pleading: "جاهزة للمذكرة",
+  progress_completed: "مكتملة",
+  col_case_name: "اسم القضية",
+  col_case_number: "رقم القضية",
+  col_parties: "العميل / الخصم",
+  col_case_type: "نوع القضية",
+  col_last_updated: "آخر تحديث",
+  col_stage: "المرحلة",
+  col_status: "الحالة",
+  col_contract_name: "اسم العقد",
+  col_contract_type: "نوع العقد",
+  col_counterparty: "الطرف الآخر",
+  continue_case: "متابعة",
+  continue_review: "متابعة",
+  archive_case: "أرشفة",
+  restore_case: "استعادة",
+  archive_confirm: "أرشفة هذه القضية؟ ستختفي من لوحتك ويمكن استعادتها من «عرض المؤرشفة».",
+  case_archived: "تمت أرشفة القضية.",
+  case_restored: "تمت استعادة القضية.",
+  no_cases_yet: "لا توجد قضايا بعد. أنشئ قضية للبدء.",
+  no_archived_cases: "لا توجد قضايا مؤرشفة.",
+  no_contracts_yet: "لا توجد مراجعات عقود بعد.",
+  no_archived_contracts: "لا توجد مراجعات عقود مؤرشفة.",
+  field_case_number: "رقم القضية",
+  field_client: "العميل",
+  field_opposing_party: "الخصم",
+  field_description_optional: "الوصف (اختياري)",
+  create_case_and_upload: "إنشاء القضية وإضافة المستندات",
+  create_contract_review: "إنشاء مراجعة العقد",
+  last_updated_at: "آخر تحديث {at}",
+  case_progress: "سير القضية",
+  go_there: "انتقال",
+  metric_financial_pages: "المستندات المالية (صفحات)",
+  metric_financial_claims: "الادعاءات المالية",
+  metric_atomic_facts: "الوقائع المالية الذرية",
+  metric_pending_reviews: "مراجعات معلّقة",
+  col_file: "الملف",
+  col_pages: "الصفحات",
+  col_document_type: "نوع المستند",
+  col_reading: "القراءة",
+  col_accounting: "مستخدم في المحاسبة",
+  doc_pages_failed: "تعذّرت قراءة {count} صفحة",
+  doc_pages_to_check: "{count} صفحة للتحقق",
+  doc_read_ok: "تمت القراءة",
+  doc_not_checked_yet: "لم يُفحص بعد",
+  doc_financial_pages: "{count} صفحة مالية، {facts} واقعة",
+  doc_no_financial_records: "لا توجد سجلات مالية",
+  preview: "معاينة",
+  tab_home: "نظرة عامة",
+  tab_documents: "المستندات والوقائع",
+  tab_accounting: "التحليل المحاسبي",
+  tab_attorney_review: "مراجعة المحامي",
+  tab_legal_analysis: "التحليل القانوني",
+  tab_written_pleading: "المذكرة المكتوبة",
+  tab_case_discussion: "مساعد القضية",
+});
+
 /* Financial fact review (page beside the table). */
 Object.assign(I18N.en, {
   review_claims_heading: "Financial claims found in these pages ({count}) — to verify, not evidence",
@@ -1469,6 +1632,8 @@ const S = {
   uploads: { documents: [], agreement: [] },
   jobs: {},                    // region -> { detail, current, total }
   accountingSelectedDocs: null, // Set of case_document_id, lazily defaulted to "all" per case
+  user: "",                    // the Dataiku user signed in
+  dash: { litigation: [], agreement_review: [], query: "", contractQuery: "", status: "", archived: false },
   reviewPageId: "",            // financial page shown beside the fact table
   pageExtractions: {},         // page_id -> stored extraction record (lazy)
 };
@@ -1502,8 +1667,8 @@ function applyLanguage() {
   });
 
   // Placeholders that have no text node of their own.
-  setPlaceholder("#library-search", S.workspace === "agreement_review"
-    ? "search_agreement_files" : "search_litigation_cases");
+  setPlaceholder("#library-search", "search_litigation_cases");
+  setPlaceholder("#contract-search", "search_agreement_files");
   setPlaceholder("#case-search", "search_inside_case");
   setPlaceholder("#facts-filter", "filter_facts");
   setPlaceholder("#clause-filter", "filter_clauses");
@@ -1853,45 +2018,32 @@ function showTab(tabset, name) {
    Sidebar
    ============================================================ */
 function renderSidebar() {
-  const agreements = S.workspace === "agreement_review";
-
-  $$("[data-workspace]").forEach((btn) => {
-    btn.classList.toggle("is-active", btn.dataset.workspace === S.workspace);
-  });
+  const user = S.user || "";
+  html(region("user-card"), user ? `
+    <div class="bsf-user-avatar" aria-hidden="true">${esc(user.slice(0, 1).toUpperCase())}</div>
+    <div>
+      <div class="bsf-user-name">${esc(user)}</div>
+      <div class="bsf-caption">${esc(t("signed_in_with_dataiku"))}</div>
+    </div>` : "");
 
   const open = region("open-matter");
   if (S.snapshot) {
     show(open, true);
     region("chip-title").textContent = S.snapshot.display_name || t("open_matter");
-    region("chip-ref").textContent = S.snapshot.reference;
+    region("chip-ref").textContent = (S.snapshot.details || {}).case_number || S.snapshot.reference;
   } else {
     show(open, false);
   }
-
-  region("create-summary").textContent = t(agreements ? "create_agreement_review" : "create_litigation_case");
-  region("create-name-label").textContent = t(agreements ? "agreement_file_name" : "case_file_name");
-  region("create-submit").textContent = t(agreements ? "create_agreement_file" : "create_case_file");
 }
 
-function caseCardMarkup(item, compact) {
-  const agreements = item.workflow_type === "agreement_review";
-  const openLabel = t(agreements ? "open_agreement" : "open_case");
-  const meta = compact ? "" : `
-    <div class="case-card-meta">
-      ${esc(t("card_attorney"))}: ${esc(item.attorney || t("unassigned"))}<br>
-      ${esc(t("card_last_activity"))}: ${esc(item.activity || "—")}
-    </div>
-    ${item.status ? `<span class="status-pill">${esc(friendlyStatus(item.status))}</span>` : ""}`;
-  return `
-    <article class="case-card">
-      <div class="case-card-title">${esc(item.title || t(agreements ? "unnamed_agreement" : "unnamed_case"))}</div>
-      <div class="case-card-ref">${esc(item.reference)}</div>
-      ${meta}
-      <button type="button" class="bsf-btn" data-action="open-case" data-case-id="${esc(item.case_id)}">
-        ${esc(openLabel)}
-      </button>
-    </article>`;
+function progressLabel(key) {
+  return key ? t(`progress_${key}`) : "";
 }
+
+const PROGRESS_KIND = {
+  new: "neutral", documents_uploaded: "neutral", processing: "ai", accounting_review: "review",
+  legal_analysis: "review", attorney_review: "provisional", ready_for_pleading: "verified", completed: "verified",
+};
 
 function friendlyStatus(status) {
   const key = String(status || "").trim().toLowerCase();
@@ -1903,32 +2055,131 @@ function friendlyStatus(status) {
 }
 
 /* ============================================================
-   Case library
+   Dashboard: the signed-in user's own cases and contract reviews
+   (the server only ever returns the user's own).
    ============================================================ */
-function renderLibrary() {
-  const agreements = S.workspace === "agreement_review";
-  region("library-title").textContent = t(agreements ? "agreement_review_library" : "litigation_case_library");
-  region("library-caption").textContent = t(agreements ? "agreement_library_caption" : "litigation_library_caption");
+function matchesQuery(item, query) {
+  if (!query) return true;
+  const haystack = [item.title, item.reference, item.matter, ...Object.values(item.details || {})]
+    .join(" ").toLowerCase();
+  return haystack.includes(query.toLowerCase());
+}
 
-  const grid = region("library-grid");
-  if (!S.cases.length) {
-    html(grid, `<p class="bsf-caption">${esc(t(agreements ? "no_matching_agreements" : "no_matching_cases"))}</p>`);
-    return;
-  }
-  html(grid, S.cases.map((item) => caseCardMarkup(item, false)).join(""));
+function renderLibrary() {
+  const dash = S.dash;
+  region("dash-title").textContent = S.user ? t("dash_welcome", { user: S.user }) : t("dash_title");
+
+  const litigation = dash.litigation.filter((item) => matchesQuery(item, dash.query)
+    && (!dash.status || item.progress === dash.status));
+  const contracts = dash.agreement_review.filter((item) => matchesQuery(item, dash.contractQuery));
+  const attention = dash.litigation.filter((item) => ["accounting_review", "attorney_review"].includes(item.progress)).length;
+  const metric = (value, key) => `<div class="bsf-metric"><span class="m-value">${esc(value)}</span>
+    <span class="m-label">${esc(t(key))}</span></div>`;
+  html(region("dash-metrics"), dash.archived ? "" : `
+    ${metric(dash.litigation.length, "dash_metric_cases")}
+    ${metric(attention, "dash_metric_attention")}
+    ${metric(dash.litigation.filter((item) => item.progress === "completed").length, "dash_metric_completed")}
+    ${metric(dash.agreement_review.length, "dash_metric_contracts")}`);
+
+  const archiveButton = (item) => `<button type="button" class="bsf-btn bsf-btn-sm" data-action="archive-case"
+      data-case-id="${esc(item.case_id)}" data-archived="${item.archived ? "0" : "1"}">
+      ${esc(t(item.archived ? "restore_case" : "archive_case"))}</button>`;
+
+  html(region("dash-litigation"), litigation.length ? `
+    <div class="bsf-table-scroll"><table class="bsf-table bsf-dash-table">
+      <thead><tr>
+        <th>${esc(t("col_case_name"))}</th><th>${esc(t("col_case_number"))}</th><th>${esc(t("col_parties"))}</th>
+        <th>${esc(t("col_case_type"))}</th><th>${esc(t("col_last_updated"))}</th><th>${esc(t("col_stage"))}</th><th></th>
+      </tr></thead>
+      <tbody>${litigation.map((item) => {
+        const d = item.details || {};
+        const parties = [d.client_name, d.opposing_party].filter(Boolean).join(" v ");
+        return `<tr>
+          <td dir="auto"><button type="button" class="bsf-link bsf-dash-open" data-action="open-case" data-case-id="${esc(item.case_id)}">
+            ${esc(item.title || t("unnamed_case"))}</button></td>
+          <td dir="auto">${esc(d.case_number || "—")}</td>
+          <td dir="auto">${esc(parties || "—")}</td>
+          <td dir="auto">${esc(d.case_type || item.matter || "—")}</td>
+          <td>${esc(item.activity || "—")}</td>
+          <td>${item.progress ? badge(progressLabel(item.progress), PROGRESS_KIND[item.progress] || "neutral") : "—"}</td>
+          <td class="bsf-dash-actions">
+            <button type="button" class="bsf-btn bsf-btn-sm bsf-btn-primary" data-action="open-case" data-case-id="${esc(item.case_id)}">
+              ${esc(t(item.progress === "new" ? "open_case" : "continue_case"))}</button>
+            ${archiveButton(item)}
+          </td></tr>`;
+      }).join("")}</tbody>
+    </table></div>` : `<div class="bsf-empty">${esc(t(dash.archived ? "no_archived_cases" : "no_cases_yet"))}</div>`);
+
+  html(region("dash-contracts"), contracts.length ? `
+    <div class="bsf-table-scroll"><table class="bsf-table bsf-dash-table">
+      <thead><tr>
+        <th>${esc(t("col_contract_name"))}</th><th>${esc(t("col_contract_type"))}</th><th>${esc(t("col_counterparty"))}</th>
+        <th>${esc(t("col_last_updated"))}</th><th>${esc(t("col_status"))}</th><th></th>
+      </tr></thead>
+      <tbody>${contracts.map((item) => {
+        const d = item.details || {};
+        return `<tr>
+          <td dir="auto"><button type="button" class="bsf-link bsf-dash-open" data-action="open-case" data-case-id="${esc(item.case_id)}">
+            ${esc(item.title || t("unnamed_agreement"))}</button></td>
+          <td dir="auto">${esc(d.contract_type || item.matter || "—")}</td>
+          <td dir="auto">${esc(d.counterparty || "—")}</td>
+          <td>${esc(item.activity || "—")}</td>
+          <td>${esc(friendlyStatus(item.status) || "—")}</td>
+          <td class="bsf-dash-actions">
+            <button type="button" class="bsf-btn bsf-btn-sm bsf-btn-primary" data-action="open-case" data-case-id="${esc(item.case_id)}">
+              ${esc(t("continue_review"))}</button>
+            ${archiveButton(item)}
+          </td></tr>`;
+      }).join("")}</tbody>
+    </table></div>` : `<div class="bsf-empty">${esc(t(dash.archived ? "no_archived_contracts" : "no_contracts_yet"))}</div>`);
 }
 
 async function loadCases() {
+  const archived = S.dash.archived ? "1" : "";
   try {
-    const query = S.libraryQuery;
-    const payload = await apiGet("/cases", { workflow: S.workspace, query });
-    S.cases = payload.cases || [];
+    const [litigation, contracts] = await Promise.all([
+      apiGet("/cases", { workflow: "litigation", archived }),
+      apiGet("/cases", { workflow: "agreement_review", archived }),
+    ]);
+    S.dash.litigation = litigation.cases || [];
+    S.dash.agreement_review = contracts.cases || [];
   } catch (error) {
-    S.cases = [];
+    S.dash.litigation = [];
+    S.dash.agreement_review = [];
     fail(error);
   }
+  S.cases = S.dash.litigation.concat(S.dash.agreement_review);
   renderSidebar();
   if (S.view === "library") renderLibrary();
+}
+
+/* New litigation case / contract review: the details are kept with the
+   case and shown on the dashboard and in the case header. */
+function openNewCaseForm(workflow) {
+  const litigation = workflow !== "agreement_review";
+  region("modal-title").textContent = t(litigation ? "new_litigation_case" : "new_contract_review");
+  const field = (name, label, attrs = "") => `
+    <label class="bsf-field"><span>${esc(t(label))}</span>
+      <input type="text" class="bsf-input" name="${name}" dir="auto" ${attrs}></label>`;
+  html(region("modal-body"), `
+    <form data-form="create-case" data-workflow="${esc(workflow)}" class="bsf-new-case">
+      ${field("case_name", litigation ? "col_case_name" : "col_contract_name", "required")}
+      ${litigation ? `
+        ${field("case_number", "field_case_number")}
+        ${field("client_name", "field_client")}
+        ${field("opposing_party", "field_opposing_party")}
+        ${field("case_type", "col_case_type")}
+        <label class="bsf-field"><span>${esc(t("field_description_optional"))}</span>
+          <textarea class="bsf-input" name="description" rows="3" dir="auto"></textarea></label>` : `
+        ${field("contract_type", "col_contract_type")}
+        ${field("counterparty", "col_counterparty")}`}
+      <label class="bsf-field"><span>${esc(t("preferred_language"))}</span>
+        <select class="bsf-input" name="language"><option value="ar">العربية</option><option value="en">English</option></select></label>
+      <button type="submit" class="bsf-btn bsf-btn-primary">${esc(t(litigation ? "create_case_and_upload" : "create_contract_review"))}</button>
+    </form>`);
+  setModalVisible(true);
+  const first = $('[data-form="create-case"] input[name="case_name"]');
+  if (first) first.focus();
 }
 
 /* ============================================================
@@ -2097,6 +2348,14 @@ function renderCase() {
   if (!snap) return;
   region("case-title").textContent = snap.display_name || t("default_case_name");
   region("case-ref").textContent = snap.reference;
+  const details = snap.details || {};
+  html(region("case-meta"), [
+    details.case_number ? `<span>${esc(t("field_case_number"))}: <strong dir="auto">${esc(details.case_number)}</strong></span>` : "",
+    [details.client_name, details.opposing_party].filter(Boolean).length
+      ? `<span dir="auto">${esc([details.client_name, details.opposing_party].filter(Boolean).join(" v "))}</span>` : "",
+    snap.progress ? badge(progressLabel(snap.progress), PROGRESS_KIND[snap.progress] || "neutral") : "",
+    snap.last_updated ? `<span class="bsf-caption">${esc(t("last_updated_at", { at: snap.last_updated }))}</span>` : "",
+  ].filter(Boolean).join('<span class="bsf-meta-sep">|</span>'));
 
   const dirty = region("case-dirty");
   const state = snap.workflow_state || {};
@@ -2113,6 +2372,7 @@ function renderCase() {
   renderUnresolved();
   renderCaseSearch();
   renderDocumentsTab();
+  renderDocumentsOverview();
   renderCaseRegister();
   renderAccountingTab();
   renderReviewTab();
@@ -2122,59 +2382,85 @@ function renderCase() {
   followRunningJobs();
 }
 
+/* Overview: where the case stands, at a glance. */
 function renderCaseStatus() {
   const snap = S.snapshot;
   const stages = snap.stages || [];
-  const done = stages.filter((stage) => stage.status === "completed").length;
-  const percent = stages.length ? Math.round((done / stages.length) * 100) : 0;
-
+  const acc = snap.accounting || {};
   const nextKey = snap.next_stage || "documents";
   const nextStage = stageByKey(nextKey) || { status: "" };
   let nextText;
   if (nextStage.status === "waiting_for_user") nextText = t("next_waiting", { stage: stageLabel(nextKey) });
   else if (nextStage.status === "error") nextText = t("next_error", { stage: stageLabel(nextKey) });
   else nextText = t(NEXT_ACTION_KEYS[nextKey] || "next_documents");
-  const destination = t(STAGE_TAB_KEYS[nextKey] || "tab_documents");
 
-  const stepCards = stages.map((stage) => `
-    <button type="button" class="step-card ${stage.state} status-${esc(stage.status)}"
-            data-action="goto-stage" data-stage="${esc(stage.key)}">
-      <div class="step-icon">${STAGE_ICONS[stage.status] || ""}</div>
-      <div class="step-label">${esc(stageLabel(stage.key))}</div>
-      <div class="step-status">${esc(stage.status === "running" && stage.phase ? t(`phase_${stage.phase}`) : t(`status_${stage.status}`))}</div>
-    </button>`).join("");
-
-  const counts = snap.counts || {};
-  const metric = (key, value) => `
-    <div class="bsf-metric">
-      <span class="m-value">${esc(value)}</span>
-      <span class="m-label">${esc(t(key))}</span>
-    </div>`;
+  const financialPages = (acc.financial_pages || []).length;
+  const facts = (acc.facts_table || []).filter((fact) => !fact.deleted);
+  const pending = facts.filter((fact) => fact.status === "UNCERTAIN").length;
+  const card = (value, key, tab) => `
+    <button type="button" class="bsf-ov-card" ${tab ? `data-action="goto-stage" data-stage="${tab}"` : ""}>
+      <span class="m-value">${esc(value)}</span><span class="m-label">${esc(t(key))}</span></button>`;
 
   html(region("case-status"), `
-    <div class="bsf-status">
-      <div class="bsf-status-head">
-        <h4>${esc(t("case_journey"))}</h4>
-        <div class="bsf-metric">
-          <span class="m-value">${percent}%</span>
-          <span class="m-label">${esc(t("progress"))}</span>
-        </div>
-      </div>
-      <p class="bsf-caption">${esc(t("case_journey_caption"))}</p>
-      <div class="bsf-progressbar"><span style="width:${percent}%"></span></div>
-      <div class="bsf-steps">${stepCards}</div>
-      <div class="bsf-status-meta">
-        <div class="bsf-next">
-          <strong>${esc(t("next_label", { action: nextText }))}</strong>
-          <em>${esc(t("open_destination", { destination }).replace(/\*\*/g, ""))}</em>
-        </div>
-        ${metric("metric_documents", counts.documents || 0)}
-        ${metric("metric_pages", counts.pages || 0)}
-        ${metric("metric_facts", counts.facts || 0)}
-        ${metric("metric_parties", counts.parties || 0)}
-        ${metric("metric_issues", counts.issues || 0)}
-      </div>
+    <div class="bsf-ov">
+      <section class="bsf-ov-progress">
+        <h4 class="bsf-subsection">${esc(t("case_progress"))}</h4>
+        <ol class="bsf-ov-steps">${stages.map((stage) => `
+          <li class="status-${esc(stage.status)}">
+            <button type="button" data-action="goto-stage" data-stage="${esc(stage.key)}">
+              <span class="bsf-ov-icon">${STAGE_ICONS[stage.status] || "•"}</span>
+              <span class="bsf-ov-name">${esc(stageLabel(stage.key))}</span>
+              <span class="bsf-ov-state">${esc(stage.status === "running" && stage.phase
+                ? t(`phase_${stage.phase}`) : t(`status_${stage.status}`))}</span>
+            </button>
+            ${stageDetailText(stage) ? `<div class="bsf-caption">${esc(stageDetailText(stage))}</div>` : ""}
+          </li>`).join("")}</ol>
+        <div class="bsf-next"><strong>${esc(t("next_label", { action: nextText }))}</strong>
+          <button type="button" class="bsf-btn bsf-btn-sm bsf-btn-primary" data-action="goto-stage" data-stage="${esc(nextKey)}">
+            ${esc(t("go_there"))}</button></div>
+      </section>
+      <section class="bsf-ov-cards">
+        ${card((snap.counts || {}).documents || 0, "metric_documents", "documents")}
+        ${card((snap.counts || {}).pages || 0, "metric_pages", "documents")}
+        ${card(financialPages, "metric_financial_pages", "accounting")}
+        ${card((acc.document_claims || []).length, "metric_financial_claims", "accounting")}
+        ${card(facts.length, "metric_atomic_facts", "accounting")}
+        ${card(pending, "metric_pending_reviews", "accounting")}
+      </section>
     </div>`);
+}
+
+/* Documents: what was uploaded and how each one was read. */
+function renderDocumentsOverview() {
+  const target = region("documents-overview");
+  if (!target) return;
+  const docs = (S.snapshot && S.snapshot.documents_overview) || [];
+  if (!docs.length) { html(target, ""); return; }
+  html(target, `
+    <div class="bsf-table-scroll"><table class="bsf-table bsf-docs-table">
+      <thead><tr>
+        <th>${esc(t("col_file"))}</th><th>${esc(t("col_pages"))}</th><th>${esc(t("col_document_type"))}</th>
+        <th>${esc(t("col_reading"))}</th><th>${esc(t("col_accounting"))}</th><th></th>
+      </tr></thead>
+      <tbody>${docs.map((doc) => {
+        const reading = doc.pages_failed
+          ? badge(t("doc_pages_failed", { count: doc.pages_failed }), "flagged")
+          : doc.pages_to_check ? badge(t("doc_pages_to_check", { count: doc.pages_to_check }), "review")
+          : badge(t("doc_read_ok"), "verified");
+        const accounting = !doc.classified_pages ? `<span class="bsf-caption">${esc(t("doc_not_checked_yet"))}</span>`
+          : doc.financial_pages ? badge(t("doc_financial_pages", { count: doc.financial_pages, facts: doc.facts }), "ai")
+          : `<span class="bsf-caption">${esc(t("doc_no_financial_records"))}</span>`;
+        return `<tr>
+          <td dir="auto"><strong>${esc(doc.file)}</strong><div class="bsf-caption">${esc(doc.uploaded_at || "")}</div></td>
+          <td>${esc(doc.pages)}</td>
+          <td dir="auto">${esc((doc.document_types || []).join(", ") || doc.purpose || "—")}</td>
+          <td>${reading}</td>
+          <td>${accounting}</td>
+          <td>${doc.first_page_id ? `<button type="button" class="bsf-btn bsf-btn-sm" data-action="view-page"
+               data-page-id="${esc(doc.first_page_id)}">${esc(t("preview"))}</button>` : ""}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>`);
 }
 
 function renderUnresolved() {
@@ -3913,6 +4199,18 @@ const ACTIONS = {
 
   "back-to-library": () => backToLibrary(),
 
+  "new-case": (el) => openNewCaseForm(el.dataset.workflow || "litigation"),
+
+  "archive-case": async (el) => {
+    const archive = el.dataset.archived === "1";
+    if (archive && !window.confirm(t("archive_confirm"))) return;
+    try {
+      await apiPost("/case/archive", { case_id: el.dataset.caseId, archived: archive });
+      toast(t(archive ? "case_archived" : "case_restored"), "ok");
+      await loadCases();
+    } catch (error) { fail(error); }
+  },
+
   "close-modal": () => closeModal(),
 
   "remove-upload": (el) => removeUploadFile(el.dataset.kind, Number(el.dataset.index)),
@@ -4131,15 +4429,17 @@ const FORMS = {
 
   "create-case": async (form) => {
     const data = new FormData(form);
+    const workflow = form.dataset.workflow || "litigation";
+    const body = { workflow_type: workflow };
+    ["case_name", "language", "case_number", "client_name", "opposing_party", "case_type", "description",
+     "contract_type", "counterparty"].forEach((name) => { if (data.has(name)) body[name] = String(data.get(name) || "").trim(); });
     try {
-      const result = await apiPost("/create_case", {
-        case_name: data.get("case_name"),
-        language: data.get("language"),
-        workflow_type: S.workspace,
-      });
-      form.reset();
+      const result = await apiPost("/create_case", body);
+      closeModal();
       await loadCases();
       await openCase(result.case_id);
+      // A new litigation case starts with its documents.
+      if (workflow === "litigation") { S.tab = "documents"; showTab("case", S.tab); }
     } catch (error) { fail(error); }
   },
 
@@ -4323,7 +4623,7 @@ function wireEvents() {
     }
 
     const actionEl = event.target.closest("[data-action]");
-    if (actionEl && ACTIONS[actionEl.dataset.action]) {
+    if (actionEl && ACTIONS[actionEl.dataset.action] && !actionEl.matches("input, select")) {
       event.preventDefault();
       ACTIONS[actionEl.dataset.action](actionEl);
     }
@@ -4347,6 +4647,11 @@ function wireEvents() {
       fileInput.value = "";
       return;
     }
+
+    const statusFilter = event.target.closest('[data-action="dash-status-filter"]');
+    if (statusFilter) { S.dash.status = statusFilter.value; renderLibrary(); return; }
+    const archivedToggle = event.target.closest('[data-action="dash-archived"]');
+    if (archivedToggle) { S.dash.archived = archivedToggle.checked; loadCases(); return; }
 
     const reviewSelect = event.target.closest('[data-action="review-select-page"]');
     if (reviewSelect) {
@@ -4379,7 +4684,8 @@ function wireEvents() {
   });
 
   // Debounced search inputs.
-  bindSearch("#library-search", (value) => { S.libraryQuery = value; loadCases(); });
+  bindSearch("#library-search", (value) => { S.dash.query = value; renderLibrary(); });
+  bindSearch("#contract-search", (value) => { S.dash.contractQuery = value; renderLibrary(); });
   bindSearch("#case-search", (value) => { S.caseQuery = value; renderCaseSearch(); });
   bindSearch("#facts-filter", (value) => { S.factsFilter = value; renderFactsRegister(); });
   bindSearch("#clause-filter", (value) => {
@@ -4411,6 +4717,14 @@ async function init() {
   showView("library");
   showTab("case", S.tab);
   showTab("agreement", S.agreementTab);
+
+  try {
+    S.user = (await apiGet("/me")).user || "";
+  } catch (error) {
+    html(region("dash-litigation"), alertBox(t("sign_in_required"), "flag"));
+    return;
+  }
+  renderSidebar();
 
   try {
     S.bootstrap = await apiGet("/bootstrap");

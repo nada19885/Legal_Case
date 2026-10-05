@@ -1192,7 +1192,11 @@ def case_endpoint():
         "reference": short_case_reference(case_id),
         "workflow_type": workflow_type,
         "case": {k: _clean_scalar(v) for k, v in case.items()},
-        "display_name": first_case_value(case, "client_name", "customer_name", "case_name", default=""),
+        "display_name": first_case_value(case, "case_name", "client_name", "customer_name", default=""),
+        "owner": g.user,
+        "details": (access.case_record(case_id) or {}).get("details") or {},
+        "progress": _case_progress(case_id, workflow_type),
+        "last_updated": _last_updated(case_id, case),
         "counts": {
             "documents": int(len(data["documents"])),
             "pages": int(len(data["pages"])),
@@ -1231,6 +1235,7 @@ def case_endpoint():
     response["steps"] = overview["stages"]
     response["next_action_key"] = overview["next_stage"]
 
+    response["documents_overview"] = _documents_overview(data, _latest_classifications_by_page(data))
     response["chat_messages"] = serialise_chat_messages(data)
     response["case_register"] = register
     response["facts_register"] = serialise_facts_register(data)
@@ -1275,6 +1280,49 @@ def case_endpoint():
         "facts_confirmed_at": state.get("accounting_facts_confirmed_at", ""),
     }
     return _ok(response)
+
+
+def _last_updated(case_id, case):
+    """The latest change to the case: its workflow state or its record."""
+    stamps = [str(case.get("updated_at") or case.get("created_at") or "")]
+    for stage in (read_workflow_state(case_id).get("stages") or {}).values():
+        stamps.append(str((stage or {}).get("finished_at") or (stage or {}).get("started_at") or ""))
+    latest = max((s for s in stamps if s and s != "nan"), default="")
+    return latest.replace("T", " ")[:16]
+
+
+def _documents_overview(data, classifications):
+    """One line per uploaded document: pages, how many were read, need a
+    look or failed, how many are financial records, and its facts."""
+    pages = frame_to_records(data.get("pages"))
+    facts = data.get("financial_line_items")
+    fact_pages = {}
+    if isinstance(facts, pd.DataFrame) and not facts.empty and "page_id" in facts.columns:
+        fact_pages = facts["page_id"].astype(str).value_counts().to_dict()
+    out = []
+    for document in frame_to_records(data.get("documents")):
+        doc_id = str(document.get("case_document_id", ""))
+        own = [p for p in pages if str(p.get("case_document_id", "")) == doc_id]
+        ids = [str(p.get("page_id", "")) for p in own]
+        statuses = [str(p.get("processing_status", "")) for p in own]
+        financial = [pid for pid in ids if (classifications.get(pid) or {}).get("page_type") in {"financial", "mixed"}]
+        types = sorted({str(p.get("document_type", "") or "").strip() for p in own} - {"", "nan"})
+        out.append({
+            "case_document_id": doc_id,
+            "file": document.get("original_filename") or doc_id,
+            "purpose": document.get("document_type", ""),
+            "uploaded_at": str(document.get("uploaded_at", "") or "").replace("T", " ")[:16],
+            "pages": len(own),
+            "pages_read": sum(s == "completed" for s in statuses),
+            "pages_to_check": sum(s == "completed_review_required" for s in statuses),
+            "pages_failed": sum(s not in {"completed", "completed_review_required"} for s in statuses),
+            "document_types": types[:4],
+            "financial_pages": len(financial),
+            "classified_pages": sum(1 for pid in ids if pid in classifications),
+            "facts": int(sum(fact_pages.get(pid, 0) for pid in ids)),
+            "first_page_id": ids[0] if ids else "",
+        })
+    return out
 
 
 def _document_claims(case_id, data):
