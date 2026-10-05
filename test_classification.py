@@ -58,11 +58,50 @@ check("a statement with dated amounts is financial", statement["page_type"] == "
       and statement["financial_document_type"] == "bank_statement")
 check("a statement sent inside an email still counts (it is a list of dated amounts)",
       fc.classify_accounting_page("C", "P9", EMAILED_STATEMENT)["page_type"] == "financial")
+MIXED = """From: FraudAlerts <FraudAlerts@alrajhibank.com.sa>
+Subject: RE: freeze
+Please continue freezing the amount of SAR 250.
+---
+ACCOUNT TRANSACTION RECORD
+Date: 29/08/2025  Credit: SAR 250.00  Balance: SAR 250.00  Reference: TX82921
+---
+Rakan Al-Enezi, Fraud Investigations"""
+mixed = fc.classify_accounting_page("C", "P10", MIXED)
+check("an email with a pasted transaction record is a mixed page (its record section goes to accounting)",
+      mixed["page_type"] == "mixed")
 fc.complete_json = lambda **kwargs: {"page_type": "mixed", "confidence": 0.7}
-check("the old 'mixed' answer no longer sends a page to accounting",
-      fc.classify_accounting_page("C", "P2", "Some page with 250.00")["page_type"] == "claim")
-check("the prompt lists what is never financial",
-      "emails and email chains" in fc.CLASSIFY_ACCOUNTING_PAGE_PROMPT and "صحيفة دعوى" in fc.CLASSIFY_ACCOUNTING_PAGE_PROMPT)
+check("'mixed' without any record section on the page is not sent to accounting",
+      fc.classify_accounting_page("C", "P2", EMAIL)["page_type"] == "other")
+check("the prompt says what documents say about money is a claim, not evidence",
+      "CLAIM to be" in fc.CLASSIFY_ACCOUNTING_PAGE_PROMPT and "صحيفة دعوى" in fc.CLASSIFY_ACCOUNTING_PAGE_PROMPT)
+
+# --- facts only from accounting evidence; claims kept apart -----------------------------
+from legal_platform import financial_reconciliation as fr   # noqa: E402
+
+model_output = {
+    "sections": [{"section": 1, "label": "context"}, {"section": 2, "label": "claim"},
+                 {"section": 3, "label": "accounting_evidence", "source_type": "transaction_record"}],
+    "facts": [
+        {"fact_key": "F1", "section": 2, "fact_type": "transfer", "amount": "250", "currency": "SAR"},
+        {"fact_key": "F2", "section": 3, "fact_type": "deposit", "date": "29/08/2025", "credit": "250",
+         "balance": "250", "transaction_reference": "TX82921"},
+        {"fact_key": "F3", "fact_type": "transfer", "amount": "250"},
+    ],
+    "financial_claims": [{"statement": "Please continue freezing the amount of SAR 250.",
+                          "made_by": "Al Rajhi fraud team", "amounts": ["SAR 250"]}],
+}
+kept, claims, dropped = fr.split_page_output(model_output, "mixed")
+check("a fact drawn from an email's statement is dropped, the transaction record's fact kept",
+      [f["fact_key"] for f in kept["facts"]] == ["F2"] and len(dropped) == 2)
+check("the kept fact carries the kind of record it came from", kept["facts"][0]["source_type"] == "transaction_record")
+check("the email's statement becomes a financial claim to verify, not a fact",
+      claims == [{"type": "financial_claim", "statement": "Please continue freezing the amount of SAR 250.",
+                  "made_by": "Al Rajhi fraud team", "amounts": ["SAR 250"], "requires_accounting_verification": True}])
+whole, _, _ = fr.split_page_output({"facts": [{"fact_key": "F1", "amount": "1.00"}]}, "financial")
+check("on a page that is wholly a financial record, facts need no section label", len(whole["facts"]) == 1)
+check("the fact prompt states the decision rule and the email example",
+      "did I find it in an accounting record" in fr.ATOMIC_FACTS_SYSTEM_PROMPT
+      and "The customer transferred SAR 250 to\nBSF" in fr.ATOMIC_FACTS_SYSTEM_PROMPT)
 check("results carry the rules version (older results are classified again)",
       email["classifier_version"] == fc.CLASSIFIER_VERSION)
 

@@ -726,3 +726,6 @@ button.step-card:hover { border-color: var(--bsf-green); }
   .bsf-fr-image img { max-height: 50vh; }
   .bsf-fr-add-form { grid-template-columns: 1fr 1fr; }
 }
+
+.bsf-fr-claims { margin-top: .75rem; }
+.bsf-fr-claims tr.is-current-claim td { background: var(--mint-light); }

@@ -22,51 +22,53 @@ from .llm import complete_json
 # ============================================================
 
 CLASSIFY_ACCOUNTING_PAGE_PROMPT = """
-You decide whether ONE page of a legal case file is a FINANCIAL RECORD that the
-accounting analysis should extract figures from.
+You decide whether ONE page of a legal case file contains ACCOUNTING EVIDENCE:
+a genuine financial record that a forensic accountant would inspect to verify
+the financial claims of the case.
 
-"financial" ONLY when the page itself IS a financial record:
-- a bank / account statement or transaction list (dates, amounts, balances);
-- a balance sheet, income statement, cash-flow statement, trial balance,
-  general ledger or journal;
-- an invoice, receipt, payment or transfer confirmation / advice;
-- a loan, financing, instalment or repayment schedule or account summary
-  (financed amount, instalments, paid, outstanding).
+Accounting records: bank / account statements, transaction histories,
+account ledgers, general ledgers, balance reports, debit / credit records,
+payment and transfer records or confirmations, financing and loan
+statements, repayment / amortization schedules, instalment histories,
+outstanding-balance records, settlement and reconciliation statements,
+financial statements, balance sheets, income and cash-flow statements, trial
+balances, journal entries, invoices and receipts.
 
-NOT financial, even when it mentions amounts, account numbers or IBANs:
-- emails and email chains (From / To / Subject / Sent headers), letters,
-  correspondence, notices;
-- statements of claim, claim forms (صحيفة دعوى), complaints, requests,
-  pleadings, legal memos, court or committee decisions;
-- application or KYC forms, ID documents, cover pages, signatures, terms and
-  conditions, contract clauses without a payment schedule.
-An email or letter that quotes an amount is NOT financial. A screenshot of
-transfer details pasted inside an email is NOT financial unless the page is
-mainly a transaction record (several dated amounts).
+NOT accounting evidence, even when they contain amounts, dates, account
+numbers, IBANs, claimed balances, payments, transfers, deductions or frozen
+amounts: emails, letters, internal or fraud-investigation correspondence,
+statements of claim / claim forms (صحيفة دعوى), complaints, pleadings,
+defence memoranda, case summaries, witness statements, narrative
+explanations, legal arguments. What they say about money is a CLAIM to be
+verified, not evidence.
 
 Categories:
-- "financial": a financial record as defined above.
+- "financial": the page is an accounting record.
+- "mixed": the page is mainly correspondence / narrative, but a distinct
+  section of it IS an accounting record (e.g. an email with a pasted account
+  transaction record showing a date, an amount and a reference or balance).
+  An email that only mentions an amount is NOT mixed.
 - "claim": the claimant's allegations, claim form, complaint or demands.
 - "other": everything else (emails, letters, decisions, forms, IDs...).
 
 Return ONLY JSON:
 {
-  "page_type": "financial | claim | other",
-  "financial_document_type": "bank_statement | balance_sheet | income_statement | cash_flow_statement | ledger | invoice | receipt | transfer_confirmation | loan_schedule | other_financial | none",
+  "page_type": "financial | mixed | claim | other",
+  "financial_document_type": "bank_statement | account_statement | transaction_record | ledger | balance_sheet | income_statement | cash_flow_statement | trial_balance | journal | invoice | receipt | transfer_confirmation | loan_statement | repayment_schedule | settlement_statement | other_financial | none",
   "confidence": <0.0 to 1.0>,
-  "reasoning": "<one sentence: what the page is>"
+  "reasoning": "<one sentence: what the page is and, for mixed, which part is the record>"
 }
 """.strip()
 
 # Raise when the rules change: stored results of an older version are
 # classified again.
-CLASSIFIER_VERSION = "2"
+CLASSIFIER_VERSION = "3"
 
 # ============================================================
 # ALLOWED TYPES
 # ============================================================
 
-ALLOWED_PAGE_TYPES = {"financial", "claim", "other"}
+ALLOWED_PAGE_TYPES = {"financial", "mixed", "claim", "other"}
 SAFE_FALLBACK_PAGE_TYPE = "other"
 
 
@@ -100,6 +102,16 @@ _DATE = re.compile(r"[0-9٠-٩]{1,4}[/\-.][0-9٠-٩]{1,2}[/\-.][0-9٠-٩]{1,4}")
 def _record_rows(text: str) -> int:
     """Lines that look like transaction rows: a date and an amount."""
     return sum(1 for line in str(text or "").splitlines() if _DATE.search(line) and _MONEY.search(line))
+
+
+def _has_record_section(text: str) -> bool:
+    """Something that looks like an accounting record inside the page: a
+    dated amount line, or a markdown table holding amounts."""
+    text = str(text or "")
+    if _record_rows(text) >= 1:
+        return True
+    table_lines = [line for line in text.splitlines() if line.count("|") >= 2]
+    return sum(1 for line in table_lines if _MONEY.search(line)) >= 1
 
 
 def non_financial_reason(text: str) -> str:
@@ -143,22 +155,25 @@ def classify_accounting_page(case_id: str, page_id: str, page_text: str) -> dict
         )
         
         page_type = _normalise_string(raw_result.get("page_type", "")).lower()
-        if page_type == "mixed":
-            page_type = "claim"
         if page_type not in ALLOWED_PAGE_TYPES:
             page_type = SAFE_FALLBACK_PAGE_TYPE
         reasoning = _normalise_string(raw_result.get("reasoning", ""))
         blocked = non_financial_reason(page_text)
         if page_type == "financial" and blocked:
+            # Correspondence or a claim form is never a financial record as a
+            # whole; it is mixed only if a record section is really there.
+            page_type = "mixed" if _has_record_section(page_text) else ("claim" if "claim" in blocked else "other")
+            reasoning = f"Not a financial record as a whole ({blocked}). " + reasoning
+        if page_type == "mixed" and not _has_record_section(page_text):
             page_type = "claim" if "claim" in blocked else "other"
-            reasoning = f"Not a financial record ({blocked}). " + reasoning
+            reasoning = "No accounting record section found on the page. " + reasoning
 
         return {
             "case_id": str(case_id),
             "page_id": str(page_id),
             "page_type": page_type,
             "financial_document_type": _normalise_string(raw_result.get("financial_document_type", ""))
-            if page_type == "financial" else "none",
+            if page_type in ("financial", "mixed") else "none",
             "confidence": _normalise_confidence(raw_result.get("confidence", 0.0)),
             "reasoning": reasoning,
             "classification_status": "completed",

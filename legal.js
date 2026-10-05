@@ -1341,6 +1341,12 @@ const SESSION_ID = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())
 
 /* Financial fact review (page beside the table). */
 Object.assign(I18N.en, {
+  review_claims_heading: "Financial claims found in these pages ({count}) — to verify, not evidence",
+  review_claims_caption: "What emails and narrative sections say about money. They are not accounting facts and are not in the ledger; the accounting analysis checks them against the records above.",
+  review_claim_statement: "Statement",
+  review_claim_by: "Made by",
+  review_claim_amounts: "Amounts mentioned",
+  review_source_type: "Record: {type}",
   continue_to_written_pleading: "Continue to the written pleading",
   review_heading: "Financial facts — review page by page",
   review_caption: "The page is shown beside the table; its rows are highlighted. Click any cell to correct it (Enter saves, Esc cancels). Your edits are kept and the AI's reading stays visible.",
@@ -1387,6 +1393,12 @@ Object.assign(I18N.en, {
 });
 
 Object.assign(I18N.ar, {
+  review_claims_heading: "ادعاءات مالية وردت في هذه الصفحات ({count}) — للتحقق وليست أدلة",
+  review_claims_caption: "ما تذكره الرسائل والأجزاء السردية عن المبالغ. ليست وقائع محاسبية ولا تدخل في السجل؛ يتحقق منها التحليل المحاسبي مقابل السجلات أعلاه.",
+  review_claim_statement: "العبارة",
+  review_claim_by: "صادرة عن",
+  review_claim_amounts: "المبالغ المذكورة",
+  review_source_type: "السجل: {type}",
   continue_to_written_pleading: "متابعة إلى المذكرة المكتوبة",
   review_heading: "الوقائع المالية — المراجعة صفحةً صفحة",
   review_caption: "تظهر الصفحة بجانب الجدول مع تمييز صفوفها. انقر على أي خلية لتصحيحها (Enter للحفظ وEsc للإلغاء). تُحفظ تعديلاتك وتبقى قراءة الذكاء الاصطناعي ظاهرة.",
@@ -2631,6 +2643,7 @@ function factRowMarkup(fact, currentPageId, columns) {
           data-page-id="${esc(fact.page_id)}">${esc(fact.page_number || "—")}</button></td>
       ${columns.map((name) => factCell(fact, name, editable)).join("")}
       <td class="bsf-fr-status">${source}
+        ${fact.source_type ? `<div class="bsf-caption">${esc(t("review_source_type", { type: String(fact.source_type).replace(/_/g, " ") }))}</div>` : ""}
         ${uncertain && reason ? `<div class="bsf-fr-reason">${esc(reason)}</div>` : ""}
         ${(review.alternatives || []).length && uncertain
           ? `<div class="bsf-fr-reason">${esc(t("fact_alternatives"))}: ${esc(review.alternatives.join(" / "))}</div>` : ""}
@@ -2732,7 +2745,8 @@ function renderFactReview() {
       <span class="bsf-fr-spacer"></span>
       <button type="button" class="bsf-btn bsf-btn-primary" data-action="confirm-all-facts" ${facts.length ? "" : "disabled"}>
         ${esc(confirmed ? t("review_confirm_again") : t("review_confirm_all"))}</button>
-    </div>`);
+    </div>
+    ${documentClaimsMarkup(acc.document_claims || [], page ? page.page_id : "")}`);
 
   scrollToCurrentRows();
   const extraction = target.querySelector(".bsf-fr-extraction");
@@ -2748,6 +2762,32 @@ function renderFactReview() {
   if (addForm) addForm.addEventListener("toggle", () => { S.reviewAddOpen = addForm.open; });
   const synthesize = document.querySelector('[data-action="accounting-synthesize"]');
   if (synthesize) synthesize.disabled = !confirmed;
+}
+
+/* Layer 1: what the documents SAY about money (emails, narrative sections).
+   Shown apart from the facts: the accountant verifies them against the
+   records; they are never part of the ledger. */
+function documentClaimsMarkup(claims, currentPageId) {
+  if (!claims.length) return "";
+  return `
+    <details class="bsf-expander bsf-fr-claims">
+      <summary>${esc(t("review_claims_heading", { count: claims.length }))}</summary>
+      <div class="bsf-expander-body">
+        <p class="bsf-caption">${esc(t("review_claims_caption"))}</p>
+        <table class="bsf-table">
+          <thead><tr><th>${esc(t("column_page"))}</th><th>${esc(t("review_claim_statement"))}</th>
+            <th>${esc(t("review_claim_by"))}</th><th>${esc(t("review_claim_amounts"))}</th></tr></thead>
+          <tbody>${claims.map((claim) => `
+            <tr class="${claim.page_id === currentPageId ? "is-current-claim" : ""}">
+              <td><button type="button" class="bsf-link" data-action="review-goto-page" data-page-id="${esc(claim.page_id)}">
+                ${esc(claim.page_label || claim.page_number || "—")}</button></td>
+              <td dir="auto">${esc(claim.statement)}</td>
+              <td dir="auto">${esc(claim.made_by || "—")}</td>
+              <td dir="auto">${esc((claim.amounts || []).join(", ") || "—")}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+      </div>
+    </details>`;
 }
 
 function scrollToCurrentRows() {

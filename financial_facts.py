@@ -379,6 +379,7 @@ def build_fact_rows(page_id: str, case_document_id: str, page_number: int, outpu
             "calculation": raw.get("calculation") if isinstance(raw.get("calculation"), dict) else None,
             "source_text": fix_visual_arabic(_clean(raw.get("source_text")) or ""),
             "supporting_table": _clean(raw.get("supporting_table")) or "",
+            "source_type": _snake(raw.get("source_type")) or "",
         })
 
     facts_by_key = {item["key"]: item["fact"] for item in prepared}
@@ -413,6 +414,7 @@ def build_fact_rows(page_id: str, case_document_id: str, page_number: int, outpu
             "supporting_table": item["supporting_table"][:2000],
             "document_name": str((meta or {}).get("document_name") or ""),
             "extraction_source": str((meta or {}).get("extraction_source") or ""),
+            "source_type": item["source_type"],
             "fingerprint": fact_fingerprint(item["key"], item["source_text"], item["raw"], item["fact"]),
         }
         rows.append({
@@ -531,6 +533,7 @@ def fact_from_row(row: dict, corrections: Optional[dict] = None) -> dict:
             "supporting_table": stored.get("supporting_table") or "",
             "document_name": stored.get("document_name") or "",
             "extraction_source": stored.get("extraction_source") or "",
+            "source_type": stored.get("source_type") or "",
             "added_by_user": bool(stored.get("added_by_user")),
             "fingerprint": stored.get("fingerprint") or "",
             "legacy": False,
@@ -658,6 +661,7 @@ def ledger_entry(item: dict) -> dict:
         "supporting_table": item.get("supporting_table", ""),
         "document_name": item.get("document_name", ""),
         "extraction_source": item.get("extraction_source", ""),
+        "source_type": item.get("source_type", ""),
         "original_values": item.get("original_values", {}),
         "added_by_user": item.get("added_by_user", False),
         "edited_by": item.get("resolved_by", "") if item.get("corrected_fields") or item.get("added_by_user") else "",

@@ -115,7 +115,11 @@ from legal_platform.financial_facts import (
 )
 from legal_platform.financial_reconciliation import persist_reconciled_rows, reinterpret_fact
 from legal_platform.financial_fields import FIELD_NAMES
-from legal_platform.financial_extraction_pipeline import run_financial_extraction
+from legal_platform.financial_extraction_pipeline import (
+    load_document_claims,
+    run_financial_extraction,
+    save_document_claims,
+)
 from legal_platform.financial_forensics import (
     build_and_save_financial_timeline,
     ledger_summary,
@@ -322,7 +326,7 @@ def load_case_data(case_id):
 
 
 def _facts_on_financial_pages(data):
-    """Facts of pages classified financial (or not classified yet). A page
+    """Facts of pages classified financial or mixed (or not classified yet). A page
     later classified as an email, letter or claim keeps its rows on record,
     but they leave the review table and the ledger. Facts the user added
     are always kept."""
@@ -331,7 +335,7 @@ def _facts_on_financial_pages(data):
         return frame
     latest = _latest_classifications_by_page(data)
     excluded = {pid for pid, info in latest.items()
-                if info.get("status") != "failed" and info.get("page_type") and info["page_type"] != "financial"}
+                if info.get("status") != "failed" and info.get("page_type") and info["page_type"] not in {"financial", "mixed"}}
     if not excluded:
         return frame
     user_added = frame["row_id"].astype(str).str.startswith("FACTU") if "row_id" in frame.columns else False
@@ -1174,12 +1178,25 @@ def case_endpoint():
         "discrepancies": data.get("discrepancies") or [],
         "findings": _claims_with_evidence(data.get("forensic_findings"), ledger, data),
         "facts_table": _fact_table(case_id, data, corrections, resolutions),
+        "document_claims": _document_claims(case_id, data),
         "financial_pages": _financial_pages(case_id, data, classifications),
         "facts_confirmed": bool(state.get("accounting_facts_confirmed")),
         "facts_confirmed_by": state.get("accounting_facts_confirmed_by", ""),
         "facts_confirmed_at": state.get("accounting_facts_confirmed_at", ""),
     }
     return _ok(response)
+
+
+def _document_claims(case_id, data):
+    """Financial claims found in the accounting pages (what an email or a
+    narrative section SAYS about money): to be verified, never evidence."""
+    labels = _page_reference_map(data)
+    out = []
+    for page_id, claims in (load_document_claims(case_id) or {}).items():
+        for claim in claims or []:
+            out.append({**claim, "page_id": page_id, "page_label": labels.get(page_id, "")})
+    out.sort(key=lambda c: (str(c.get("case_document_id", "")), int(float(c.get("page_number") or 0))))
+    return out
 
 
 def _fact_table(case_id, data, corrections=None, resolutions=None):
@@ -1214,7 +1231,7 @@ def _financial_pages(case_id, data, classifications=None):
     for row in frame_to_records(pages):
         page_id = str(row.get(id_col, "") or row.get("page_id", ""))
         info = classifications.get(page_id, {})
-        financial = info.get("page_type") == "financial" and info.get("status") != "failed"
+        financial = info.get("page_type") in {"financial", "mixed"} and info.get("status") != "failed"
         if not (financial or page_id in with_facts):
             continue
         document_id = str(row.get("case_document_id", ""))
@@ -1558,7 +1575,7 @@ def _accounting_pipeline(job_id, case_id, document_ids=None, extract=True, sessi
     classification_failures = sum(1 for item in in_scope if item.get("status") == "failed")
     financial_page_ids = [
         pid for pid in page_ids
-        if classifications.get(pid, {}).get("page_type") == "financial"
+        if classifications.get(pid, {}).get("page_type") in {"financial", "mixed"}
         and classifications.get(pid, {}).get("status") != "failed"
     ]
     report = {
@@ -1588,7 +1605,10 @@ def _accounting_pipeline(job_id, case_id, document_ids=None, extract=True, sessi
                        f"Extracting financial data (page {current} of {total})…", current=current, total=total)
 
         try:
-            extraction = run_financial_extraction(case_id, financial_page_ids, progress_callback=_on_progress)
+            extraction = run_financial_extraction(
+                case_id, financial_page_ids, progress_callback=_on_progress,
+                page_types={pid: classifications.get(pid, {}).get("page_type", "financial") for pid in financial_page_ids},
+            )
         except ValueError as error:
             # No page text available for the selected pages.
             report["extraction_note"] = str(error)
@@ -1711,6 +1731,12 @@ def accounting_clear():
         return jsonify({"error": "The accounting analysis is running. Wait for it to finish before clearing."}), 409
 
     deleted = {}
+    try:
+        deleted["financial_claims"] = sum(len(c or []) for c in load_document_claims(case_id).values())
+        save_document_claims(case_id, {}, replace=True)
+    except Exception:
+        traceback.print_exc()
+        deleted["financial_claims"] = "error"
     for label, dataset_name in ACCOUNTING_CLEAR_DATASETS.items():
         try:
             before = len(case_rows(dataset_name, case_id))
@@ -2129,6 +2155,24 @@ def _financial_claims(state, data):
     return claims, "case_register"
 
 
+def _claims_to_verify(state, data):
+    """(claims, source): the claimant's claims plus the financial claims the
+    accounting pages make (e.g. an email saying an amount was transferred).
+    Claims are what the accountant verifies; they never enter the ledger."""
+    claims, source = _financial_claims(state, data)
+    case_id = str((data.get("case") or {}).get("case_id", ""))
+    extra = [
+        {
+            "allegation_text": claim["statement"],
+            "made_by": claim.get("made_by") or "document statement",
+            "source_page_ids": [claim.get("page_id")] if claim.get("page_id") else [],
+            "claim_kind": "financial_claim_in_document",
+        }
+        for claim in _document_claims(case_id, data)
+    ]
+    return claims + extra, (source + "+document_claims" if extra else source)
+
+
 @app.route("/accounting/synthesize", methods=["POST"])
 def accounting_synthesize():
     body = request.get_json(force=True)
@@ -2159,7 +2203,7 @@ def accounting_synthesize():
         if not normalized_ledger:
             raise ValueError("The reviewed ledger is empty. Run the accounting extraction first.")
 
-        claims, claims_source = _financial_claims(state, data)
+        claims, claims_source = _claims_to_verify(state, data)
 
         _set_phase(job_id, "building_timeline", "Building the chronological financial timeline…")
         build_and_save_financial_timeline(case_id, normalized_ledger)
