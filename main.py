@@ -17,7 +17,7 @@ import os
 import sys
 
 import pandas as pd
-from flask import request, jsonify, send_file, Response, copy_current_request_context
+from flask import request, jsonify, send_file, Response, copy_current_request_context, g
 from dataiku.customwebapp import *  
 import dataiku
 
@@ -49,6 +49,7 @@ def increment_usage(session_id, field, amount=1, use_case="litigation"):
 # CORE LEGAL PLATFORM IMPORTS
 # -----------------------------------------------------------------------------
 from legal_platform.intake import create_case, add_message
+from legal_platform import access
 from legal_platform.storage import list_cases, latest_case, case_rows, replace_case_rows
 from legal_platform.workflow import (
     COMPLETED,
@@ -880,9 +881,14 @@ def _prune_jobs():
 def _new_job(case_id="", stage=""):
     _prune_jobs()
     job_id = uuid.uuid4().hex
+    try:
+        owner = getattr(g, "user", "")
+    except RuntimeError:                       # outside a request
+        owner = ""
     with JOBS_LOCK:
         JOBS[job_id] = {
             "status": "running",
+            "user": owner,
             "case_id": str(case_id or ""),
             "stage": stage,
             "progress": {"stage": stage, "phase": "", "current": 0, "total": 0, "detail": ""},
@@ -997,6 +1003,40 @@ def _start_stage_job(case_id, stage, phase, detail, task, session_id=None, use_c
     return jsonify({"job_id": job_id})
 
 
+# =============================================================================
+# SIGNED-IN USER AND CASE OWNERSHIP (every request)
+#
+# The user is the one signed in to Dataiku. A request about a case (its
+# case_id in the query, the form or the JSON body) or about a background job
+# is answered only for that case's owner; anything else gets "Case not
+# found", the same as a case that does not exist.
+# =============================================================================
+@app.before_request
+def _authorise_request():
+    if request.method == "OPTIONS":
+        return None
+    user = access.user_from_headers(request.headers)
+    g.user = user
+    body = request.get_json(silent=True) if request.is_json else None
+    case_id = access.requested_case_id(request.args, request.form, body)
+    job_case = None
+    if request.path.endswith("/job_status"):
+        with JOBS_LOCK:
+            job = JOBS.get(request.args.get("job_id", ""))
+        if job and job.get("user") and job["user"] != user:
+            return jsonify({"status": "unknown"}), 404
+        job_case = (job or {}).get("case_id") or None
+    status, message = access.authorise(user, case_id, job_case)
+    if status != 200:
+        return jsonify({"error": message}), status
+    return None
+
+
+@app.route("/me")
+def me():
+    return _ok({"user": g.user})
+
+
 @app.route("/job_status")
 def job_status():
     job_id = request.args.get("job_id", "")
@@ -1059,15 +1099,59 @@ def bootstrap():
 
 @app.route("/cases")
 def cases_endpoint():
+    """The signed-in user's own cases only (others' are never listed)."""
     workflow = request.args.get("workflow", "litigation")
     query = request.args.get("query", "")
+    show_archived = str(request.args.get("archived", "")).lower() in {"1", "true", "yes"}
+    records = {r["case_id"]: r for r in access.user_cases(g.user)}
     cases = list_cases()
+    if not cases.empty and "case_id" in cases.columns:
+        cases = cases[cases["case_id"].astype(str).isin(records)]
+        keep = cases["case_id"].astype(str).map(lambda cid: bool(records[cid].get("archived")) == show_archived)
+        cases = cases[keep]
     filtered = filter_cases_by_workflow(cases, workflow)
     filtered = case_search_frame(filtered, query)
     if "updated_at" in filtered.columns:
         filtered = filtered.sort_values("updated_at", ascending=False)
-    cards = [serialise_case_card(row, workflow) for row in frame_to_records(filtered)]
+    cards = []
+    for row in frame_to_records(filtered):
+        card = serialise_case_card(row, workflow)
+        record = records.get(card["case_id"]) or {}
+        card["details"] = record.get("details") or {}
+        card["archived"] = bool(record.get("archived"))
+        card["progress"] = _case_progress(card["case_id"], workflow)
+        cards.append(card)
     return _ok({"cases": cards})
+
+
+def _case_progress(case_id, workflow):
+    """Where a case stands, from its saved workflow state only (cheap):
+    new / documents_uploaded / processing / accounting_review /
+    legal_analysis / ready_for_pleading / attorney_review / completed."""
+    if workflow == "agreement_review":
+        return ""
+    state = read_workflow_state(case_id)
+    stages = state.get("stages") or {}
+    accounting_done = str(state.get("accounting_status") or "") in {"forensic_complete", "complete_no_transactions"}
+    if state.get("memo"):
+        return "completed" if state.get("pleading_status") == "final" else "attorney_review"
+    if any((stage or {}).get("status") == RUNNING for stage in stages.values()):
+        return "processing"
+    if state.get("analysis") and accounting_done:
+        return "ready_for_pleading"
+    if str(state.get("accounting_status") or "") not in {"", "not_started"} and not accounting_done:
+        return "accounting_review"
+    if (stages.get("documents") or {}).get("status") == COMPLETED:
+        return "legal_analysis" if state.get("attorney_summary") or accounting_done else "documents_uploaded"
+    return "new"
+
+
+@app.route("/case/archive", methods=["POST"])
+def case_archive():
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    access.update_case_record(case_id, g.user, {"archived": bool(body.get("archived", True))})
+    return _ok({"archived": bool(body.get("archived", True))})
 
 
 @app.route("/create_case", methods=["POST"])
@@ -1078,12 +1162,18 @@ def create_case_endpoint():
     workflow_type = body.get("workflow_type", "litigation")
     if not case_name:
         return jsonify({"error": "case_name is required"}), 400
+    details = {key: body.get(key, "") for key in access.DETAIL_FIELDS}
     case_id = create_case(
         case_name=case_name,
         intake_mode="mixed",
         language=language,
         workflow_type=workflow_type,
+        created_by=g.user,
+        description=str(body.get("description", "") or ""),
+        client_name=str(body.get("client_name", "") or ""),
+        matter_type=str(body.get("case_type", "") or body.get("contract_type", "") or ""),
     )
+    access.register_case(case_id, g.user, workflow_type, details)
     return jsonify({"case_id": case_id})
 
 
