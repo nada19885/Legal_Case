@@ -144,6 +144,17 @@ from legal_platform.financial_normalizer import (
 APP_ASSETS_FOLDER_ID = "qx2RWzgX"
 APP_LOGO_PATH = "logo.png"
 
+class _QuietProgressPolls:
+    """Keep the browser's once-a-second progress checks out of the log, so
+    page messages and errors stay readable."""
+    def filter(self, record):
+        message = record.getMessage()
+        return not ("/job_status" in message and '" 200 ' in message)
+
+
+import logging as _logging  # noqa: E402
+_logging.getLogger("werkzeug").addFilter(_QuietProgressPolls())
+
 RUN_JOBS_INLINE = False
 JOBS = {}
 JOBS_LOCK = threading.Lock()

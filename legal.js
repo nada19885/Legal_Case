@@ -1915,7 +1915,7 @@ function pollJob(jobId, onProgress) {
         const status = await apiGet("/job_status", { job_id: jobId });
         if (status.status === "running") {
           if (onProgress) onProgress(status);
-          setTimeout(poll, 1200);
+          setTimeout(poll, 2000);
           return;
         }
         if (status.status === "error") reject(new Error(status.error || "job failed"));
