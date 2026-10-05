@@ -89,6 +89,9 @@ FINANCIAL_CLASSIFICATION_LLM_ID = GENERATION_LLM_ID
 PDF_RENDER_DPI = 200
 
 PDF_PAGE_MAX_CONCURRENT_REQUESTS = 4
+# Vision calls one page may make at the same time (its views are read in
+# parallel); total parallel calls are at most this x the page workers.
+PAGE_READ_PARALLEL_CALLS = 2
 FAST_VLM_MAX_ATTEMPTS = 1
 FALLBACK_VLM_MAX_ATTEMPTS = 1
 FAILED_PAGE_RECOVERY_ATTEMPTS = 1

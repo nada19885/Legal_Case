@@ -1303,9 +1303,23 @@ class _MemoryUpload:
     def close(self): self._buffer.close()
 
 
+def _intake_context(case_id):
+    """What the page reader may use as a hint: the case record and the
+    parties already known (from documents processed earlier)."""
+    case = latest_case(case_id) or {}
+    parties = []
+    for row in frame_to_records(case_rows("case_parties", case_id))[:20]:
+        name = str(row.get("party_name") or row.get("name") or "").strip()
+        role = str(row.get("party_role") or row.get("role") or "").strip()
+        if name and name not in [p.split(" (")[0] for p in parties]:
+            parties.append(f"{name} ({role})" if role else name)
+    return {"case": {k: _clean_scalar(v) for k, v in case.items()}, "parties": parties}
+
+
 @app.route("/documents/process", methods=["POST"])
 def documents_process():
-    """Stage "documents": pages -> images -> OCR -> page summaries ->
+    """Stage "documents": pages -> page pipeline (PDF text or VLM reading,
+    consolidated) -> page summaries ->
     parties / events / facts / issues / evidence merged into the case
     register. New material marks downstream work stale."""
     case_id = request.form.get("case_id", "")
@@ -1337,6 +1351,8 @@ def documents_process():
                 pdf_bytes=pdf_bytes,
                 zoom=render_zoom,
                 progress_callback=update_progress,
+                document_name=name,
+                case_context=_intake_context(case_id),
             )
             llm_call_count += len(pages)
             completed_pages = [p for p in pages if p.get("processing_status") in {"completed", "completed_review_required"}]
