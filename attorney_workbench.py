@@ -266,7 +266,8 @@ def _compact_forensic_data(case_data: dict | None) -> dict:
     }
 
 
-def _case_context(case_record, summary=None, analysis=None, strategy=None, research=None, case_data=None):
+def _case_context(case_record, summary=None, analysis=None, strategy=None, research=None, case_data=None,
+                  pleading=None):
     authorities = []
     for node in _records((research or {}).get("authority_nodes", []))[:24]:
         authorities.append({
@@ -323,7 +324,8 @@ def _case_context(case_record, summary=None, analysis=None, strategy=None, resea
         },
         "approved_attorney_summary": _compact_summary(summary),
         "legal_analysis": _compact_analysis(analysis),
-        "defence_plan": _compact_strategy(strategy),
+        **({"defence_plan": _compact_strategy(strategy)} if strategy else {}),
+        **({"written_pleading": _compact(pleading, 12000)} if pleading else {}),
         "forensic_financial_analysis": forensic_payload,
         "authorities": authorities,
         "case_material": material,
@@ -711,6 +713,7 @@ def answer_case_question(
     strategy=None,
     research=None,
     case_data=None,
+    pleading=None,
 ):
     payload = _case_context(
         case_record,
@@ -719,6 +722,7 @@ def answer_case_question(
         strategy=strategy,
         research=research,
         case_data=case_data,
+        pleading=pleading,
     )
     payload["question"] = _compact(question, 3000)
     draft = complete_json(

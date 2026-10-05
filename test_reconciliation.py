@@ -697,6 +697,27 @@ check("older two-language pleadings still show the requested language",
       and "Preliminary Statement" in pleading.pleading_to_markdown(old_memo, "en"))
 
 calls.clear()
+both = pleading.draft_pleadings(record, "both")
+check("'Both' drafts two complete versions, each directly in its own language (four calls, no translation)",
+      len(calls) == 4 and sum(c[0].endswith(pleading.LANGUAGE_RULES["ar"]) for c in calls) == 2
+      and both["language"] == "both" and both["pleading_ar"]["heading"]["title"] == "مذكرة جوابية"
+      and both["pleading_en"]["claim_responses"] and pleading.pleading_languages(both) == ("ar", "en"))
+both_markdown = pleading.pleading_to_markdown(both, "both")
+check("'Both' is shown as two separate versions, Arabic then English, not mixed paragraph by paragraph",
+      both_markdown.startswith("بسم الله") and "\n\n---\n\n" in both_markdown
+      and both_markdown.index("Preliminary Statement") > both_markdown.index("الثاني عشر"))
+check("one version of a 'Both' pleading can be shown alone",
+      pleading.pleading_to_markdown(both, "en").startswith("#") or "Preliminary Statement" in pleading.pleading_to_markdown(both, "en")
+      and "بسم الله" not in pleading.pleading_to_markdown(both, "en"))
+calls.clear()
+both_revised = pleading.revise_pleading(both, "Shorten the introduction", record)
+check("a 'Both' pleading is revised in each language", len(calls) == 2 and both_revised["language"] == "both"
+      and both_revised["pleading_en"]["introduction"] == ["Revised introduction by Banque Saudi Fransi."]
+      and both_revised["pleading_ar"]["introduction"] == ["Revised introduction by Banque Saudi Fransi."])
+check("the drafting record no longer carries a defence plan", "defence_plan" not in pleading.build_drafting_record(
+      {}, {}, {}, {}, {"documents": [], "pages": []}, {}, {}, [], {}))
+
+calls.clear()
 revised = pleading.revise_pleading(memo, "Shorten the introduction", record)
 check("revision rewrites only the changed section, in one call",
       revised["pleading_en"]["introduction"] == ["Revised introduction by Banque Saudi Fransi."]

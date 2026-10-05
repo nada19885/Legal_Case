@@ -68,7 +68,7 @@ from legal_platform.case_mapping import build_case_map
 from legal_platform.case_map_storage import persist_case_map
 from legal_platform.case_register import build_case_register, prioritise_pages_for_summary
 from legal_platform.facts import add_fact_candidate
-from legal_platform.chat_orchestrator import assess_next_step, run_legal_analysis, run_defence_plan
+from legal_platform.chat_orchestrator import assess_next_step, run_legal_analysis
 from legal_platform.interview_state import persist_interview_state
 from legal_platform.case_summary import generate_case_summary, approve_case_summary
 from legal_platform.attorney_workbench import answer_case_question, revise_bilingual_pleading
@@ -124,9 +124,10 @@ from legal_platform.financial_forensics import (
 )
 from legal_platform.pleading import (
     build_drafting_record,
-    draft_pleading,
+    draft_pleadings,
     is_full_pleading,
     pleading_language,
+    pleading_languages,
     pleading_to_markdown,
     revise_pleading,
 )
@@ -2297,46 +2298,6 @@ def analysis_run():
     )
 
 
-@app.route("/analysis/defence_plan", methods=["POST"])
-def analysis_defence_plan():
-    body = request.get_json(force=True)
-    case_id = body.get("case_id", "")
-    session_id = body.get("session_id")
-
-    def task(job_id):
-        data = load_case_data(case_id)
-        state = restore_workflow_state(data)
-        if not approval_gate_passed(state):
-            raise ValueError(_gate_error())
-        if not state.get("analysis") or not state.get("research"):
-            raise ValueError("Run the legal analysis before preparing the defence plan.")
-        _set_phase(job_id, "planning_defence", "Developing defence plan…")
-        register = case_register(data)
-        strategy = run_defence_plan(
-            data["case"], state["analysis"], register["facts"],
-            register["evidence_requests"], (state.get("research") or {}).get("authority_nodes", []),
-        )
-        if session_id:
-            increment_usage(session_id, "llm_request_count", 1)
-            increment_usage(session_id, "message_count", 1)
-        # The defence plan extends the analysis; it does not make it newer.
-        previous = (state.get("stages") or {}).get("analysis") or {}
-        patch = stage_patch(COMPLETED, detail="analysis_and_defence_plan")
-        if previous.get("finished_at"):
-            patch["finished_at"] = previous["finished_at"]
-        update_workflow_state(
-            case_id,
-            changes={"strategy": strategy},
-            stages={"analysis": patch},
-            action="defence_plan_prepared",
-        )
-        return {"strategy": strategy}
-
-    return _start_stage_job(
-        case_id, "analysis", "planning_defence", "Developing defence plan…", task, session_id=session_id,
-    )
-
-
 def _drafting_record(case_id, data, state, instructions=""):
     """Everything the written pleading may rely on (see
     legal_platform.pleading.build_drafting_record)."""
@@ -2352,7 +2313,6 @@ def _drafting_record(case_id, data, state, instructions=""):
         ledger,
         ledger_summary(ledger),
         instructions,
-        strategy=state.get("strategy"),
     )
 
 
@@ -2368,10 +2328,13 @@ def pleading_generate():
     def task(job_id):
         data = load_case_data(case_id)
         state = restore_workflow_state(data)
-        # The pleading is drafted in one language: the one chosen on the
-        # pleading tab, else the case's preferred language.
-        language = requested_language if requested_language in ("ar", "en") else (
-            str(data["case"].get("preferred_language", "") or "").strip().lower() or "en")
+        # The language chosen on the pleading tab (Arabic, English or both,
+        # each drafted directly in its language), else the case's preferred one.
+        language = requested_language if requested_language in ("ar", "en", "both") else (
+            state.get("pleading_language") or str(data["case"].get("preferred_language", "") or "").strip().lower()
+            or "en")
+        if language not in ("ar", "en", "both"):
+            language = "en"
 
         # 1. Attorney review must be prepared / approved.
         if not approval_gate_passed(state):
@@ -2393,7 +2356,7 @@ def pleading_generate():
         _set_phase(job_id, "generating_pleading", "Collecting the record for the pleading…")
         instructions = "" if direct else memo_instructions
         record = _drafting_record(case_id, data, state, instructions)
-        memo = draft_pleading(record, language, progress=lambda message: _set_phase(job_id, "generating_pleading", message))
+        memo = draft_pleadings(record, language, progress=lambda message: _set_phase(job_id, "generating_pleading", message))
         if session_id:
             increment_usage(session_id, "llm_request_count", 2)
             increment_usage(session_id, "message_count", 1)
@@ -2406,6 +2369,7 @@ def pleading_generate():
                 "pleading_versions": versions,
                 "pleading_status": "draft",
                 "pleading_finalised_by": "",
+                "pleading_language": language,
             },
             stages={"pleading": stage_patch(COMPLETED, detail="draft")},
             action="pleading_prepared",
@@ -2443,7 +2407,7 @@ def pleading_revise():
                 data["case"],
                 state["attorney_summary"],
                 state["analysis"],
-                state["strategy"],
+                None,
                 state["research"],
                 case_data=data,
             )
@@ -2534,7 +2498,7 @@ def pleading_export():
         return jsonify({"error": "no pleading available"}), 404
     reference = short_case_reference(case_id)
     if fmt == "docx":
-        languages = (pleading_language(memo),) if is_full_pleading(memo) else (
+        languages = pleading_languages(memo) if is_full_pleading(memo) else (
             ("ar", "en") if language == "both" else (language,))
         try:
             docx_bytes = build_pleading_docx_bytes(memo, reference, languages)
@@ -2568,9 +2532,12 @@ def discussion_ask():
         data = load_case_data(case_id)
         state = restore_workflow_state(data)
         message_id = add_message(case_id, conversation_id, "user", question)
+        memo = state.get("memo")
         answer = answer_case_question(
             question, data["case"], state["attorney_summary"], state["analysis"],
-            state["strategy"], state["research"], case_data=data,
+            None, state["research"], case_data=data,
+            pleading=memo_to_markdown(memo, "both" if pleading_language(memo) == "both" else pleading_language(memo))
+            if memo else None,
         )
         increment_usage(session_id, "llm_request_count", 2)
         increment_usage(session_id, "message_count", 1)

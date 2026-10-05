@@ -1341,6 +1341,8 @@ const SESSION_ID = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())
 
 /* Financial fact review (page beside the table). */
 Object.assign(I18N.en, {
+  continue_to_written_pleading: "Continue to the written pleading",
+  pleading_language_both: "Both (Arabic and English, two separate versions)",
   review_heading: "Financial facts — review page by page",
   review_caption: "The page is shown beside the table; its rows are highlighted. Click any cell to correct it (Enter saves, Esc cancels). Your edits are kept and the AI's reading stays visible.",
   review_uncertain_count: "{count} value(s) are uncertain (marked in red): the readings of the page disagreed. Check them against the page.",
@@ -1386,6 +1388,8 @@ Object.assign(I18N.en, {
 });
 
 Object.assign(I18N.ar, {
+  continue_to_written_pleading: "متابعة إلى المذكرة المكتوبة",
+  pleading_language_both: "كلتاهما (العربية والإنجليزية، نسختان منفصلتان)",
   review_heading: "الوقائع المالية — المراجعة صفحةً صفحة",
   review_caption: "تظهر الصفحة بجانب الجدول مع تمييز صفوفها. انقر على أي خلية لتصحيحها (Enter للحفظ وEsc للإلغاء). تُحفظ تعديلاتك وتبقى قراءة الذكاء الاصطناعي ظاهرة.",
   review_uncertain_count: "{count} قيمة غير مؤكدة (باللون الأحمر): اختلفت قراءات الصفحة. تحقق منها مقابل الصفحة.",
@@ -3231,21 +3235,10 @@ function renderAnalysisTab() {
       ${analysisIssuesMarkup(analysis.issues || [])}
 
       <div class="bsf-btn-row">
-        <button type="button" class="bsf-btn" data-action="defence-plan"
-                ${state.summary_approved ? "" : "disabled"}>${esc(t("develop_defence_plan"))}</button>
-      </div>
-      ${state.summary_approved ? "" : `<p class="bsf-caption">${esc(t("defence_plan_locked"))}</p>`}`);
+        <button type="button" class="bsf-btn bsf-btn-primary" data-action="goto-stage" data-stage="pleading">
+          ${esc(t("continue_to_written_pleading"))}</button>
+      </div>`);
   }
-
-  const strategy = state.strategy;
-  const strategyBody = region("strategy-body");
-  if (!strategy) { html(strategyBody, ""); return; }
-  html(strategyBody, `
-    <h3 class="bsf-section-title">${esc(t("defence_structure"))}</h3>
-    <div>${renderMarkdown((strategy.primary_theory || {}).description || "")}</div>
-    <ul>${(strategy.actions || []).map((action) => `
-      <li><strong>${esc(action.action_type || t("action_fallback"))}</strong> — ${esc(action.description || "")}
-        (${esc(t("priority_label", { value: action.priority || "medium" }))})</li>`).join("")}</ul>`);
 }
 
 /* Issues backed by at least one retrieved authority node are shown in
@@ -3312,12 +3305,9 @@ const accountingReady = [
   "complete_no_transactions",
 ].includes(accountingStatus);
 
-const canDraft =
-  state.summary_approved &&
-  state.attorney_summary &&
-  legalAnalysisReady &&
-  accountingReady &&
-  !state.case_dirty;
+// The pleading is drafted from the legal analysis and the accounting
+// analysis (the backend checks the attorney-review gate as configured).
+const canDraft = legalAnalysisReady && accountingReady;
 
 const generate = document.querySelector(
   '[data-action="generate-pleading"]'
@@ -3335,23 +3325,7 @@ if (canDraft) {
 
 } else {
 
-  let reason = t("block_not_approved");
-
-  if (state.case_dirty) {
-    reason = t("block_case_dirty");
-
-  } else if (!state.attorney_summary) {
-    reason = t("block_no_summary");
-
-  } else if (!state.summary_approved) {
-    reason = t("block_not_approved");
-
-  } else if (!legalAnalysisReady) {
-    reason = t("block_no_legal_analysis");
-
-  } else if (!accountingReady) {
-    reason = t("block_accounting_incomplete");
-  }
+  const reason = !legalAnalysisReady ? t("block_no_legal_analysis") : t("block_accounting_incomplete");
 
   html(
     locked,
@@ -3367,21 +3341,24 @@ if (canDraft) {
   const body = region("pleading-body");
   if (!memo) { html(body, ""); return; }
 
-  // The pleading is drafted in one language, chosen before generating.
+  // The pleading is drafted in the language chosen before generating;
+  // "both" holds two complete versions, shown one after the other.
   const lang = pleadingLanguage(memo);
-  const downloadKey = lang === "ar" ? "download_arabic_pleading" : "download_english_pleading";
+  const langs = lang === "both" ? ["ar", "en"] : [lang];
 
   html(body, `
     <div class="bsf-btn-row">
-      <button type="button" class="bsf-btn" data-action="download" data-fmt="md" data-lang="${lang}">
-        ${esc(t(downloadKey))}</button>
+      ${langs.map((l) => `<button type="button" class="bsf-btn" data-action="download" data-fmt="md" data-lang="${l}">
+        ${esc(t(l === "ar" ? "download_arabic_pleading" : "download_english_pleading"))}</button>`).join("")}
       <button type="button" class="bsf-btn" data-action="download" data-fmt="docx" data-lang="${lang}">
         ${esc(t("download_pleading_docx"))}</button>
     </div>
 
-    <div class="bsf-pleading-body ${lang === "ar" ? "arabic-block" : "english-block"}"
-         dir="${lang === "ar" ? "rtl" : "ltr"}" lang="${lang}"
-         data-region="pleading-markdown">${esc(t("loading"))}</div>
+    ${langs.map((l) => `
+    ${langs.length > 1 ? `<h3 class="bsf-section-title">${esc(l === "ar" ? "النسخة العربية" : "English version")}</h3>` : ""}
+    <div class="bsf-pleading-body ${l === "ar" ? "arabic-block" : "english-block"}"
+         dir="${l === "ar" ? "rtl" : "ltr"}" lang="${l}"
+         data-region="pleading-markdown-${l}">${esc(t("loading"))}</div>`).join("")}
 
     <details class="bsf-expander">
       <summary>${esc(t("attorney_checks"))}</summary>
@@ -3426,11 +3403,11 @@ if (canDraft) {
               ${state.pleading_status === "final" ? "disabled" : ""}>${esc(t("mark_final"))}</button>
     </form>`);
 
-  loadPleadingMarkdown(lang);
+  langs.forEach((l) => loadPleadingMarkdown(l));
 }
 
 async function loadPleadingMarkdown(lang) {
-  const target = region("pleading-markdown");
+  const target = region(`pleading-markdown-${lang}`);
   if (!target) return;
   try {
     // Rendered from the backend's own memo_to_markdown so the document on
@@ -3445,19 +3422,20 @@ async function loadPleadingMarkdown(lang) {
 /* Language a stored pleading was drafted in (older pleadings held both
    languages and follow the interface language). */
 function pleadingLanguage(memo) {
-  if (memo && (memo.language === "ar" || memo.language === "en")) return memo.language;
+  if (memo && ["ar", "en", "both"].includes(memo.language)) return memo.language;
   if (memo && memo.pleading_en && memo.pleading_ar) return S.lang;
   return memo && memo.pleading_ar && !memo.pleading_en ? "ar" : "en";
 }
 
-/* Language the next pleading is drafted in: the one picked on the tab,
-   else the case's preferred language. */
+/* Language the next pleading is drafted in: the one picked on the tab
+   (saved with the case), else the case's preferred language. */
 function preferredPleadingLanguage() {
+  const state = (S.snapshot && S.snapshot.workflow_state) || {};
   const preferred = String(((S.snapshot && S.snapshot.case) || {}).preferred_language || "").toLowerCase();
   if (S.pleadingLang) return S.pleadingLang;
+  if (["ar", "en", "both"].includes(state.pleading_language)) return state.pleading_language;
   if (preferred === "ar" || preferred === "en") return preferred;
-  const memo = S.snapshot && S.snapshot.workflow_state && S.snapshot.workflow_state.memo;
-  return memo ? pleadingLanguage(memo) : S.lang;
+  return state.memo ? pleadingLanguage(state.memo) : S.lang;
 }
 
 function versionHistoryMarkup(versions) {
@@ -3944,15 +3922,6 @@ const ACTIONS = {
     }
   },
 
-  "defence-plan": async () => {
-    try {
-      await runJob(apiPost("/analysis/defence_plan", { case_id: S.caseId }), "analysis-job");
-      await refreshCase();
-    } catch (error) {
-      await refreshCase();
-      html(region("strategy-body"), alertBox(t("defence_planning_failed", { error: error.message }), "flag"));
-    }
-  },
 
   "generate-pleading": async () => {
     const instructions = ($("#pleading-instructions") || {}).value || "";
@@ -4351,6 +4320,9 @@ function wireEvents() {
     const pleadingLang = event.target.closest('[data-action="select-pleading-lang"]');
     if (pleadingLang) {
       S.pleadingLang = pleadingLang.value;
+      // Saved with the case, so the choice survives a refresh.
+      apiPost("/state/persist", { case_id: S.caseId, state: { pleading_language: pleadingLang.value } }).catch(fail);
+      if (S.snapshot && S.snapshot.workflow_state) S.snapshot.workflow_state.pleading_language = pleadingLang.value;
       return;
     }
 

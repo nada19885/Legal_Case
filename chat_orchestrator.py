@@ -12,7 +12,6 @@ from .models import MatterFilters
 from .review_pipeline import assess_case_completeness_multi_request
 from .research_package import research_approved_issues
 from .case_analysis import analyse_case
-from .strategy import generate_defence_strategy
 from .financial_classification import classify_case_pages
 from .config import (
     COMPLETENESS_MAX_PAGE_SUMMARIES,
@@ -438,16 +437,6 @@ def run_legal_analysis(case_record, facts, issues, evidence, actor=""):
         authority_nodes=research["authority_nodes"],
     )
     return {"research": research, "analysis": analysis}
-
-
-def run_defence_plan(case_record, analysis, facts, evidence, authority_nodes):
-    return generate_defence_strategy(
-        case_record=case_record,
-        analysis=analysis,
-        facts=_records(facts),
-        evidence=_records(evidence),
-        authority_nodes=_records(authority_nodes),
-    )
 
 
 def run_accounting_classification(case_id: str, page_ids: list[str], actor: str = ""):
