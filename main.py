@@ -309,6 +309,7 @@ def load_case_data(case_id):
         "financial_line_items": case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id),
         "financial_classifications": case_rows(FINANCIAL_DOCUMENT_CLASSIFICATION_DATASET, case_id),
     }
+    data["financial_line_items"] = _facts_on_financial_pages(data)
 
     forensic = load_saved_forensic_results(case_id)
     data["financial_timeline"] = forensic.get("timeline", [])
@@ -318,6 +319,23 @@ def load_case_data(case_id):
     data["cross_check_summary"] = forensic.get("cross_check_summary", {})
 
     return data
+
+
+def _facts_on_financial_pages(data):
+    """Facts of pages classified financial (or not classified yet). A page
+    later classified as an email, letter or claim keeps its rows on record,
+    but they leave the review table and the ledger. Facts the user added
+    are always kept."""
+    frame = data.get("financial_line_items")
+    if not isinstance(frame, pd.DataFrame) or frame.empty or "page_id" not in frame.columns:
+        return frame
+    latest = _latest_classifications_by_page(data)
+    excluded = {pid for pid, info in latest.items()
+                if info.get("status") != "failed" and info.get("page_type") and info["page_type"] != "financial"}
+    if not excluded:
+        return frame
+    user_added = frame["row_id"].astype(str).str.startswith("FACTU") if "row_id" in frame.columns else False
+    return frame[~frame["page_id"].astype(str).isin(excluded) | user_added].copy()
 
 
 def _latest_classifications_by_page(data):
@@ -1196,7 +1214,7 @@ def _financial_pages(case_id, data, classifications=None):
     for row in frame_to_records(pages):
         page_id = str(row.get(id_col, "") or row.get("page_id", ""))
         info = classifications.get(page_id, {})
-        financial = info.get("page_type") in {"financial", "mixed"} and info.get("status") != "failed"
+        financial = info.get("page_type") == "financial" and info.get("status") != "failed"
         if not (financial or page_id in with_facts):
             continue
         document_id = str(row.get("case_document_id", ""))
@@ -1540,7 +1558,7 @@ def _accounting_pipeline(job_id, case_id, document_ids=None, extract=True, sessi
     classification_failures = sum(1 for item in in_scope if item.get("status") == "failed")
     financial_page_ids = [
         pid for pid in page_ids
-        if classifications.get(pid, {}).get("page_type") in {"financial", "mixed"}
+        if classifications.get(pid, {}).get("page_type") == "financial"
         and classifications.get(pid, {}).get("status") != "failed"
     ]
     report = {
