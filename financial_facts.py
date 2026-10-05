@@ -334,8 +334,19 @@ def check_calculation(fact: dict, calculation: dict, facts_by_key: dict) -> dict
     return check
 
 
+def fact_fingerprint(key: str, source_text: str, raw_amounts: dict, fact: dict) -> str:
+    """What identifies one extracted fact: an edit made to it is applied
+    only to a fact with the same fingerprint, never to another fact that
+    later got the same row id."""
+    import hashlib
+    basis = json.dumps([key, source_text or "", sorted((raw_amounts or {}).items()),
+                        fact.get("fact_type"), fact.get("date"), fact.get("description")],
+                       ensure_ascii=False, default=str)
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:16]
+
+
 def build_fact_rows(page_id: str, case_document_id: str, page_number: int, output: dict,
-                    created_at: str = "") -> list[dict]:
+                    created_at: str = "", meta: Optional[dict] = None) -> list[dict]:
     """Normalise the LLM's facts for one page into fin_line_items rows.
 
     * fields not supported by the page stay None;
@@ -367,6 +378,7 @@ def build_fact_rows(page_id: str, case_document_id: str, page_number: int, outpu
             "problems": problems, "review": review,
             "calculation": raw.get("calculation") if isinstance(raw.get("calculation"), dict) else None,
             "source_text": fix_visual_arabic(_clean(raw.get("source_text")) or ""),
+            "supporting_table": _clean(raw.get("supporting_table")) or "",
         })
 
     facts_by_key = {item["key"]: item["fact"] for item in prepared}
@@ -398,6 +410,10 @@ def build_fact_rows(page_id: str, case_document_id: str, page_number: int, outpu
             "review": review,
             "calculation": calculation,
             "source_text": item["source_text"][:1000],
+            "supporting_table": item["supporting_table"][:2000],
+            "document_name": str((meta or {}).get("document_name") or ""),
+            "extraction_source": str((meta or {}).get("extraction_source") or ""),
+            "fingerprint": fact_fingerprint(item["key"], item["source_text"], item["raw"], item["fact"]),
         }
         rows.append({
             "row_id": stable_id("FACT", page_id, f"{page_number}_{item['key']}"),
@@ -411,6 +427,31 @@ def build_fact_rows(page_id: str, case_document_id: str, page_number: int, outpu
             "created_at": created_at,
         })
     return rows
+
+
+def user_fact_row(page_id: str, case_document_id: str, page_number: Any, fields: dict, document_name: str = "",
+                  actor: str = "", created_at: str = "") -> dict:
+    """A fact the user added because the extraction missed it. It is the
+    user's own value (USER_CORRECTED) and is marked as added by the user."""
+    from .ids import random_id
+    fact = {name: fields.get(name) for name in FACT_FIELDS}
+    fields_json = {
+        "schema": SCHEMA, "fact_key": "USER", "fact": fact, "raw": {}, "status": USER_CORRECTED,
+        "review": {}, "calculation": None, "source_text": "", "supporting_table": "",
+        "document_name": document_name, "extraction_source": "user", "added_by_user": True,
+        "added_by": actor, "fingerprint": "",
+    }
+    return {
+        "row_id": random_id("FACTU"),
+        "page_id": page_id,
+        "case_document_id": case_document_id,
+        "page_number": page_number,
+        "cluster_key": f"FACT_{page_number}_USER",
+        "fields_json": json.dumps(fields_json, ensure_ascii=False),
+        "row_status": USER_CORRECTED,
+        "has_conflict": False,
+        "created_at": created_at,
+    }
 
 
 # -----------------------------------------------------------------------------
@@ -487,6 +528,11 @@ def fact_from_row(row: dict, corrections: Optional[dict] = None) -> dict:
             "review": stored.get("review") or {},
             "calculation": stored.get("calculation"),
             "source_text": stored.get("source_text") or "",
+            "supporting_table": stored.get("supporting_table") or "",
+            "document_name": stored.get("document_name") or "",
+            "extraction_source": stored.get("extraction_source") or "",
+            "added_by_user": bool(stored.get("added_by_user")),
+            "fingerprint": stored.get("fingerprint") or "",
             "legacy": False,
         }
     else:
@@ -537,7 +583,22 @@ def effective_fact(row: dict, corrections: Optional[dict] = None, resolutions: O
     fact = dict(base["fact"])
     status = base["status"]
     corrected = []
+    originals = {}
     note = ""
+    review = base["review"]
+    stale = False
+
+    if final and final.get("fingerprint") and base.get("fingerprint") \
+            and final["fingerprint"] != base["fingerprint"]:
+        # The decision was made on another reading of this row: never apply
+        # it silently; the user decides again.
+        stale = True
+        status = UNCERTAIN
+        review = dict(review or {})
+        review["reason"] = "; ".join(filter(None, [
+            review.get("reason"),
+            "Your earlier review was made on a different extraction of this fact; please review it again."]))
+        final = None
 
     if final:
         action = final.get("action")
@@ -549,6 +610,7 @@ def effective_fact(row: dict, corrections: Optional[dict] = None, resolutions: O
         elif action == "correct":
             for name, value in (final.get("fields") or {}).items():
                 if name in FACT_FIELDS and fact.get(name) != value:
+                    originals[name] = fact.get(name)
                     fact[name] = value
                     corrected.append(name)
             status = USER_CORRECTED
@@ -561,9 +623,15 @@ def effective_fact(row: dict, corrections: Optional[dict] = None, resolutions: O
         "page_number": row.get("page_number", ""),
         "fact": fact,
         "status": status,
+        "review": review,
         "corrected_fields": corrected,
+        "original_values": originals,
         "user_note": note,
         "resolved_by": (final or {}).get("by", ""),
+        "resolved_at": (final or {}).get("at", ""),
+        "final_action": (final or {}).get("action", ""),
+        "final_fields": (final or {}).get("fields") or {},
+        "stale_review": stale,
         "proposal": None if final else resolution.get("proposal"),
     }
 
@@ -587,6 +655,13 @@ def ledger_entry(item: dict) -> dict:
         "corrected_fields": item.get("corrected_fields", []),
         "user_note": item.get("user_note", ""),
         "source_text": item.get("source_text", ""),
+        "supporting_table": item.get("supporting_table", ""),
+        "document_name": item.get("document_name", ""),
+        "extraction_source": item.get("extraction_source", ""),
+        "original_values": item.get("original_values", {}),
+        "added_by_user": item.get("added_by_user", False),
+        "edited_by": item.get("resolved_by", "") if item.get("corrected_fields") or item.get("added_by_user") else "",
+        "edited_at": item.get("resolved_at", ""),
         # Names older consumers (timeline, pleading context) read.
         "debit_or_credit": direction,
         "reference_number": fact.get("transaction_reference") or "",
@@ -624,6 +699,35 @@ def build_fact_ledger(rows: list[dict], corrections: Optional[dict] = None,
             ledger.append(ledger_entry(item))
     ledger.sort(key=_sort_key)
     return ledger, withheld
+
+
+def build_fact_table(rows: list[dict], corrections: Optional[dict] = None,
+                     resolutions: Optional[dict] = None) -> list[dict]:
+    """Every fact for the review table, in page order (document, page, then
+    as extracted): ledger facts, UNCERTAIN facts (with why) and deleted
+    (IGNORED) facts, each with what the AI read and what the user changed."""
+    out = []
+    for index, row in enumerate(rows):
+        item = effective_fact(row, corrections, resolutions)
+        entry = ledger_entry(item)
+        entry["amount"] = item["fact"].get("amount")      # the fact's own field, as edited (not the display value)
+        entry["review"] = item.get("review") or {}
+        entry["deleted"] = item["status"] == IGNORED
+        entry["stale_review"] = item.get("stale_review", False)
+        entry["_order"] = index
+        out.append(entry)
+
+    def order(entry):
+        try:
+            page = int(float(entry.get("page_number") or 0))
+        except (TypeError, ValueError):
+            page = 0
+        return (str(entry.get("case_document_id", "")), page, 1 if entry.get("added_by_user") else 0, entry["_order"])
+
+    out.sort(key=order)
+    for entry in out:
+        entry.pop("_order", None)
+    return out
 
 
 def count_uncertain(rows: list[dict], corrections: Optional[dict] = None,

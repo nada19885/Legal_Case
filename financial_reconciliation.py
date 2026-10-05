@@ -181,13 +181,18 @@ def build_rows_from_reconstruction(
 ATOMIC_FACTS_SYSTEM_PROMPT = r"""
 You are a forensic accountant turning ONE page of a legal case file into atomic financial facts.
 
-You receive two independent readings of the same page:
-- structural_evidence: text and tables read directly from the PDF (may be empty for scanned pages);
-- transcription_text: a verbatim transcription of the page image by a vision model.
+You receive:
+- transcription_text: the page's consolidated text. It comes from the PDF's own text when that was
+  reliable (page_route "native" / "native+vlm") or from vision-model readings of the page image (page_route
+  "vlm"). Tables are markdown, one row per entry. A value written [?: A | B] was read differently by the
+  readers: such a fact is UNCERTAIN, with A and B as alternatives.
+- structural_evidence: text and tables read directly from the PDF (may be empty for scanned pages).
 Use both. Where they disagree, say so.
 Arabic text in structural_evidence can be garbled (letters reversed or wrong glyphs, a known PDF issue).
 For Arabic wording, prefer transcription_text; use structural_evidence mainly for numbers and table layout.
 Write every description in normal Arabic/English reading order.
+Never correct, round or recalculate a printed number because it looks unusual: copy it, and use UNCERTAIN
+when you doubt it.
 
 WHAT AN ATOMIC FACT IS
 One independent piece of financial information. Never combine several amounts in one fact.
@@ -224,7 +229,9 @@ REVIEW BLOCK (only for UNCERTAIN)
 "review": {"question": "what the reviewer must decide", "suggestion": "your best interpretation in words",
            "reason": "why you are unsure", "alternatives": ["other plausible meanings"]}
 
-For every fact, copy the exact text it came from into "source_text".
+For every fact, copy the exact text it came from into "source_text". For a fact read from a table, also copy
+its table row exactly as in transcription_text into "supporting_table" (the header row, the separator row and
+the fact's row, as markdown); otherwise null.
 
 RETURN JSON ONLY:
 {
@@ -239,6 +246,7 @@ RETURN JSON ONLY:
       "account_number": null, "transaction_reference": null, "counterparty": null,
       "status": "EXTRACTED",
       "source_text": "...",
+      "supporting_table": null,
       "calculation": null,
       "review": null
     }
@@ -251,10 +259,12 @@ def extract_page_facts(
     structural_evidence: dict,
     transcription_text: str,
     page_number: int,
+    page_route: str = "",
 ) -> dict:
     """One LLM call: all evidence for a page -> atomic financial facts."""
     payload = {
         "page_number": page_number,
+        "page_route": page_route,
         "structural_evidence": structural_evidence,
         "transcription_text": transcription_text,
     }

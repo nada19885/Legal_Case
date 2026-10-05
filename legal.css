@@ -670,3 +670,59 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-review-pager { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin: .6rem 0; font-size: .88rem; }
 .bsf-review-pager .bsf-btn-primary { margin-inline-start: auto; }
 .bsf-review-item.is-saving { opacity: .45; pointer-events: none; transition: opacity .2s; }
+
+/* ------------------------------------------------------------------
+   Financial fact review: the page beside the fact table
+   ------------------------------------------------------------------ */
+.bsf-fr { display: grid; grid-template-columns: minmax(280px, 38%) 1fr; gap: 1rem; align-items: start; margin: .75rem 0; }
+.bsf-fr-pane { position: sticky; top: .5rem; display: flex; flex-direction: column; gap: .5rem; }
+.bsf-fr-pane-title { font-weight: 600; display: flex; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+.bsf-fr-image { display: block; width: 100%; padding: .4rem; border: 2px solid var(--primary); border-radius: var(--radius-sm, 6px);
+  background: var(--surface-2, #F9FAFB); cursor: zoom-in; }
+.bsf-fr-image img { display: block; width: 100%; max-height: 72vh; object-fit: contain; }
+.bsf-fr-extraction .bsf-fr-text { max-height: 50vh; overflow: auto; font-size: .84rem; }
+.bsf-fr-meta { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; margin-bottom: .5rem; }
+.bsf-fr-uncertain { margin: .25rem 0 .75rem; padding-inline-start: 1.2rem; font-size: .84rem; }
+.bsf-fr-table-wrap { min-width: 0; }
+.bsf-fr-table-scroll { max-height: 72vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-sm, 6px); }
+.bsf-fr-table { margin: 0; font-size: .82rem; }
+.bsf-fr-table thead th { position: sticky; top: 0; z-index: 1; }
+.bsf-fr-row.is-other { opacity: .55; }
+.bsf-fr-row.is-other:hover { opacity: .85; }
+.bsf-fr-row.is-current td { background: var(--mint-light); }
+.bsf-fr-row.is-current td:first-child { box-shadow: inset 4px 0 0 var(--primary); }
+[dir="rtl"] .bsf-fr-row.is-current td:first-child { box-shadow: inset -4px 0 0 var(--primary); }
+.bsf-fr-row.is-uncertain td { background: #FEF2F2; }
+.bsf-fr-row.is-uncertain.is-current td { background: #FEE2E2; }
+.bsf-fr-row.is-deleted td.bsf-fr-cell { text-decoration: line-through; color: var(--ink-faint); }
+.bsf-fr-cell[data-action] { cursor: text; }
+.bsf-fr-cell[data-action]:hover { outline: 1px dashed var(--primary); outline-offset: -2px; }
+.bsf-fr-cell.is-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bsf-fr-cell.is-edited { font-weight: 600; color: var(--primary-dark); }
+.bsf-fr-cell.is-saving { opacity: .5; }
+.bsf-fr-edited-mark { margin-inline-start: .25rem; font-size: .75em; color: var(--primary); }
+.bsf-fr-input { width: 100%; min-width: 6rem; padding: .2rem .35rem; font-size: .82rem; }
+.bsf-fr-status { min-width: 7.5rem; font-size: .78rem; }
+.bsf-fr-table td[data-field="description"] { min-width: 10rem; }
+.bsf-fr-table td[data-field="fact_type"] { min-width: 6rem; }
+.bsf-fr-reason { font-size: .76rem; color: var(--danger); margin-top: .2rem; }
+.bsf-fr-source summary { font-size: .76rem; color: var(--ink-soft); cursor: pointer; margin-top: .2rem; }
+.bsf-fr-source .bsf-table { font-size: .74rem; }
+.bsf-fr-page-cell .bsf-link { background: none; border: 0; padding: 0; color: var(--primary); cursor: pointer; font-weight: 600; text-decoration: underline; }
+.bsf-fr-actions { width: 1%; white-space: nowrap; }
+.bsf-btn-sm { padding: .2rem .5rem; font-size: .78rem; }
+.bsf-fr-add { margin-top: .5rem; }
+.bsf-fr-add > summary { display: inline-block; list-style: none; }
+.bsf-fr-add-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; align-items: end; margin-top: .5rem;
+  padding: .75rem; border: 1px solid var(--line); border-radius: var(--radius-sm, 6px); }
+.bsf-fr-add-form .bsf-fr-wide { grid-column: span 2; }
+.bsf-fr-nav { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; position: sticky; bottom: 0; z-index: 2;
+  padding: .6rem 0; background: var(--paper); border-top: 1px solid var(--line); }
+.bsf-fr-page-select { width: auto; max-width: 22rem; }
+.bsf-fr-spacer { flex: 1; }
+@media (max-width: 980px) {
+  .bsf-fr { grid-template-columns: 1fr; }
+  .bsf-fr-pane { position: static; }
+  .bsf-fr-image img { max-height: 50vh; }
+  .bsf-fr-add-form { grid-template-columns: 1fr 1fr; }
+}

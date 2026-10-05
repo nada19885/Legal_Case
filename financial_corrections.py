@@ -211,6 +211,8 @@ def submit_fact_resolutions(case_id: str, decisions: list[dict], decided_by: str
             "explanation": decision.get("explanation", ""),
             "summary": decision.get("summary", ""),
         }
+        if decision.get("fingerprint"):
+            payload["fingerprint"] = decision["fingerprint"]
         rows.append({
             "correction_id": random_id("FACTRES"),
             "case_id": case_id,
@@ -233,6 +235,7 @@ def submit_fact_resolution(
     explanation: str = "",
     decided_by: str = "",
     summary: str = "",
+    fingerprint: str = "",
 ) -> str:
     """Record the user's decision on one atomic fact: confirm, correct,
     ignore, or an explanation-based proposal awaiting confirmation.
@@ -242,7 +245,7 @@ def submit_fact_resolution(
     the original reading and every decision stay on record."""
     submit_fact_resolutions(case_id, [{
         "row_id": row_id, "action": action, "fields": fields,
-        "explanation": explanation, "summary": summary,
+        "explanation": explanation, "summary": summary, "fingerprint": fingerprint,
     }], decided_by)
     return row_id
 

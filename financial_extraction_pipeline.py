@@ -3,12 +3,12 @@
 Financial Evidence-Extraction Pipeline Orchestrator.
 Location: lib/python/legal_platform/financial_extraction_pipeline.py
 
-Per page: Stage 1a (PyMuPDF structural evidence, from the original PDF) +
-the page's existing verbatim OCR transcription (produced once at document
-intake, see extraction.py/vlm_adapter.py) -> Stage 2 (text-LLM
-reconstruction into rows). No dedicated financial VLM pass: the intake OCR
-already transcribes every page verbatim, including tables, at the same DPI
-a financial-specific re-read would use.
+Per financial page: the page's consolidated text (produced once at document
+intake by the page pipeline: the PDF's own text where reliable, the vision
+reading otherwise, tables as markdown) + PyMuPDF structural evidence from
+the original PDF -> one text-LLM call into atomic facts. Each fact records
+its document, page, extraction source (the page's route) and the table
+row(s) it came from.
 """
 
 from __future__ import annotations
@@ -87,15 +87,15 @@ def _process_page(
         except Exception as error:
             failures.append(f"PyMuPDF structural extraction failed: {error!r}")
 
-    # Second evidence source: the page's own verbatim OCR transcription,
-    # already produced at document intake (extraction.py) — no fresh VLM call.
+    # The page's consolidated text from document intake (extraction.py).
     transcription_text = page.page_text
+    route = page.extraction_method.split(":", 1)[1] if page.extraction_method.startswith("page_pipeline:") else ""
 
     # Stage 2: one LLM call breaks the page into atomic financial facts,
     # each with a status (extracted / calculated / inferred / uncertain /
     # missing). Calculated facts are recomputed in build_fact_rows.
     try:
-        output = extract_page_facts(structural_evidence, transcription_text, page.page_number)
+        output = extract_page_facts(structural_evidence, transcription_text, page.page_number, route)
     except Exception as error:
         failures.append(f"Fact extraction failed: {error!r}")
         return [], failures, 0
@@ -103,6 +103,7 @@ def _process_page(
     rows = build_fact_rows(
         page.page_id, page.case_document_id, page.page_number, output,
         created_at=datetime.now(timezone.utc).isoformat(),
+        meta={"document_name": page.document_name, "extraction_source": route or "page_text"},
     )
     return rows, failures, 0
 

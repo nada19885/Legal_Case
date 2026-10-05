@@ -1339,6 +1339,97 @@ const LANGUAGES = { en: "English", ar: "العربية" };
 const SESSION_ID = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
 /// END ///
 
+/* Financial fact review (page beside the table). */
+Object.assign(I18N.en, {
+  review_heading: "Financial facts — review page by page",
+  review_caption: "The page is shown beside the table; its rows are highlighted. Click any cell to correct it (Enter saves, Esc cancels). Your edits are kept and the AI's reading stays visible.",
+  review_uncertain_count: "{count} value(s) are uncertain (marked in red): the readings of the page disagreed. Check them against the page.",
+  review_confirmed_by: "Facts confirmed by {by} on {at}. Edits made since then are kept; the analysis shows when it is out of date.",
+  review_page_position: "page {index} of {total}",
+  review_open_full_page: "Open the full page",
+  review_extraction_heading: "Page {page} — what was extracted",
+  review_no_facts_on_page: "No financial facts were extracted from this page. Add one below if the page holds one.",
+  review_previous_page: "Previous page",
+  review_next_page: "Next page",
+  review_confirm_all: "Confirm all pages",
+  review_confirm_again: "Confirm all pages again",
+  review_confirm_all_prompt: "Confirm all {count} facts as shown? {uncertain} uncertain value(s) will be accepted as they are now. The accounting analysis can then run.",
+  review_confirmed_toast: "All pages confirmed. You can run the accounting analysis.",
+  review_cell_edited: "AI read: {value} — edited by {by}",
+  review_cell_click_to_edit: "Click to edit",
+  review_you: "you",
+  review_added_by_you: "Added by you",
+  review_edited_by_you: "Edited by you",
+  review_confirmed: "Confirmed",
+  review_from_ai: "AI extraction",
+  review_as_printed: "As printed",
+  review_restore: "Restore",
+  review_delete_title: "Remove this fact from the ledger",
+  review_delete_confirm: "Remove this fact from the ledger? It stays on record and can be restored.",
+  review_add_fact: "+ Add a fact on page {page}",
+  review_add_save: "Add",
+  review_fact_added: "Fact added.",
+  review_route_native: "From the PDF's own text",
+  review_route_mixed: "PDF text + pictures read by the vision model",
+  review_route_vlm: "Read from the page image",
+  review_kind_photo: "Camera photo",
+  review_kind_scan: "Scan",
+  review_kind_screenshot: "Screenshot / digital",
+  review_flag_low_resolution: "low resolution",
+  review_flag_table_heavy: "table",
+  review_flag_mixed: "text and table",
+  review_candidates: "Readings merged: {names}",
+  review_extraction_uncertain: "Values the readings disagreed on",
+  review_extracted_text: "Extracted text",
+  review_extraction_errors: "{count} extraction note(s)",
+  detail_confirm_facts: "Review the financial facts and press \u201cConfirm all pages\u201d to continue.",
+});
+
+Object.assign(I18N.ar, {
+  review_heading: "الوقائع المالية — المراجعة صفحةً صفحة",
+  review_caption: "تظهر الصفحة بجانب الجدول مع تمييز صفوفها. انقر على أي خلية لتصحيحها (Enter للحفظ وEsc للإلغاء). تُحفظ تعديلاتك وتبقى قراءة الذكاء الاصطناعي ظاهرة.",
+  review_uncertain_count: "{count} قيمة غير مؤكدة (باللون الأحمر): اختلفت قراءات الصفحة. تحقق منها مقابل الصفحة.",
+  review_confirmed_by: "أكّد {by} الوقائع بتاريخ {at}. التعديلات اللاحقة محفوظة، ويُشار إلى التحليل إذا أصبح غير محدّث.",
+  review_page_position: "الصفحة {index} من {total}",
+  review_open_full_page: "فتح الصفحة كاملة",
+  review_extraction_heading: "الصفحة {page} — ما تم استخراجه",
+  review_no_facts_on_page: "لم تُستخرج وقائع مالية من هذه الصفحة. أضف واقعة أدناه إن كانت الصفحة تتضمن واحدة.",
+  review_previous_page: "الصفحة السابقة",
+  review_next_page: "الصفحة التالية",
+  review_confirm_all: "تأكيد جميع الصفحات",
+  review_confirm_again: "تأكيد جميع الصفحات مجددًا",
+  review_confirm_all_prompt: "تأكيد جميع الوقائع ({count}) كما هي معروضة؟ ستُقبل {uncertain} قيمة غير مؤكدة بحالتها الحالية، ثم يمكن تشغيل التحليل المحاسبي.",
+  review_confirmed_toast: "تم تأكيد جميع الصفحات. يمكنك تشغيل التحليل المحاسبي.",
+  review_cell_edited: "قراءة الذكاء الاصطناعي: {value} — عدّلها {by}",
+  review_cell_click_to_edit: "انقر للتعديل",
+  review_you: "أنت",
+  review_added_by_you: "أضفتها أنت",
+  review_edited_by_you: "عدّلتها أنت",
+  review_confirmed: "مؤكدة",
+  review_from_ai: "استخراج آلي",
+  review_as_printed: "كما وردت في المستند",
+  review_restore: "استعادة",
+  review_delete_title: "استبعاد هذه الواقعة من السجل",
+  review_delete_confirm: "استبعاد هذه الواقعة من السجل؟ تبقى محفوظة ويمكن استعادتها.",
+  review_add_fact: "+ إضافة واقعة في الصفحة {page}",
+  review_add_save: "إضافة",
+  review_fact_added: "تمت إضافة الواقعة.",
+  review_route_native: "من نص ملف PDF نفسه",
+  review_route_mixed: "نص PDF مع صور قرأها نموذج الرؤية",
+  review_route_vlm: "مقروءة من صورة الصفحة",
+  review_kind_photo: "صورة بالكاميرا",
+  review_kind_scan: "مسح ضوئي",
+  review_kind_screenshot: "لقطة شاشة / رقمية",
+  review_flag_low_resolution: "دقة منخفضة",
+  review_flag_table_heavy: "جدول",
+  review_flag_mixed: "نص وجدول",
+  review_candidates: "القراءات المدمجة: {names}",
+  review_extraction_uncertain: "قيم اختلفت فيها القراءات",
+  review_extracted_text: "النص المستخرج",
+  review_extraction_errors: "{count} ملاحظة استخراج",
+  detail_confirm_facts: "راجع الوقائع المالية ثم اضغط «تأكيد جميع الصفحات» للمتابعة.",
+});
+
 /* ============================================================
    Application state. One object, mutated by handlers, read by
    the render functions. Nothing else holds view state.
@@ -1364,7 +1455,8 @@ const S = {
   uploads: { documents: [], agreement: [] },
   jobs: {},                    // region -> { detail, current, total }
   accountingSelectedDocs: null, // Set of case_document_id, lazily defaulted to "all" per case
-  reviewPage: 0,               // page of the uncertain-facts review list
+  reviewPageId: "",            // financial page shown beside the fact table
+  pageExtractions: {},         // page_id -> stored extraction record (lazy)
 };
 
 /* ============================================================
@@ -2379,8 +2471,7 @@ function renderAccountingTab() {
 
   renderAccountingDocPicker(acc.documents || []);
   renderAccountingReport(acc.last_run_report || {});
-  renderAccountingConflicts(acc.review_items || acc.pending_conflicts || []);
-  renderAccountingLedger(acc.normalized_ledger || [], acc.has_line_items, acc.has_pending_review, acc.withheld_rows || 0);
+  renderFactReview();
   renderAccountingCrossCheck(acc.cross_check_summary || {});
   renderAccountingDiscrepancies(acc.discrepancies || []);
   renderAccountingFindings(acc.findings || {}, acc.run_metadata || {});
@@ -2430,11 +2521,6 @@ function renderAccountingDocPicker(documents) {
     </div>`);
 }
 
-const FACT_FIELD_ORDER = [
-  "fact_type", "date", "description", "amount", "currency", "debit", "credit", "balance",
-  "amount_due", "paid_amount", "remaining_amount", "account_number", "transaction_reference", "counterparty",
-];
-const REVIEW_PAGE_SIZE = 10;
 const FACT_AMOUNT_FIELDS = ["amount", "debit", "credit", "balance", "amount_due", "paid_amount", "remaining_amount"];
 const FACT_STATUS_KIND = {
   EXTRACTED: "verified", CALCULATED: "ai", INFERRED: "provisional", UNCERTAIN: "review",
@@ -2452,196 +2538,331 @@ function factStatusBadge(status) {
   return badge(t(`fact_status_${status}`), FACT_STATUS_KIND[status] || "neutral");
 }
 
-function factFieldsTable(fact, onlyFilled) {
-  const names = FACT_FIELD_ORDER.filter((name) =>
-    !onlyFilled || (fact[name] !== null && fact[name] !== undefined && fact[name] !== ""));
-  if (!names.length) return "";
+/* ============================================================
+   Financial fact review: the page beside the table of atomic facts.
+   The rows of the page on screen are highlighted; Previous / Next move
+   to the next financial page and the highlight follows. Cells are
+   edited in place (click, type, Enter); every edit is saved at once,
+   layered on the AI's reading, which stays visible. Uncertain values
+   are marked in the table. "Confirm all pages" unlocks the accounting
+   analysis.
+   ============================================================ */
+const FACT_TYPE_OPTIONS = [
+  "transaction", "payment", "installment", "deposit", "withdrawal", "transfer", "financing_amount",
+  "outstanding_balance", "remaining_balance", "amount_due", "opening_balance", "closing_balance", "balance",
+  "fee", "interest", "penalty", "credit_limit", "claimed_amount", "other",
+];
+const REVIEW_COLUMNS = ["date", "fact_type", "description", "amount", "debit", "credit", "balance", "currency"];
+const REVIEW_ALWAYS = ["date", "fact_type", "description", "amount"];
+
+/* Columns with a value somewhere in the table (date, type, description
+   and amount are always shown, so they can be filled in). */
+function reviewColumns(facts) {
+  return REVIEW_COLUMNS.filter((name) => REVIEW_ALWAYS.includes(name)
+    || facts.some((fact) => fact[name] !== null && fact[name] !== undefined && fact[name] !== ""));
+}
+
+function reviewState() {
+  const acc = (S.snapshot && S.snapshot.accounting) || {};
+  const pages = acc.financial_pages || [];
+  const facts = acc.facts_table || [];
+  // Pages that only have facts (e.g. classified before) still appear.
+  const known = new Set(pages.map((page) => page.page_id));
+  facts.forEach((fact) => {
+    if (fact.page_id && !known.has(fact.page_id)) {
+      known.add(fact.page_id);
+      pages.push({ page_id: fact.page_id, page_number: fact.page_number, document_name: fact.document_name || "",
+                   label: "", image_url: `/page_image?case_id=${S.caseId}&page_id=${fact.page_id}` });
+    }
+  });
+  return { acc, pages, facts };
+}
+
+function rememberedReviewPage() {
+  try { return window.localStorage.getItem(`bsf-review-page-${S.caseId}`) || ""; } catch (error) { return ""; }
+}
+
+function rememberReviewPage(pageId) {
+  try { window.localStorage.setItem(`bsf-review-page-${S.caseId}`, pageId); } catch (error) { /* private mode */ }
+}
+
+function currentReviewPage(pages) {
+  if (!pages.length) return null;
+  const wanted = S.reviewPageId || rememberedReviewPage();
+  return pages.find((page) => page.page_id === wanted) || pages[0];
+}
+
+function reviewPageTitle(page) {
+  return page.label || `${page.document_name || ""} — ${t("page_label")} ${page.page_number || "—"}`;
+}
+
+function factCell(fact, name, editable) {
+  const raw = fact[name];
+  const shown = name === "fact_type" ? factTypeLabel(raw) : (raw === null || raw === undefined || raw === "" ? "—" : raw);
+  const original = (fact.original_values || {})[name];
+  const edited = Object.prototype.hasOwnProperty.call(fact.original_values || {}, name);
+  const title = edited
+    ? t("review_cell_edited", { value: original === null || original === undefined || original === "" ? "—" : original,
+                                 by: fact.edited_by || t("review_you") })
+    : (editable ? t("review_cell_click_to_edit") : "");
+  return `<td dir="auto" class="bsf-fr-cell${edited ? " is-edited" : ""}${FACT_AMOUNT_FIELDS.includes(name) ? " is-number" : ""}"
+             ${editable ? `data-action="edit-fact-cell" data-row-id="${esc(fact.row_id)}" data-field="${esc(name)}"` : ""}
+             title="${esc(title)}">${esc(shown)}${edited ? '<span class="bsf-fr-edited-mark" aria-hidden="true">✎</span>' : ""}</td>`;
+}
+
+function factRowMarkup(fact, currentPageId, columns) {
+  const current = fact.page_id === currentPageId;
+  const uncertain = fact.status === "UNCERTAIN";
+  const review = fact.review || {};
+  const reason = [review.question, review.reason].filter(Boolean).join(" — ");
+  const classes = ["bsf-fr-row", current ? "is-current" : "is-other", uncertain ? "is-uncertain" : "",
+                   fact.deleted ? "is-deleted" : ""].filter(Boolean).join(" ");
+  const source = fact.added_by_user ? badge(t("review_added_by_you"), "provisional")
+    : (fact.corrected_fields || []).length ? badge(t("review_edited_by_you"), "provisional")
+    : fact.status === "USER_CONFIRMED" ? badge(t("review_confirmed"), "verified")
+    : uncertain ? badge(t("fact_status_UNCERTAIN"), "review")
+    : badge(t("review_from_ai"), "ai");
+  const editable = !fact.deleted;
   return `
-    <table class="bsf-table bsf-review-transaction">
-      <tbody>${names.map((name) => `
-        <tr><th>${esc(t(`field_${name}`))}</th>
-            <td>${esc(name === "fact_type" ? factTypeLabel(fact[name]) : (fact[name] ?? "—"))}</td></tr>`).join("")}
-      </tbody>
-    </table>`;
+    <tr class="${classes}" data-page-id="${esc(fact.page_id)}" data-row-id="${esc(fact.row_id)}">
+      <td class="bsf-fr-page-cell"><button type="button" class="bsf-link" data-action="review-goto-page"
+          data-page-id="${esc(fact.page_id)}">${esc(fact.page_number || "—")}</button></td>
+      ${columns.map((name) => factCell(fact, name, editable)).join("")}
+      <td class="bsf-fr-status">${source}
+        ${uncertain && reason ? `<div class="bsf-fr-reason">${esc(reason)}</div>` : ""}
+        ${(review.alternatives || []).length && uncertain
+          ? `<div class="bsf-fr-reason">${esc(t("fact_alternatives"))}: ${esc(review.alternatives.join(" / "))}</div>` : ""}
+        ${fact.supporting_table || fact.source_text ? `<details class="bsf-fr-source"><summary>${esc(t("review_as_printed"))}</summary>
+          <div dir="auto">${fact.supporting_table ? renderExtractionMarkdown(fact.supporting_table) : `<pre>${esc(fact.source_text)}</pre>`}</div>
+        </details>` : ""}
+      </td>
+      <td class="bsf-fr-actions">${fact.deleted
+        ? `<button type="button" class="bsf-btn bsf-btn-sm" data-action="restore-fact" data-row-id="${esc(fact.row_id)}">${esc(t("review_restore"))}</button>`
+        : `<button type="button" class="bsf-btn bsf-btn-sm" data-action="delete-fact" data-row-id="${esc(fact.row_id)}"
+             title="${esc(t("review_delete_title"))}">✕</button>`}</td>
+    </tr>`;
 }
 
-/* Facts the AI marked UNCERTAIN. Each card shows the AI's interpretation,
-   why it is unsure, the text as printed and the page, and four ways to
-   decide: confirm it, correct it, ignore it, or explain how to read it
-   (the AI rewrites the fact and you accept the rewrite). */
-function renderAccountingConflicts(items) {
-  const target = region("accounting-conflicts");
-  if (!target) return;
-  if (!items.length) {
-    const acc = (S.snapshot && S.snapshot.accounting) || {};
-    html(target, acc.has_line_items ? alertBox(t("all_reconciled"), "ok") : "");
-    return;
-  }
+function renderExtractionMarkdown(text) {
+  // Wrapped cell text is joined with <br> by the extraction.
+  return renderMarkdown(String(text || "")).replace(/&lt;br\s*\/?&gt;/gi, "<br>");
+}
 
-  const correctForm = (item) => `
-    <details class="bsf-fact-correct">
-      <summary class="bsf-btn">${esc(t("fact_correct"))}</summary>
-      <div class="bsf-fact-form">
-        ${FACT_FIELD_ORDER.map((name) => `
-          <label class="bsf-field">
-            <span>${esc(t(`field_${name}`))}</span>
-            <input type="text" class="bsf-input" data-fact-field="${esc(name)}"
-                   ${FACT_AMOUNT_FIELDS.includes(name) ? 'inputmode="decimal"' : ""}
-                   value="${esc(item.fact[name] ?? "")}">
-          </label>`).join("")}
-        <label class="bsf-field bsf-fact-note">
-          <span>${esc(t("fact_note_label"))}</span>
-          <input type="text" class="bsf-input" data-fact-note>
-        </label>
-        <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-correct" data-row-id="${esc(item.row_id)}">
-          ${esc(t("fact_save_correction"))}
-        </button>
-      </div>
+function addFactFormMarkup(page) {
+  return `
+    <details class="bsf-fr-add" ${S.reviewAddOpen ? "open" : ""}>
+      <summary class="bsf-btn bsf-btn-sm">${esc(t("review_add_fact", { page: page.page_number || "—" }))}</summary>
+      <form class="bsf-fr-add-form" data-form="add-fact" data-page-id="${esc(page.page_id)}">
+        <label class="bsf-field"><span>${esc(t("field_date"))}</span><input class="bsf-input" name="date" dir="auto"></label>
+        <label class="bsf-field"><span>${esc(t("column_fact_type"))}</span>
+          <select class="bsf-input" name="fact_type">${FACT_TYPE_OPTIONS.map((type) =>
+            `<option value="${type}" ${type === "transaction" ? "selected" : ""}>${esc(factTypeLabel(type))}</option>`).join("")}</select></label>
+        <label class="bsf-field bsf-fr-wide"><span>${esc(t("field_description"))}</span><input class="bsf-input" name="description" dir="auto"></label>
+        <label class="bsf-field"><span>${esc(t("field_amount"))}</span><input class="bsf-input" name="amount" inputmode="decimal"></label>
+        <label class="bsf-field"><span>${esc(t("column_balance"))}</span><input class="bsf-input" name="balance" inputmode="decimal"></label>
+        <label class="bsf-field"><span>${esc(t("column_currency"))}</span><input class="bsf-input" name="currency"></label>
+        <button type="submit" class="bsf-btn bsf-btn-primary">${esc(t("review_add_save"))}</button>
+      </form>
     </details>`;
-
-  const proposalBox = (item) => item.proposal ? `
-    <div class="bsf-fact-proposal">
-      <div class="bsf-review-label">${esc(t("fact_proposal_heading"))}</div>
-      <div class="bsf-caption">“${esc(item.proposal.explanation || "")}”</div>
-      ${item.proposal.summary ? `<div><strong>${esc(item.proposal.summary)}</strong></div>` : ""}
-      ${factFieldsTable(item.proposal.fields || {}, true)}
-      <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-accept-proposal" data-row-id="${esc(item.row_id)}">
-        ${esc(t("fact_accept_proposal"))}
-      </button>
-    </div>` : "";
-
-  const card = (item) => {
-    const review = item.review || {};
-    const check = (item.calculation && item.calculation.check) || null;
-    return `
-      <details class="bsf-expander bsf-review-item" data-row-id="${esc(item.row_id)}" open>
-        <summary>${esc(t("fact_item_title", {
-          page: item.page_label || `${t("page_label")} ${item.page_number || "—"}`,
-          type: factTypeLabel(item.fact.fact_type),
-        }))}</summary>
-        <div class="bsf-expander-body">
-          <div class="bsf-review-grid">
-            <div>
-              <div class="bsf-review-label">${esc(t("fact_ai_interpretation"))}</div>
-              ${factFieldsTable(item.fact, true)}
-              ${review.question ? `<div class="bsf-kv"><strong>${esc(t("fact_question"))}:</strong> ${esc(review.question)}</div>` : ""}
-              ${review.suggestion ? `<div class="bsf-kv"><strong>${esc(t("review_suggestion"))}:</strong> ${esc(review.suggestion)}</div>` : ""}
-              ${review.reason ? `<div class="bsf-kv"><strong>${esc(t("review_reasoning"))}:</strong> ${esc(review.reason)}</div>` : ""}
-              ${(review.alternatives || []).length ? `<div class="bsf-kv"><strong>${esc(t("fact_alternatives"))}:</strong>
-                ${review.alternatives.map((alt) => badge(factTypeLabel(alt), "neutral")).join(" ")}</div>` : ""}
-              ${check && !check.ok ? alertBox(`${t("fact_calc_failed")}: ${check.message || ""}`, "warn") : ""}
-              ${item.source_text ? `
-                <div class="bsf-review-label">${esc(t("review_row_as_printed"))}</div>
-                <pre class="bsf-source-text">${esc(item.source_text)}</pre>` : ""}
-              ${item.page_excerpt ? `
-                <div class="bsf-review-label">${esc(t("review_page_excerpt"))}</div>
-                <pre class="bsf-source-text">${esc(item.page_excerpt)}</pre>` : ""}
-            </div>
-            <div>
-              ${item.page_image_url ? `
-                <button type="button" class="bsf-review-image" data-action="view-page" data-page-id="${esc(item.page_id)}">
-                  <img src="${esc(backendUrl(item.page_image_url))}" alt="${esc(item.page_label || "")}" loading="lazy">
-                </button>` : ""}
-            </div>
-          </div>
-          ${proposalBox(item)}
-          <div class="bsf-fact-actions">
-            <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-confirm" data-row-id="${esc(item.row_id)}">
-              ${esc(t("fact_confirm"))}
-            </button>
-            ${correctForm(item)}
-            <button type="button" class="bsf-btn" data-action="fact-ignore" data-row-id="${esc(item.row_id)}">
-              ${esc(t("fact_ignore"))}
-            </button>
-          </div>
-          <div class="bsf-fact-explain">
-            <label class="bsf-field">
-              <span>${esc(t("fact_explain_label"))}</span>
-              <textarea class="bsf-input" rows="2" data-fact-explanation
-                        placeholder="${esc(t("fact_explain_placeholder"))}"></textarea>
-            </label>
-            <button type="button" class="bsf-btn" data-action="fact-explain" data-row-id="${esc(item.row_id)}">
-              ${esc(t("fact_apply_explanation"))}
-            </button>
-          </div>
-        </div>
-      </details>`;
-  };
-
-  // Ten facts at a time: fewer cards (and page images) to load at once.
-  const pages = Math.max(1, Math.ceil(items.length / REVIEW_PAGE_SIZE));
-  S.reviewPage = Math.min(Math.max(0, S.reviewPage || 0), pages - 1);
-  const shown = items.slice(S.reviewPage * REVIEW_PAGE_SIZE, (S.reviewPage + 1) * REVIEW_PAGE_SIZE);
-  const pager = () => `
-    <div class="bsf-review-pager">
-      <button type="button" class="bsf-btn" data-action="review-page" data-step="-1" ${S.reviewPage === 0 ? "disabled" : ""}>
-        ${esc(t("review_prev"))}</button>
-      <span>${esc(t("review_page_of", { page: S.reviewPage + 1, pages, total: items.length }))}</span>
-      <button type="button" class="bsf-btn" data-action="review-page" data-step="1" ${S.reviewPage >= pages - 1 ? "disabled" : ""}>
-        ${esc(t("review_next"))}</button>
-      <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-confirm-page"
-              data-row-ids="${esc(shown.map((item) => item.row_id).join(","))}">
-        ${esc(t("review_confirm_page", { count: shown.length }))}</button>
-    </div>`;
-
-  html(target, `
-    <h4 class="bsf-subsection">${esc(t("fact_review_heading"))}</h4>
-    ${alertBox(t("fact_review_count", { count: items.length }), "warn")}
-    ${pager()}
-    ${shown.map(card).join("")}
-    ${shown.length > 3 ? pager() : ""}`);
 }
 
-function renderAccountingLedger(ledger, hasLineItems, hasPendingReview, withheld) {
-  const target = region("accounting-ledger");
+function renderFactReview() {
+  const target = region("accounting-review");
   if (!target) return;
-
-  // The ledger only holds facts with a final status; uncertain ones wait
-  // for the user and are counted here instead of shown.
-  const withheldNote = withheld ? alertBox(t("ledger_withheld", { count: withheld }), "info") : "";
-  if (!hasLineItems || !ledger.length) {
-    html(target, withheldNote || `<p class="bsf-caption">${esc(t("no_line_items"))}</p>`);
+  const { acc, pages, facts } = reviewState();
+  if (!facts.length && !pages.length) {
+    html(target, `<p class="bsf-caption">${esc(t("no_line_items"))}</p>`);
     return;
   }
+  const page = currentReviewPage(pages);
+  const index = page ? pages.findIndex((item) => item.page_id === page.page_id) : -1;
+  const pageFacts = facts.filter((fact) => page && fact.page_id === page.page_id);
+  const uncertain = facts.filter((fact) => fact.status === "UNCERTAIN" && !fact.deleted).length;
+  const confirmed = Boolean(acc.facts_confirmed);
+  const columns = reviewColumns(facts);
 
-  const cell = (value) => esc(value === null || value === undefined || value === "" ? "—" : value);
   html(target, `
-    ${withheldNote}
-    <div class="bsf-table-scroll">
-    <table class="bsf-table bsf-fact-ledger">
-      <thead>
-        <tr>
-          <th>${esc(t("column_page"))}</th>
-          <th>${esc(t("column_fin_date"))}</th>
-          <th>${esc(t("column_fact_type"))}</th>
-          <th>${esc(t("column_description"))}</th>
-          <th>${esc(t("column_value"))}</th>
-          <th>${esc(t("column_debit"))}</th>
-          <th>${esc(t("column_credit"))}</th>
-          <th>${esc(t("column_balance"))}</th>
-          <th>${esc(t("column_currency"))}</th>
-          <th>${esc(t("column_reference"))}</th>
-          <th>${esc(t("column_row_status"))}</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${ledger.map((item) => `
-          <tr>
-            <td>${cell(item.page_number)}</td>
-            <td>${cell(item.date)}</td>
-            <td>${esc(factTypeLabel(item.fact_type))}</td>
-            <td>${cell(item.description)}${item.user_note ? `<div class="bsf-caption">${esc(t("ledger_note", { note: item.user_note }))}</div>` : ""}</td>
-            <td>${cell(item.value)}${item.value_field && item.value_field !== "amount" ? `<div class="bsf-caption">${esc(t(`field_${item.value_field}`))}</div>` : ""}</td>
-            <td>${cell(item.debit)}</td>
-            <td>${cell(item.credit)}</td>
-            <td>${cell(item.balance)}</td>
-            <td>${cell(item.currency)}</td>
-            <td>${cell(item.transaction_reference || item.counterparty)}</td>
-            <td>${factStatusBadge(item.status)}</td>
-          </tr>`).join("")}
-      </tbody>
-    </table>
+    <h4 class="bsf-subsection">${esc(t("review_heading"))}</h4>
+    <p class="bsf-caption">${esc(t("review_caption"))}</p>
+    ${confirmed
+      ? alertBox(t("review_confirmed_by", { by: acc.facts_confirmed_by || "—", at: String(acc.facts_confirmed_at || "").slice(0, 16).replace("T", " ") }), "ok")
+      : uncertain ? alertBox(t("review_uncertain_count", { count: uncertain }), "warn") : ""}
+    <div class="bsf-fr">
+      <div class="bsf-fr-pane">
+        ${page ? `
+          <div class="bsf-fr-pane-title" dir="auto">${esc(reviewPageTitle(page))}
+            <span class="bsf-caption">${esc(t("review_page_position", { index: index + 1, total: pages.length }))}</span></div>
+          <button type="button" class="bsf-fr-image" data-action="view-page" data-page-id="${esc(page.page_id)}"
+                  title="${esc(t("review_open_full_page"))}">
+            <img src="${esc(backendUrl(page.image_url))}" alt="${esc(reviewPageTitle(page))}">
+          </button>
+          <details class="bsf-expander bsf-fr-extraction" data-page-id="${esc(page.page_id)}">
+            <summary>${esc(t("review_extraction_heading", { page: page.page_number || "—" }))}</summary>
+            <div class="bsf-expander-body" data-region="review-extraction"></div>
+          </details>` : ""}
+      </div>
+      <div class="bsf-fr-table-wrap">
+        ${page && !pageFacts.length ? alertBox(t("review_no_facts_on_page"), "info") : ""}
+        <div class="bsf-fr-table-scroll" data-region="review-table-scroll">
+          <table class="bsf-table bsf-fr-table">
+            <thead><tr>
+              <th>${esc(t("column_page"))}</th>
+              ${columns.map((name) => `<th>${esc(t(name === "fact_type" ? "column_fact_type"
+                : name === "date" ? "column_fin_date" : name === "description" ? "column_description"
+                : name === "amount" ? "field_amount" : `column_${name}`))}</th>`).join("")}
+              <th>${esc(t("column_row_status"))}</th><th></th>
+            </tr></thead>
+            <tbody>${facts.map((fact) => factRowMarkup(fact, page ? page.page_id : "", columns)).join("")}</tbody>
+          </table>
+        </div>
+        ${page ? addFactFormMarkup(page) : ""}
+      </div>
+    </div>
+    <div class="bsf-fr-nav">
+      <button type="button" class="bsf-btn" data-action="review-step" data-step="-1" ${index <= 0 ? "disabled" : ""}>
+        ${esc(isRTL() ? "▶" : "◀")} ${esc(t("review_previous_page"))}</button>
+      <select class="bsf-input bsf-fr-page-select" data-action="review-select-page" aria-label="${esc(t("page_label"))}">
+        ${pages.map((item, i) => `<option value="${esc(item.page_id)}" ${page && item.page_id === page.page_id ? "selected" : ""}>
+          ${esc(`${i + 1}. ${reviewPageTitle(item)} (${facts.filter((f) => f.page_id === item.page_id && !f.deleted).length})`)}</option>`).join("")}
+      </select>
+      <button type="button" class="bsf-btn" data-action="review-step" data-step="1" ${index >= pages.length - 1 ? "disabled" : ""}>
+        ${esc(t("review_next_page"))} ${esc(isRTL() ? "◀" : "▶")}</button>
+      <span class="bsf-fr-spacer"></span>
+      <button type="button" class="bsf-btn bsf-btn-primary" data-action="confirm-all-facts" ${facts.length ? "" : "disabled"}>
+        ${esc(confirmed ? t("review_confirm_again") : t("review_confirm_all"))}</button>
     </div>`);
+
+  scrollToCurrentRows();
+  const extraction = target.querySelector(".bsf-fr-extraction");
+  if (extraction) {
+    if (S.reviewExtractionOpen) extraction.open = true;
+    extraction.addEventListener("toggle", () => {
+      S.reviewExtractionOpen = extraction.open;
+      if (extraction.open) loadPageExtraction(extraction.dataset.pageId);
+    });
+    if (extraction.open) loadPageExtraction(extraction.dataset.pageId);
+  }
+  const addForm = target.querySelector(".bsf-fr-add");
+  if (addForm) addForm.addEventListener("toggle", () => { S.reviewAddOpen = addForm.open; });
+  const synthesize = document.querySelector('[data-action="accounting-synthesize"]');
+  if (synthesize) synthesize.disabled = !confirmed;
+}
+
+function scrollToCurrentRows() {
+  const box = region("review-table-scroll");
+  if (!box) return;
+  const first = box.querySelector("tr.is-current");
+  if (!first) return;
+  const head = box.querySelector("thead");
+  box.scrollTop = Math.max(0, first.offsetTop - (head ? head.offsetHeight : 0) - 4);
+}
+
+async function loadPageExtraction(pageId) {
+  const target = region("review-extraction");
+  if (!target || !pageId) return;
+  S.pageExtractions = S.pageExtractions || {};
+  let record = S.pageExtractions[pageId];
+  if (!record) {
+    html(target, `<p class="bsf-caption">${esc(t("loading"))}</p>`);
+    try {
+      record = await apiGet("/accounting/page_extraction", { case_id: S.caseId, page_id: pageId });
+      S.pageExtractions[pageId] = record;
+    } catch (error) {
+      html(target, alertBox(t("request_failed", { error: error.message }), "flag"));
+      return;
+    }
+  }
+  if (region("review-extraction") !== target) return;
+  const routeKey = { native: "review_route_native", "native+vlm": "review_route_mixed", vlm: "review_route_vlm" }[record.route];
+  html(target, `
+    <div class="bsf-fr-meta">
+      ${routeKey ? badge(t(routeKey), "neutral") : ""}
+      ${(record.regions || []).map((r) => badge(`${t(`review_kind_${r.kind}`)}${(r.flags || []).length
+        ? " · " + r.flags.map((flag) => t(`review_flag_${flag}`)).join(", ") : ""}`, "neutral")).join(" ")}
+      ${(record.candidates || []).length ? `<span class="bsf-caption">${esc(t("review_candidates", { names: record.candidates.join(", ") }))}</span>` : ""}
+    </div>
+    ${record.note ? `<p class="bsf-caption">${esc(record.note)}</p>` : ""}
+    ${(record.uncertain || []).length ? `
+      <div class="bsf-review-label">${esc(t("review_extraction_uncertain"))}</div>
+      <ul class="bsf-fr-uncertain">${record.uncertain.map((u) => `<li dir="auto"><strong>${esc(u.value || "")}</strong>
+        ${(u.readings || []).length ? ` — ${esc(u.readings.join(" | "))}` : ""}${u.reason ? ` <span class="bsf-caption">(${esc(u.reason)})</span>` : ""}</li>`).join("")}</ul>` : ""}
+    <div class="bsf-review-label">${esc(t("review_extracted_text"))}</div>
+    <div class="bsf-fr-text" dir="auto">${renderExtractionMarkdown(record.final_text || "")}</div>
+    ${(record.errors || []).length ? `<details><summary class="bsf-caption">${esc(t("review_extraction_errors", { count: record.errors.length }))}</summary>
+      <pre>${esc(record.errors.join("\n"))}</pre></details>` : ""}`);
+}
+
+function goToReviewPage(pageId) {
+  if (!pageId) return;
+  S.reviewPageId = pageId;
+  rememberReviewPage(pageId);
+  renderFactReview();
+}
+
+/* Edits are saved one at a time, in order; the table is updated from the
+   server's answer, the stage strip after the user pauses. */
+let factSaveQueue = Promise.resolve();
+let reviewRefreshTimer = null;
+
+function scheduleReviewRefresh() {
+  clearTimeout(reviewRefreshTimer);
+  reviewRefreshTimer = setTimeout(() => refreshCase(), 1500);
+}
+
+function saveFactChange(path, body) {
+  factSaveQueue = factSaveQueue.then(async () => {
+    try {
+      const saved = await apiPost(path, Object.assign({ case_id: S.caseId }, body));
+      if (saved.facts_table && S.snapshot && S.snapshot.accounting) {
+        S.snapshot.accounting.facts_table = saved.facts_table;
+        if (typeof saved.facts_confirmed === "boolean") S.snapshot.accounting.facts_confirmed = saved.facts_confirmed;
+      }
+      renderFactReview();
+      scheduleReviewRefresh();
+      return saved;
+    } catch (error) {
+      fail(error);
+      renderFactReview();
+      return null;
+    }
+  });
+  return factSaveQueue;
+}
+
+function startCellEdit(cell) {
+  if (cell.querySelector("input, select")) return;
+  const rowId = cell.dataset.rowId;
+  const field = cell.dataset.field;
+  const fact = (reviewState().facts || []).find((item) => item.row_id === rowId);
+  if (!fact) return;
+  const value = fact[field] === null || fact[field] === undefined ? "" : String(fact[field]);
+  const control = field === "fact_type"
+    ? Object.assign(document.createElement("select"), {
+        innerHTML: FACT_TYPE_OPTIONS.map((type) => `<option value="${type}" ${type === value ? "selected" : ""}>${esc(factTypeLabel(type))}</option>`).join(""),
+      })
+    : Object.assign(document.createElement("input"), { value, dir: "auto" });
+  control.className = "bsf-input bsf-fr-input";
+  if (FACT_AMOUNT_FIELDS.includes(field)) control.inputMode = "decimal";
+  cell.textContent = "";
+  cell.appendChild(control);
+  control.focus();
+  if (control.select) control.select();
+
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    const next = control.value.trim();
+    if (!save || next === value) { renderFactReview(); return; }
+    cell.classList.add("is-saving");
+    saveFactChange("/accounting/fact/update", { row_id: rowId, fields: { [field]: next } });
+  };
+  control.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); finish(true); }
+    else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
+  });
+  control.addEventListener("blur", () => finish(true));
+  if (field === "fact_type") control.addEventListener("change", () => finish(true));
 }
 
 function renderAccountingCrossCheck(summary) {
@@ -3672,74 +3893,6 @@ function closeModal() {
 /* ============================================================
    Action handlers, wired through one delegated click listener.
    ============================================================ */
-/* Decisions on uncertain facts are sent one at a time, in order, so quick
-   clicks never pile up parallel requests on the backend. A decided card is
-   removed at once; the full case refresh happens once, after the user
-   pauses. When the last fact is decided, the accounting analysis continues
-   automatically with the instructions on screen (or the ones last used). */
-let decisionQueue = Promise.resolve();
-let decisionsInFlight = 0;
-let reviewRefreshTimer = null;
-
-function setCardsSaving(rowIds, saving) {
-  rowIds.forEach((rowId) => {
-    const card = document.querySelector(`.bsf-review-item[data-row-id="${CSS.escape(rowId)}"]`);
-    if (!card) return;
-    card.classList.toggle("is-saving", saving);
-    card.querySelectorAll("button, input, textarea").forEach((control) => { control.disabled = saving; });
-  });
-}
-
-function dropReviewItems(rowIds, pendingCount) {
-  const acc = (S.snapshot && S.snapshot.accounting) || null;
-  if (!acc) return;
-  acc.review_items = (acc.review_items || []).filter((item) => !rowIds.includes(item.row_id));
-  acc.pending_conflicts = acc.review_items;
-  acc.pending_count = typeof pendingCount === "number" ? pendingCount : acc.review_items.length;
-  acc.pending_field_count = acc.pending_count;
-  acc.has_pending_review = acc.pending_count > 0;
-  renderAccountingConflicts(acc.review_items);
-  renderStageStrips();
-  renderAttention();
-}
-
-function scheduleReviewRefresh() {
-  clearTimeout(reviewRefreshTimer);
-  reviewRefreshTimer = setTimeout(() => { if (!decisionsInFlight) refreshCase(); }, 1500);
-}
-
-function queueDecision(rowIds, send) {
-  setCardsSaving(rowIds, true);
-  decisionsInFlight += 1;
-  decisionQueue = decisionQueue.then(async () => {
-    try {
-      const saved = await send();
-      dropReviewItems(rowIds, saved.pending_count);
-      if (saved.ready_for_analysis) {
-        clearTimeout(reviewRefreshTimer);
-        const box = $("#accounting-instructions");
-        const instructions = (box && box.value.trim()) || saved.instructions || "";
-        toast(t("accounting_continue_auto"), "ok");
-        await refreshCase();
-        await ACTIONS["accounting-synthesize"](null, instructions);
-      }
-    } catch (error) {
-      setCardsSaving(rowIds, false);
-      fail(error);
-    } finally {
-      decisionsInFlight -= 1;
-      if (!decisionsInFlight) scheduleReviewRefresh();
-    }
-  });
-  return decisionQueue;
-}
-
-function resolveFact(el, body) {
-  const rowId = el.dataset.rowId;
-  return queueDecision([rowId], () =>
-    apiPost("/accounting/fact/resolve", Object.assign({ case_id: S.caseId, row_id: rowId }, body)));
-}
-
 const ACTIONS = {
   "open-case": (el) => openCase(el.dataset.caseId),
 
@@ -3890,52 +4043,46 @@ const ACTIONS = {
     } catch (error) { fail(error); }
   },
 
-  "fact-confirm": (el) => resolveFact(el, { action: "confirm" }),
-
-  "fact-ignore": (el) => {
-    if (!window.confirm(t("fact_ignore_confirm"))) return;
-    return resolveFact(el, { action: "ignore" });
+  "edit-fact-cell": (el) => {
+    const row = el.closest("tr");
+    if (row && !row.classList.contains("is-current")) {
+      const rowId = el.dataset.rowId, field = el.dataset.field;
+      goToReviewPage(row.dataset.pageId);
+      const cell = document.querySelector(`[data-action="edit-fact-cell"][data-row-id="${CSS.escape(rowId)}"][data-field="${CSS.escape(field)}"]`);
+      if (cell) startCellEdit(cell);
+      return;
+    }
+    startCellEdit(el);
   },
 
-  "fact-correct": (el) => {
-    const form = el.closest(".bsf-fact-form");
-    const fields = {};
-    form.querySelectorAll("[data-fact-field]").forEach((input) => {
-      fields[input.dataset.factField] = input.value.trim();
-    });
-    const note = (form.querySelector("[data-fact-note]") || {}).value || "";
-    return resolveFact(el, { action: "correct", fields, explanation: note.trim() });
+  "review-goto-page": (el) => goToReviewPage(el.dataset.pageId),
+
+  "review-step": (el) => {
+    const { pages } = reviewState();
+    const page = currentReviewPage(pages);
+    const index = page ? pages.findIndex((item) => item.page_id === page.page_id) : 0;
+    const next = pages[Math.min(pages.length - 1, Math.max(0, index + Number(el.dataset.step || 0)))];
+    if (next) goToReviewPage(next.page_id);
   },
 
-  "fact-accept-proposal": (el) => resolveFact(el, { action: "accept_proposal" }),
-
-  "fact-confirm-page": (el) => {
-    const rowIds = (el.dataset.rowIds || "").split(",").filter(Boolean);
-    if (!rowIds.length || !window.confirm(t("review_confirm_page_prompt", { count: rowIds.length }))) return;
-    return queueDecision(rowIds, () =>
-      apiPost("/accounting/fact/resolve_bulk", { case_id: S.caseId, row_ids: rowIds, action: "confirm" }));
+  "delete-fact": (el) => {
+    if (!window.confirm(t("review_delete_confirm"))) return;
+    return saveFactChange("/accounting/fact/delete", { row_id: el.dataset.rowId });
   },
 
-  "review-page": (el) => {
-    S.reviewPage = (S.reviewPage || 0) + Number(el.dataset.step || 0);
-    renderAccountingConflicts(((S.snapshot && S.snapshot.accounting) || {}).review_items || []);
-    const target = region("accounting-conflicts");
-    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-  },
+  "restore-fact": (el) => saveFactChange("/accounting/fact/restore", { row_id: el.dataset.rowId }),
 
-  "fact-explain": async (el) => {
-    const box = el.closest(".bsf-fact-explain").querySelector("[data-fact-explanation]");
-    const explanation = (box.value || "").trim();
-    if (!explanation) { toast(t("no_value_selected"), "warn"); return; }
+  "confirm-all-facts": async (el) => {
+    const { facts } = reviewState();
+    const uncertain = facts.filter((fact) => fact.status === "UNCERTAIN" && !fact.deleted).length;
+    if (!window.confirm(t("review_confirm_all_prompt", { count: facts.filter((f) => !f.deleted).length, uncertain }))) return;
     el.disabled = true;
-    toast(t("fact_explaining"));
-    try {
-      await apiPost("/accounting/fact/explain", { case_id: S.caseId, row_id: el.dataset.rowId, explanation });
+    const saved = await saveFactChange("/accounting/facts/confirm_all", {});
+    if (saved) {
+      toast(t("review_confirmed_toast"), "ok");
       await refreshCase();
-    } catch (error) {
-      fail(error);
-    } finally {
-      el.disabled = false;
+      const box = document.querySelector('[data-action="accounting-synthesize"]');
+      if (box) box.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   },
 
@@ -3964,6 +4111,18 @@ const ACTIONS = {
    Form handlers
    ============================================================ */
 const FORMS = {
+  "add-fact": async (form) => {
+    const data = new FormData(form);
+    const fields = {};
+    ["date", "fact_type", "description", "amount", "balance", "currency"].forEach((name) => {
+      const value = String(data.get(name) || "").trim();
+      if (value) fields[name] = value;
+    });
+    S.reviewAddOpen = false;
+    const saved = await saveFactChange("/accounting/fact/add", { page_id: form.dataset.pageId, fields });
+    if (saved) toast(t("review_fact_added"), "ok");
+  },
+
   "create-case": async (form) => {
     const data = new FormData(form);
     try {
@@ -4180,6 +4339,12 @@ function wireEvents() {
       addUploadFiles(kind, fileInput.files);
       // Clearing lets the picker re-offer a file the user removed.
       fileInput.value = "";
+      return;
+    }
+
+    const reviewSelect = event.target.closest('[data-action="review-select-page"]');
+    if (reviewSelect) {
+      goToReviewPage(reviewSelect.value);
       return;
     }
 

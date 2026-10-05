@@ -87,6 +87,9 @@ WORKFLOW_KEYS = (
     "accounting_dirty",
     "accounting_dirty_reason",
     "accounting_instructions",
+    "accounting_facts_confirmed",
+    "accounting_facts_confirmed_by",
+    "accounting_facts_confirmed_at",
 
     "research",
     "analysis",
@@ -95,6 +98,7 @@ WORKFLOW_KEYS = (
     "pleading_versions",
     "pleading_status",
     "pleading_finalised_by",
+    "pleading_language",
 
     "case_dirty",
     "dirty_reason",
@@ -120,6 +124,9 @@ def blank_workflow_state() -> dict:
         "accounting_dirty": False,
         "accounting_dirty_reason": "",
         "accounting_instructions": "",
+        "accounting_facts_confirmed": False,
+        "accounting_facts_confirmed_by": "",
+        "accounting_facts_confirmed_at": "",
 
         "research": None,
         "analysis": None,
@@ -128,6 +135,7 @@ def blank_workflow_state() -> dict:
         "pleading_versions": [],
         "pleading_status": "draft",
         "pleading_finalised_by": "",
+        "pleading_language": "",
 
         "case_dirty": False,
         "dirty_reason": "",
@@ -371,6 +379,9 @@ def _derived_status(key: str, facts: dict) -> tuple[str, str, list]:
         status = str(accounting.get("status") or "not_started")
         if pending:
             return WAITING, "review_items", []
+        if accounting.get("has_line_items") and not accounting.get("facts_confirmed") \
+                and status not in ACCOUNTING_COMPLETE:
+            return WAITING, "confirm_facts", []
         if status in ACCOUNTING_COMPLETE:
             return (STALE if accounting.get("dirty") else COMPLETED), status, []
         if status == "ready_for_synthesis" or accounting.get("has_line_items"):

@@ -63,7 +63,7 @@ from legal_platform.workflow import (
     update_workflow_state,
 )
 from legal_platform.files import save_upload
-from legal_platform.extraction import extract_pdf_page_by_page
+from legal_platform.extraction import extract_pdf_page_by_page, load_page_extraction
 from legal_platform.case_mapping import build_case_map
 from legal_platform.case_map_storage import persist_case_map
 from legal_platform.case_register import build_case_register, prioritise_pages_for_summary
@@ -106,11 +106,14 @@ from legal_platform.financial_facts import (
     UNCERTAIN,
     build_fact_ledger,
     build_fact_review_items,
+    build_fact_table,
+    fact_from_row,
+    user_fact_row,
     count_uncertain,
     effective_fact,
     validate_fact_fields,
 )
-from legal_platform.financial_reconciliation import reinterpret_fact
+from legal_platform.financial_reconciliation import persist_reconciled_rows, reinterpret_fact
 from legal_platform.financial_fields import FIELD_NAMES
 from legal_platform.financial_extraction_pipeline import run_financial_extraction
 from legal_platform.financial_forensics import (
@@ -399,6 +402,7 @@ def accounting_state(data, state, review_items=None):
         "pending_count": pending_count,
         "pending_field_count": len(review_items),
         "has_forensic_output": has_forensic_output,
+        "facts_confirmed": bool(state.get("accounting_facts_confirmed")),
     }
 
 
@@ -1150,8 +1154,70 @@ def case_endpoint():
         "cross_check_summary": data.get("cross_check_summary") or {},
         "discrepancies": data.get("discrepancies") or [],
         "findings": _claims_with_evidence(data.get("forensic_findings"), ledger, data),
+        "facts_table": _fact_table(case_id, data, corrections, resolutions),
+        "financial_pages": _financial_pages(case_id, data, classifications),
+        "facts_confirmed": bool(state.get("accounting_facts_confirmed")),
+        "facts_confirmed_by": state.get("accounting_facts_confirmed_by", ""),
+        "facts_confirmed_at": state.get("accounting_facts_confirmed_at", ""),
     }
     return _ok(response)
+
+
+def _fact_table(case_id, data, corrections=None, resolutions=None):
+    """Every atomic fact for the review table (ledger, uncertain, deleted)."""
+    line_items = data.get("financial_line_items")
+    if not isinstance(line_items, pd.DataFrame) or line_items.empty:
+        return []
+    if corrections is None:
+        corrections = load_latest_corrections(case_id)
+    if resolutions is None:
+        resolutions = load_fact_resolutions(case_id)
+    return build_fact_table(line_items.to_dict(orient="records"), corrections, resolutions)
+
+
+def _financial_pages(case_id, data, classifications=None):
+    """The pages shown beside the fact table: pages classified financial /
+    mixed and pages that have facts, in document and page order."""
+    pages = data.get("pages")
+    if not isinstance(pages, pd.DataFrame) or pages.empty:
+        return []
+    if classifications is None:
+        classifications = _latest_classifications_by_page(data)
+    with_facts = set()
+    line_items = data.get("financial_line_items")
+    if isinstance(line_items, pd.DataFrame) and not line_items.empty and "page_id" in line_items.columns:
+        with_facts = set(line_items["page_id"].astype(str))
+    documents = {str(r.get("case_document_id", "")): r for r in frame_to_records(data["documents"])}
+    document_order = list(documents)
+    labels = _page_reference_map(data)
+    id_col = _page_id_column(pages)
+    out = []
+    for row in frame_to_records(pages):
+        page_id = str(row.get(id_col, "") or row.get("page_id", ""))
+        info = classifications.get(page_id, {})
+        financial = info.get("page_type") in {"financial", "mixed"} and info.get("status") != "failed"
+        if not (financial or page_id in with_facts):
+            continue
+        document_id = str(row.get("case_document_id", ""))
+        try:
+            number = int(float(row.get("page_number") or 0))
+        except (TypeError, ValueError):
+            number = 0
+        out.append({
+            "page_id": page_id,
+            "page_number": number,
+            "case_document_id": document_id,
+            "document_name": (documents.get(document_id) or {}).get("original_filename") or document_id,
+            "label": labels.get(page_id, ""),
+            "page_type": info.get("page_type", ""),
+            "image_url": f"/page_image?case_id={case_id}&page_id={page_id}",
+            "_order": (document_order.index(document_id) if document_id in document_order else 999, number),
+        })
+    unique = {item["page_id"]: item for item in out}
+    ordered = sorted(unique.values(), key=lambda item: item["_order"])
+    for item in ordered:
+        item.pop("_order", None)
+    return ordered
 
 
 CLAIM_RESULT_ORDER = (
@@ -1526,9 +1592,15 @@ def _accounting_pipeline(job_id, case_id, document_ids=None, extract=True, sessi
     report["pending_review_items"] = sum(len(item.get("fields") or []) for item in pending)
 
     changes = {"accounting_dirty": False, "accounting_dirty_reason": ""}
-    if pending:
+    confirmed = bool(before.get("accounting_facts_confirmed"))
+    if report["rows_added"]:
+        # New facts: the user reviews the table again before the analysis.
+        changes.update({"accounting_facts_confirmed": False, "accounting_facts_confirmed_by": "",
+                        "accounting_facts_confirmed_at": ""})
+        confirmed = False
+    if pending or (has_items and not confirmed):
         changes["accounting_status"] = "needs_review"
-        stage = stage_patch(WAITING, detail="review_items", report=report)
+        stage = stage_patch(WAITING, detail="review_items" if pending else "confirm_facts", report=report)
     elif (
         report["rows_added"] == 0
         and previous in {"forensic_complete", "complete_no_transactions"}
@@ -1635,6 +1707,9 @@ def accounting_clear():
             "accounting_status": "not_started",
             "accounting_dirty": False,
             "accounting_dirty_reason": "",
+            "accounting_facts_confirmed": False,
+            "accounting_facts_confirmed_by": "",
+            "accounting_facts_confirmed_at": "",
         },
         stages={"accounting": stage_patch(NOT_STARTED, finished_at="", report={})},
         action="accounting_cleared",
@@ -1697,12 +1772,13 @@ def _after_review_change(case_id, actor):
     )
     state = read_workflow_state(case_id)
     status = str(state.get("accounting_status", "") or "")
+    confirmed = bool(state.get("accounting_facts_confirmed"))
 
-    if pending:
+    if pending or not confirmed:
         update_workflow_state(
             case_id,
             changes={"accounting_status": "needs_review"},
-            stages={"accounting": stage_patch(WAITING, detail="review_items")},
+            stages={"accounting": stage_patch(WAITING, detail="review_items" if pending else "confirm_facts")},
             action="accounting_fact_reviewed",
             actor=actor,
         )
@@ -1730,7 +1806,8 @@ def _after_review_change(case_id, actor):
     return {
         "saved": True,
         "pending_count": pending,
-        "ready_for_analysis": not pending,
+        "facts_confirmed": confirmed,
+        "ready_for_analysis": not pending and confirmed,
         "instructions": state.get("accounting_instructions", ""),
     }
 
@@ -1811,6 +1888,172 @@ def accounting_fact_resolve_bulk():
     return _ok(result)
 
 
+@app.route("/accounting/page_extraction")
+def accounting_page_extraction():
+    """What the system extracted from one page before facts were made: the
+    consolidated text (markdown tables), uncertain values, the route and
+    image kinds, and the candidate names (from the stored extraction
+    record; pages processed before it existed show their page text)."""
+    case_id = request.args.get("case_id", "")
+    page_id = request.args.get("page_id", "")
+    if not (case_id and page_id):
+        return jsonify({"error": "case_id and page_id are required"}), 400
+    record = load_page_extraction(case_id, page_id) or {}
+    if not record:
+        page = _page_row(load_case_data(case_id), page_id) or {}
+        record = {"final_text": str(page.get("page_text", "") or ""), "route": "",
+                  "note": "This page was processed before extraction records were kept."}
+    return _ok({
+        "page_id": page_id,
+        "final_text": record.get("final_text", ""),
+        "route": record.get("route", ""),
+        "text_layer_quality": record.get("text_layer_quality", ""),
+        "regions": [{"region": r.get("region"), "kind": r.get("kind"), "flags": r.get("flags") or [],
+                     "views": r.get("variants") or [], "numbers_pass": bool(r.get("numbers_pass"))}
+                    for r in record.get("regions") or []],
+        "candidates": sorted((record.get("candidates") or {}).keys()),
+        "uncertain": record.get("uncertain") or [],
+        "corrections": record.get("corrections") or [],
+        "errors": record.get("errors") or [],
+        "document_type": record.get("document_type", ""),
+        "note": record.get("note", ""),
+    })
+
+
+def _fact_change_response(case_id, actor):
+    result = _after_review_change(case_id, actor)
+    data = load_case_data(case_id)
+    result["facts_table"] = _fact_table(case_id, data)
+    return result
+
+
+@app.route("/accounting/fact/update", methods=["POST"])
+def accounting_fact_update():
+    """The user edits cells of one fact (value, description, date, currency,
+    type...). Stored as a correction layered on the extraction, merged with
+    the user's earlier edits of the same fact; the AI's reading is kept."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    row_id = str(body.get("row_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    if not (case_id and row_id):
+        return jsonify({"error": "case_id and row_id are required."}), 400
+    fields, errors = validate_fact_fields(body.get("fields") or {})
+    if errors:
+        return jsonify({"error": "; ".join(errors)}), 400
+    if not fields:
+        return jsonify({"error": "Nothing to change."}), 400
+    row = _fact_row(case_id, row_id)
+    if row is None:
+        return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
+    current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
+    if current["status"] == "IGNORED":
+        return jsonify({"error": "Restore the deleted fact before editing it."}), 409
+    merged = dict(current.get("final_fields") or {}) if current.get("final_action") == "correct" else {}
+    merged.update(fields)
+    submit_fact_resolution(case_id, row_id, "correct", merged, str(body.get("note", "") or ""), actor,
+                           fingerprint=fact_from_row(row).get("fingerprint", ""))
+    return _ok(_fact_change_response(case_id, actor))
+
+
+@app.route("/accounting/fact/add", methods=["POST"])
+def accounting_fact_add():
+    """A fact the extraction missed, added by the user on a page."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    page_id = str(body.get("page_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    if not (case_id and page_id):
+        return jsonify({"error": "case_id and page_id are required."}), 400
+    fields, errors = validate_fact_fields(body.get("fields") or {})
+    if errors:
+        return jsonify({"error": "; ".join(errors)}), 400
+    if not any(value for name, value in fields.items() if name != "fact_type"):
+        return jsonify({"error": "Enter at least a value or a description."}), 400
+    data = load_case_data(case_id)
+    page = _page_row(data, page_id)
+    if not page:
+        return jsonify({"error": "That page was not found."}), 404
+    document_id = str(page.get("case_document_id", ""))
+    names = {str(r.get("case_document_id", "")): r.get("original_filename", "") for r in frame_to_records(data["documents"])}
+    row = user_fact_row(page_id, document_id, page.get("page_number", ""), {"fact_type": "other", **fields},
+                        names.get(document_id, ""), actor, created_at=pd.Timestamp.utcnow().isoformat())
+    persist_reconciled_rows(case_id, [row])
+    result = _fact_change_response(case_id, actor)
+    result["row_id"] = row["row_id"]
+    return _ok(result)
+
+
+@app.route("/accounting/fact/delete", methods=["POST"])
+def accounting_fact_delete():
+    """Leave a fact out of the ledger (kept on record, can be restored)."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    row_id = str(body.get("row_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    row = _fact_row(case_id, row_id) if case_id and row_id else None
+    if row is None:
+        return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
+    current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
+    # The user's earlier edits ride along, so a restore brings them back.
+    kept = current.get("final_fields") if current.get("final_action") == "correct" else {}
+    submit_fact_resolution(case_id, row_id, "ignore", kept or {}, "deleted in the review table", actor,
+                           fingerprint=fact_from_row(row).get("fingerprint", ""))
+    return _ok(_fact_change_response(case_id, actor))
+
+
+@app.route("/accounting/fact/restore", methods=["POST"])
+def accounting_fact_restore():
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    row_id = str(body.get("row_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    row = _fact_row(case_id, row_id) if case_id and row_id else None
+    if row is None:
+        return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
+    current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
+    fields = current.get("final_fields") or {}
+    fingerprint = fact_from_row(row).get("fingerprint", "")
+    if fields:
+        submit_fact_resolution(case_id, row_id, "correct", fields, "restored", actor, fingerprint=fingerprint)
+    else:
+        submit_fact_resolution(case_id, row_id, "confirm", {}, "restored", actor, fingerprint=fingerprint)
+    return _ok(_fact_change_response(case_id, actor))
+
+
+@app.route("/accounting/facts/confirm_all", methods=["POST"])
+def accounting_facts_confirm_all():
+    """The user has reviewed the fact table: every fact still marked
+    uncertain is confirmed as shown, and the accounting analysis unlocks."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    if not case_id:
+        return jsonify({"error": "case_id is required."}), 400
+    frame = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
+    if frame.empty:
+        return jsonify({"error": "There are no financial facts to confirm. Run the extraction first."}), 409
+    corrections, resolutions = load_latest_corrections(case_id), load_fact_resolutions(case_id)
+    decisions = []
+    for row in frame.to_dict(orient="records"):
+        if effective_fact(row, corrections, resolutions)["status"] == UNCERTAIN:
+            decisions.append({"row_id": str(row.get("row_id", "")), "action": "confirm",
+                              "explanation": "confirmed with all pages",
+                              "fingerprint": fact_from_row(row).get("fingerprint", "")})
+    if decisions:
+        submit_fact_resolutions(case_id, decisions, actor)
+    update_workflow_state(
+        case_id,
+        changes={"accounting_facts_confirmed": True, "accounting_facts_confirmed_by": actor,
+                 "accounting_facts_confirmed_at": pd.Timestamp.utcnow().isoformat()},
+        action="accounting_facts_confirmed",
+        actor=actor,
+    )
+    result = _fact_change_response(case_id, actor)
+    result["confirmed_uncertain"] = len(decisions)
+    return _ok(result)
+
+
 @app.route("/accounting/fact/explain", methods=["POST"])
 def accounting_fact_explain():
     """The user explains how an uncertain fact should be read ("this is the
@@ -1884,6 +2127,9 @@ def accounting_synthesize():
                      "Resolve them before running the analysis.",
             "pending_count": len(pending),
         }), 409
+    if not read_workflow_state(case_id).get("accounting_facts_confirmed"):
+        return jsonify({"error": "Review the financial facts and press \"Confirm all pages\" before running "
+                                 "the accounting analysis."}), 409
 
     def task(job_id):
         data = load_case_data(case_id)
