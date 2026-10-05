@@ -693,37 +693,17 @@ def _node_ids_used(section: dict) -> list[str]:
 
 
 def pleading_language(memo: Any) -> str:
-    """The language a stored pleading was drafted in: "ar", "en" or "both"
-    (two separate, complete versions)."""
+    """The language a stored pleading was drafted in."""
     if not isinstance(memo, dict):
         return "en"
-    if memo.get("language") in LANGUAGES or memo.get("language") == "both":
+    if memo.get("language") in LANGUAGES:
         return memo["language"]
     return "en" if memo.get("pleading_en") else "ar"
 
 
 def pleading_languages(memo: Any) -> tuple:
-    """The versions a stored pleading holds, Arabic first."""
-    language = pleading_language(memo)
-    return ("ar", "en") if language == "both" else (language,)
-
-
-def draft_pleadings(record: dict, language: str = "en",
-                    progress: Optional[Callable[[str], None]] = None) -> dict:
-    """The pleading in the chosen language; for "both", each language is
-    drafted directly and completely in its own language (never translated)
-    and stored side by side."""
-    if language != "both":
-        return draft_pleading(record, language, progress)
-    arabic = draft_pleading(record, "ar", progress)
-    english = draft_pleading(record, "en", progress)
-    return {
-        **english,
-        **{key: value for key, value in arabic.items() if key.endswith("_ar")},
-        "language": "both",
-        "attorney_checks": list(dict.fromkeys((arabic.get("attorney_checks") or []) + (english.get("attorney_checks") or []))),
-        "source_ids_used": sorted(set(arabic.get("source_ids_used") or []) | set(english.get("source_ids_used") or [])),
-    }
+    """The language versions a stored pleading holds (one)."""
+    return (pleading_language(memo),)
 
 
 def draft_pleading(record: dict, language: str = "en",
@@ -777,20 +757,7 @@ def draft_pleading(record: dict, language: str = "en",
 def revise_pleading(memo: dict, revision_request: str, record: dict,
                     progress: Optional[Callable[[str], None]] = None) -> dict:
     """Apply an attorney's requested changes in the pleading's language:
-    only the sections that change are rewritten. A pleading in both
-    languages is revised in each language."""
-    if pleading_language(memo) == "both":
-        arabic = revise_pleading({**memo, "language": "ar"}, revision_request, record, progress)
-        english = revise_pleading({**memo, "language": "en"}, revision_request, record, progress)
-        return {
-            **english,
-            **{key: value for key, value in arabic.items() if key.endswith("_ar")},
-            "language": "both",
-            "change_notes": (arabic.get("change_notes") or []) + (english.get("change_notes") or []),
-            "rejected_changes": (arabic.get("rejected_changes") or []) + (english.get("rejected_changes") or []),
-            "attorney_checks": list(dict.fromkeys((arabic.get("attorney_checks") or []) + (english.get("attorney_checks") or []))),
-            "source_ids_used": sorted(set(arabic.get("source_ids_used") or []) | set(english.get("source_ids_used") or [])),
-        }
+    only the sections that change are rewritten."""
     report = progress or (lambda message: None)
     language = pleading_language(memo)
     key = f"pleading_{language}"
@@ -897,13 +864,8 @@ def _cell(value: str) -> str:
 
 def pleading_to_markdown(memo: dict, language: str = "") -> str:
     """Markdown of a stored pleading, in the language it was drafted in.
-    A pleading in both languages is shown in the requested language, or
-    both versions one after the other for "both"."""
-    if memo.get("language") == "both" or (memo.get("language") not in LANGUAGES and memo.get("pleading_ar")
-                                          and memo.get("pleading_en")):
-        if language not in LANGUAGES:
-            return "\n\n---\n\n".join(pleading_to_markdown({**memo, "language": lang}, lang) for lang in ("ar", "en"))
-        memo = {**memo, "language": language}
+    Pleadings drafted in both languages (before the language choice) are
+    shown in the requested language."""
     if memo.get("language") in LANGUAGES or not memo.get(f"pleading_{language}"):
         language = pleading_language(memo)
     is_ar = language == "ar"

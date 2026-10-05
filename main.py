@@ -124,7 +124,7 @@ from legal_platform.financial_forensics import (
 )
 from legal_platform.pleading import (
     build_drafting_record,
-    draft_pleadings,
+    draft_pleading,
     is_full_pleading,
     pleading_language,
     pleading_languages,
@@ -2328,12 +2328,12 @@ def pleading_generate():
     def task(job_id):
         data = load_case_data(case_id)
         state = restore_workflow_state(data)
-        # The language chosen on the pleading tab (Arabic, English or both,
-        # each drafted directly in its language), else the case's preferred one.
-        language = requested_language if requested_language in ("ar", "en", "both") else (
+        # The language chosen on the pleading tab (Arabic or English, drafted
+        # directly in that language), else the case's preferred one.
+        language = requested_language if requested_language in ("ar", "en") else (
             state.get("pleading_language") or str(data["case"].get("preferred_language", "") or "").strip().lower()
             or "en")
-        if language not in ("ar", "en", "both"):
+        if language not in ("ar", "en"):
             language = "en"
 
         # 1. Attorney review must be prepared / approved.
@@ -2356,7 +2356,7 @@ def pleading_generate():
         _set_phase(job_id, "generating_pleading", "Collecting the record for the pleading…")
         instructions = "" if direct else memo_instructions
         record = _drafting_record(case_id, data, state, instructions)
-        memo = draft_pleadings(record, language, progress=lambda message: _set_phase(job_id, "generating_pleading", message))
+        memo = draft_pleading(record, language, progress=lambda message: _set_phase(job_id, "generating_pleading", message))
         if session_id:
             increment_usage(session_id, "llm_request_count", 2)
             increment_usage(session_id, "message_count", 1)
@@ -2536,8 +2536,7 @@ def discussion_ask():
         answer = answer_case_question(
             question, data["case"], state["attorney_summary"], state["analysis"],
             None, state["research"], case_data=data,
-            pleading=memo_to_markdown(memo, "both" if pleading_language(memo) == "both" else pleading_language(memo))
-            if memo else None,
+            pleading=memo_to_markdown(memo, pleading_language(memo)) if memo else None,
         )
         increment_usage(session_id, "llm_request_count", 2)
         increment_usage(session_id, "message_count", 1)

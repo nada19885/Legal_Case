@@ -1342,7 +1342,6 @@ const SESSION_ID = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())
 /* Financial fact review (page beside the table). */
 Object.assign(I18N.en, {
   continue_to_written_pleading: "Continue to the written pleading",
-  pleading_language_both: "Both (Arabic and English, two separate versions)",
   review_heading: "Financial facts — review page by page",
   review_caption: "The page is shown beside the table; its rows are highlighted. Click any cell to correct it (Enter saves, Esc cancels). Your edits are kept and the AI's reading stays visible.",
   review_uncertain_count: "{count} value(s) are uncertain (marked in red): the readings of the page disagreed. Check them against the page.",
@@ -1389,7 +1388,6 @@ Object.assign(I18N.en, {
 
 Object.assign(I18N.ar, {
   continue_to_written_pleading: "متابعة إلى المذكرة المكتوبة",
-  pleading_language_both: "كلتاهما (العربية والإنجليزية، نسختان منفصلتان)",
   review_heading: "الوقائع المالية — المراجعة صفحةً صفحة",
   review_caption: "تظهر الصفحة بجانب الجدول مع تمييز صفوفها. انقر على أي خلية لتصحيحها (Enter للحفظ وEsc للإلغاء). تُحفظ تعديلاتك وتبقى قراءة الذكاء الاصطناعي ظاهرة.",
   review_uncertain_count: "{count} قيمة غير مؤكدة (باللون الأحمر): اختلفت قراءات الصفحة. تحقق منها مقابل الصفحة.",
@@ -3341,10 +3339,9 @@ if (canDraft) {
   const body = region("pleading-body");
   if (!memo) { html(body, ""); return; }
 
-  // The pleading is drafted in the language chosen before generating;
-  // "both" holds two complete versions, shown one after the other.
+  // The pleading is drafted in one language, chosen before generating.
   const lang = pleadingLanguage(memo);
-  const langs = lang === "both" ? ["ar", "en"] : [lang];
+  const langs = [lang];
 
   html(body, `
     <div class="bsf-btn-row">
@@ -3422,7 +3419,7 @@ async function loadPleadingMarkdown(lang) {
 /* Language a stored pleading was drafted in (older pleadings held both
    languages and follow the interface language). */
 function pleadingLanguage(memo) {
-  if (memo && ["ar", "en", "both"].includes(memo.language)) return memo.language;
+  if (memo && (memo.language === "ar" || memo.language === "en")) return memo.language;
   if (memo && memo.pleading_en && memo.pleading_ar) return S.lang;
   return memo && memo.pleading_ar && !memo.pleading_en ? "ar" : "en";
 }
@@ -3433,7 +3430,7 @@ function preferredPleadingLanguage() {
   const state = (S.snapshot && S.snapshot.workflow_state) || {};
   const preferred = String(((S.snapshot && S.snapshot.case) || {}).preferred_language || "").toLowerCase();
   if (S.pleadingLang) return S.pleadingLang;
-  if (["ar", "en", "both"].includes(state.pleading_language)) return state.pleading_language;
+  if (state.pleading_language === "ar" || state.pleading_language === "en") return state.pleading_language;
   if (preferred === "ar" || preferred === "en") return preferred;
   return state.memo ? pleadingLanguage(state.memo) : S.lang;
 }
