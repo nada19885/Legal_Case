@@ -2387,51 +2387,58 @@ function renderCase() {
   followRunningJobs();
 }
 
-/* Overview: where the case stands, at a glance. */
 function renderCaseStatus() {
   const snap = S.snapshot;
   const stages = snap.stages || [];
-  const acc = snap.accounting || {};
+  const done = stages.filter((stage) => stage.status === "completed").length;
+  const percent = stages.length ? Math.round((done / stages.length) * 100) : 0;
+
   const nextKey = snap.next_stage || "documents";
   const nextStage = stageByKey(nextKey) || { status: "" };
   let nextText;
   if (nextStage.status === "waiting_for_user") nextText = t("next_waiting", { stage: stageLabel(nextKey) });
   else if (nextStage.status === "error") nextText = t("next_error", { stage: stageLabel(nextKey) });
   else nextText = t(NEXT_ACTION_KEYS[nextKey] || "next_documents");
+  const destination = t(STAGE_TAB_KEYS[nextKey] || "tab_documents");
 
-  const financialPages = (acc.financial_pages || []).length;
-  const facts = (acc.facts_table || []).filter((fact) => !fact.deleted);
-  const pending = facts.filter((fact) => fact.status === "UNCERTAIN").length;
-  const card = (value, key, tab) => `
-    <button type="button" class="bsf-ov-card" ${tab ? `data-action="goto-stage" data-stage="${tab}"` : ""}>
-      <span class="m-value">${esc(value)}</span><span class="m-label">${esc(t(key))}</span></button>`;
+  const stepCards = stages.map((stage) => `
+    <button type="button" class="step-card ${stage.state} status-${esc(stage.status)}"
+            data-action="goto-stage" data-stage="${esc(stage.key)}">
+      <div class="step-icon">${STAGE_ICONS[stage.status] || ""}</div>
+      <div class="step-label">${esc(stageLabel(stage.key))}</div>
+      <div class="step-status">${esc(stage.status === "running" && stage.phase ? t(`phase_${stage.phase}`) : t(`status_${stage.status}`))}</div>
+    </button>`).join("");
+
+  const counts = snap.counts || {};
+  const metric = (key, value) => `
+    <div class="bsf-metric">
+      <span class="m-value">${esc(value)}</span>
+      <span class="m-label">${esc(t(key))}</span>
+    </div>`;
 
   html(region("case-status"), `
-    <div class="bsf-ov">
-      <section class="bsf-ov-progress">
-        <h4 class="bsf-subsection">${esc(t("case_progress"))}</h4>
-        <ol class="bsf-ov-steps">${stages.map((stage) => `
-          <li class="status-${esc(stage.status)}">
-            <button type="button" data-action="goto-stage" data-stage="${esc(stage.key)}">
-              <span class="bsf-ov-icon">${STAGE_ICONS[stage.status] || "•"}</span>
-              <span class="bsf-ov-name">${esc(stageLabel(stage.key))}</span>
-              <span class="bsf-ov-state">${esc(stage.status === "running" && stage.phase
-                ? t(`phase_${stage.phase}`) : t(`status_${stage.status}`))}</span>
-            </button>
-            ${stageDetailText(stage) ? `<div class="bsf-caption">${esc(stageDetailText(stage))}</div>` : ""}
-          </li>`).join("")}</ol>
-        <div class="bsf-next"><strong>${esc(t("next_label", { action: nextText }))}</strong>
-          <button type="button" class="bsf-btn bsf-btn-sm bsf-btn-primary" data-action="goto-stage" data-stage="${esc(nextKey)}">
-            ${esc(t("go_there"))}</button></div>
-      </section>
-      <section class="bsf-ov-cards">
-        ${card((snap.counts || {}).documents || 0, "metric_documents", "documents")}
-        ${card((snap.counts || {}).pages || 0, "metric_pages", "documents")}
-        ${card(financialPages, "metric_financial_pages", "accounting")}
-        ${card((acc.document_claims || []).length, "metric_financial_claims", "accounting")}
-        ${card(facts.length, "metric_atomic_facts", "accounting")}
-        ${card(pending, "metric_pending_reviews", "accounting")}
-      </section>
+    <div class="bsf-status">
+      <div class="bsf-status-head">
+        <h4>${esc(t("case_journey"))}</h4>
+        <div class="bsf-metric">
+          <span class="m-value">${percent}%</span>
+          <span class="m-label">${esc(t("progress"))}</span>
+        </div>
+      </div>
+      <p class="bsf-caption">${esc(t("case_journey_caption"))}</p>
+      <div class="bsf-progressbar"><span style="width:${percent}%"></span></div>
+      <div class="bsf-steps">${stepCards}</div>
+      <div class="bsf-status-meta">
+        <div class="bsf-next">
+          <strong>${esc(t("next_label", { action: nextText }))}</strong>
+          <em>${esc(t("open_destination", { destination }).replace(/\*\*/g, ""))}</em>
+        </div>
+        ${metric("metric_documents", counts.documents || 0)}
+        ${metric("metric_pages", counts.pages || 0)}
+        ${metric("metric_facts", counts.facts || 0)}
+        ${metric("metric_parties", counts.parties || 0)}
+        ${metric("metric_issues", counts.issues || 0)}
+      </div>
     </div>`);
 }
 
