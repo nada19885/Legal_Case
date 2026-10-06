@@ -58,6 +58,31 @@ def parse_json_object(text: str) -> dict:
         raise ValueError("The LLM response was not a JSON object.")
     return parsed
 
+_MISSING_COMMA = re.compile(r'(["}\]0-9]|true|false|null)(\s*\n\s*)(["{\[])')
+_TRAILING_COMMA = re.compile(r",(\s*[}\]])")
+
+
+def repair_json_text(text: str) -> str:
+    """Fix the slips models make in long JSON answers, without touching
+    content: a missing comma between two items written on separate lines,
+    and a comma before a closing bracket."""
+    fixed = _MISSING_COMMA.sub(r"\1,\2\3", text)
+    return _TRAILING_COMMA.sub(r"\1", fixed)
+
+
+def parse_json_lenient(text: str) -> dict:
+    """parse_json_object, then once more after repair_json_text."""
+    try:
+        return parse_json_object(text)
+    except ValueError as first_error:
+        try:
+            repaired = parse_json_object(repair_json_text(_strip_markdown_fence(text)))
+            print("[complete_json] malformed JSON repaired in code")
+            return repaired
+        except ValueError:
+            raise first_error
+
+
 def complete_json(
     system_prompt: str,
     user_payload: dict,
@@ -122,4 +147,26 @@ def complete_json(
             "llm_id={}".format(llm_id)
         )
 
-    return parse_json_object(text)
+    try:
+        return parse_json_lenient(text)
+    except ValueError as error:
+        # One more try: the model resends the same answer as valid JSON.
+        print("[complete_json] malformed JSON ({}); asking the model to resend it".format(error))
+        retry = llm.new_completion()
+        try:
+            retry.settings["temperature"] = 0.0
+        except Exception:
+            pass
+        retry.with_message(system_prompt, role="system")
+        retry.with_message(payload_text, role="user")
+        retry.with_message(text[:60000], role="assistant")
+        retry.with_message(
+            "Your previous answer is not valid JSON ({}). Return exactly the same answer as one valid JSON "
+            "object: every item separated by a comma, no trailing commas, nothing before or after it."
+            .format(error),
+            role="user",
+        )
+        second = retry.execute()
+        if getattr(second, "success", True) is False:
+            raise error
+        return parse_json_lenient(strip_think(_extract_text(second)))
