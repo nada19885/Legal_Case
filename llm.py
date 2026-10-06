@@ -62,11 +62,39 @@ _MISSING_COMMA = re.compile(r'(["}\]0-9]|true|false|null)(\s*\n\s*)(["{\[])')
 _TRAILING_COMMA = re.compile(r",(\s*[}\]])")
 
 
+def _escape_inner_quotes(text: str) -> str:
+    """Escape quotation marks that sit INSIDE a string value (a quoted
+    article title in Arabic legal text, for example): a quote only closes a
+    string when what follows it is JSON structure (, : } ] or a line break)."""
+    out, in_string, i = [], False, 0
+    while i < len(text):
+        char = text[i]
+        if not in_string:
+            in_string = char == '"'
+            out.append(char)
+        elif char == "\\":
+            out.append(text[i:i + 2])
+            i += 2
+            continue
+        elif char == '"':
+            rest = text[i + 1:].lstrip(" \t")
+            if not rest or rest[0] in ",:}]\r\n":
+                in_string = False
+                out.append(char)
+            else:
+                out.append('\\"')
+        else:
+            out.append(char)
+        i += 1
+    return "".join(out)
+
+
 def repair_json_text(text: str) -> str:
     """Fix the slips models make in long JSON answers, without touching
-    content: a missing comma between two items written on separate lines,
-    and a comma before a closing bracket."""
-    fixed = _MISSING_COMMA.sub(r"\1,\2\3", text)
+    content: unescaped quotes inside a value, a missing comma between two
+    items written on separate lines, and a comma before a closing bracket."""
+    fixed = _escape_inner_quotes(text)
+    fixed = _MISSING_COMMA.sub(r"\1,\2\3", fixed)
     return _TRAILING_COMMA.sub(r"\1", fixed)
 
 
