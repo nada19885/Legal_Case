@@ -477,7 +477,8 @@ def build_stage_overview(facts: dict) -> dict:
                     entry["stale_because"] = dependency
                     break
 
-        entry["done"] = entry["status"] == COMPLETED
+        # A finished step counts as done even when something changed after it.
+        entry["done"] = entry["status"] in {COMPLETED, STALE}
         result.append(entry)
 
     # Legacy progress-bar states: complete / current / upcoming.
@@ -502,7 +503,7 @@ def build_stage_overview(facts: dict) -> dict:
             break
     if next_stage is None:
         for entry in result:
-            if entry["status"] in {NOT_STARTED, READY, STALE} and entry["key"] != "discussion":
+            if entry["status"] in {NOT_STARTED, READY} and entry["key"] != "discussion":
                 next_stage = entry["key"]
                 break
     if next_stage is None:

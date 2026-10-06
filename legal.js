@@ -968,7 +968,8 @@ Object.assign(I18N.en, {
   status_running: "Processing",
   status_waiting_for_user: "Waiting for you",
   status_ready: "Ready to continue",
-  status_completed: "Completed",
+  status_completed: "Done",
+  status_not_yet: "Not yet",
   status_stale: "Needs refresh",
   status_error: "Error",
   phase_extracting_pages: "Extracting pages",
@@ -1156,7 +1157,8 @@ Object.assign(I18N.ar, {
   status_running: "قيد المعالجة",
   status_waiting_for_user: "بانتظارك",
   status_ready: "جاهزة للمتابعة",
-  status_completed: "مكتملة",
+  status_completed: "تمت",
+  status_not_yet: "لم تتم بعد",
   status_stale: "تحتاج إلى تحديث",
   status_error: "خطأ",
   phase_extracting_pages: "استخراج الصفحات",
@@ -2257,11 +2259,19 @@ const NEXT_ACTION_KEYS = {
 };
 const STAGE_STATUS_KIND = {
   not_started: "neutral", blocked: "neutral", running: "ai", waiting_for_user: "review",
-  ready: "provisional", completed: "verified", stale: "review", error: "flagged",
+  ready: "provisional", completed: "verified", stale: "review", error: "flagged", not_yet: "neutral",
 };
+/* What the user sees for a step: Done (finished, even if something
+   changed after it) or Not yet; a running step keeps its progress bar. */
+function shownStatus(stage) {
+  const status = (stage && stage.status) || "";
+  if (status === "running") return "running";
+  return status === "completed" || status === "stale" ? "completed" : "not_yet";
+}
+
 const STAGE_ICONS = {
   completed: "\u2713", running: "\u21BB", waiting_for_user: "!", error: "\u2715",
-  stale: "\u21BA", ready: "\u25CF", not_started: "\u25CB", blocked: "\u25CB",
+  stale: "\u21BA", ready: "\u25CF", not_started: "\u25CB", blocked: "\u25CB", not_yet: "\u25CB",
 };
 
 function stageLabel(key) { return t(STAGE_LABEL_KEYS[key] || key); }
@@ -2276,9 +2286,7 @@ function stageDetailText(stage) {
     const acc = (S.snapshot && S.snapshot.accounting) || {};
     return t("detail_review_items", { count: acc.pending_field_count || acc.pending_count || 0 });
   }
-  if (stage.status === "stale" && stage.stale_because) {
-    return t("detail_stale_because", { stage: stageLabel(stage.stale_because) });
-  }
+  if (stage.status === "stale" || stage.status === "completed") return "";
   if (stage.status === "blocked" && (stage.blocked_by || []).length) {
     return t("detail_blocked_by", { stages: stage.blocked_by.map(stageLabel).join(", ") });
   }
@@ -2306,9 +2314,9 @@ function stageStripMarkup(stage) {
   }
   const detail = stageDetailText(stage);
   return `
-    <div class="bsf-stage-strip status-${esc(stage.status)}">
+    <div class="bsf-stage-strip status-${esc(shownStatus(stage))}">
       <div class="bsf-stage-strip-head">
-        ${badge(t(`status_${stage.status}`), STAGE_STATUS_KIND[stage.status])}
+        ${badge(t(`status_${shownStatus(stage)}`), STAGE_STATUS_KIND[shownStatus(stage)])}
         <strong>${esc(stageLabel(stage.key))}</strong>
       </div>
       ${detail ? `<div class="bsf-stage-strip-detail">${esc(detail)}</div>` : ""}
@@ -2328,7 +2336,7 @@ function renderAttention() {
   const stages = snap.stages || [];
   const line = (stage) => `
     <li>
-      <span><strong>${esc(stageLabel(stage.key))}</strong> — ${esc(stageDetailText(stage) || t(`status_${stage.status}`))}</span>
+      <span><strong>${esc(stageLabel(stage.key))}</strong> — ${esc(stageDetailText(stage) || t(`status_${shownStatus(stage)}`))}</span>
       <button type="button" class="bsf-btn" data-action="goto-stage" data-stage="${esc(stage.key)}">
         ${esc(t("attention_open", { tab: t(STAGE_TAB_KEYS[stage.key]) }))}
       </button>
@@ -2362,14 +2370,8 @@ function renderCase() {
     snap.last_updated ? `<span class="bsf-caption">${esc(t("last_updated_at", { at: snap.last_updated }))}</span>` : "",
   ].filter(Boolean).join('<span class="bsf-meta-sep">|</span>'));
 
-  const dirty = region("case-dirty");
-  const state = snap.workflow_state || {};
-  if (state.case_dirty) {
-    dirty.textContent = state.dirty_reason || t("next_review_new_material");
-    show(dirty, true);
-  } else {
-    show(dirty, false);
-  }
+  // Finished steps stay shown as done, even when something changed after them.
+  show(region("case-dirty"), false);
 
   renderAttention();
   renderStageStrips();
@@ -2390,7 +2392,7 @@ function renderCase() {
 function renderCaseStatus() {
   const snap = S.snapshot;
   const stages = snap.stages || [];
-  const done = stages.filter((stage) => stage.status === "completed").length;
+  const done = stages.filter((stage) => shownStatus(stage) === "completed").length;
   const percent = stages.length ? Math.round((done / stages.length) * 100) : 0;
 
   const nextKey = snap.next_stage || "documents";
@@ -2402,11 +2404,11 @@ function renderCaseStatus() {
   const destination = t(STAGE_TAB_KEYS[nextKey] || "tab_documents");
 
   const stepCards = stages.map((stage) => `
-    <button type="button" class="step-card ${stage.state} status-${esc(stage.status)}"
+    <button type="button" class="step-card ${shownStatus(stage) === "completed" ? "complete" : stage.state} status-${esc(shownStatus(stage))}"
             data-action="goto-stage" data-stage="${esc(stage.key)}">
-      <div class="step-icon">${STAGE_ICONS[stage.status] || ""}</div>
+      <div class="step-icon">${STAGE_ICONS[shownStatus(stage)] || ""}</div>
       <div class="step-label">${esc(stageLabel(stage.key))}</div>
-      <div class="step-status">${esc(stage.status === "running" && stage.phase ? t(`phase_${stage.phase}`) : t(`status_${stage.status}`))}</div>
+      <div class="step-status">${esc(stage.status === "running" && stage.phase ? t(`phase_${stage.phase}`) : t(`status_${shownStatus(stage)}`))}</div>
     </button>`).join("");
 
   const counts = snap.counts || {};
