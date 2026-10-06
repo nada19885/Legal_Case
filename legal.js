@@ -299,6 +299,8 @@ const I18N = {
     "no_issue_with_authority": "No issue is supported by retrieved knowledge-base text yet.",
     "issues_without_authority": "Issues without retrieved authority ({count})",
     "issues_without_authority_note": "No retrieved text or authority nodes were found for these issues, so they are not analysed legally here and remain for attorney review.",
+    "issues_not_analysed": "Issues not analysed ({count})",
+    "issues_not_analysed_note": "The model's answer for these issues could not be read. Run the legal analysis again.",
     "no_clause_text": "No text captured for this clause.",
     "no_dated_events": "No dated events were identified.",
     "no_english_summary": "A separate English summary was not generated. Refresh the attorney summary.",
@@ -746,6 +748,8 @@ const I18N = {
     "no_issue_with_authority": "لا توجد مسألة يسندها نص مسترجع من قاعدة المعرفة حتى الآن.",
     "issues_without_authority": "مسائل بلا سند نظامي مسترجع ({count})",
     "issues_without_authority_note": "لم يُعثر على نصوص مسترجعة أو عُقد سند نظامي لهذه المسائل، لذا لا تُحلل قانونياً هنا وتبقى لمراجعة المحامي.",
+    "issues_not_analysed": "مسائل لم يكتمل تحليلها ({count})",
+    "issues_not_analysed_note": "تعذّرت قراءة إجابة النموذج لهذه المسائل. أعد تشغيل التحليل القانوني.",
     "no_clause_text": "لم يُلتقط نص لهذا البند.",
     "no_dated_events": "لم تُحدد أي أحداث مؤرخة.",
     "no_english_summary": "لم يتم إنشاء ملخص إنجليزي مستقل. أعد إعداد ملخص المحامي.",
@@ -3584,8 +3588,10 @@ function issueHasAuthority(item) {
 }
 
 function analysisIssuesMarkup(issues) {
-  const supported = issues.filter(issueHasAuthority);
-  const unsupported = issues.filter((item) => !issueHasAuthority(item));
+  const failed = issues.filter((item) => item && item.analysis_failed);
+  const analysed = issues.filter((item) => !(item && item.analysis_failed));
+  const supported = analysed.filter(issueHasAuthority);
+  const unsupported = analysed.filter((item) => !issueHasAuthority(item));
   return `
     ${supported.map((item) => `
       <div class="bsf-issue">
@@ -3605,6 +3611,12 @@ function analysisIssuesMarkup(issues) {
         <h4>${esc(t("issues_without_authority", { count: unsupported.length }))}</h4>
         <p class="bsf-caption">${esc(t("issues_without_authority_note"))}</p>
         <ul>${unsupported.map((item) => `<li>${esc(item.issue_title || "")}</li>`).join("")}</ul>
+      </div>` : ""}
+    ${failed.length ? `
+      <div class="bsf-issue bsf-issue-unsupported">
+        <h4>${esc(t("issues_not_analysed", { count: failed.length }))}</h4>
+        <p class="bsf-caption">${esc(t("issues_not_analysed_note"))}</p>
+        <ul>${failed.map((item) => `<li>${esc(item.issue_title || "")}</li>`).join("")}</ul>
       </div>` : ""}`;
 }
 

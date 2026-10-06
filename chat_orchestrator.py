@@ -412,7 +412,7 @@ def assess_next_step(
     }
 
 
-def run_legal_analysis(case_record, facts, issues, evidence, actor=""):
+def run_legal_analysis(case_record, facts, issues, evidence, actor="", progress=None):
     case_id = str(case_record.get("case_id", ""))
     matter_date = _parse_date(case_record.get("matter_date"))
     filters = MatterFilters(
@@ -435,6 +435,8 @@ def run_legal_analysis(case_record, facts, issues, evidence, actor=""):
         issues=_records(issues),
         evidence=_records(evidence),
         authority_nodes=research["authority_nodes"],
+        issue_results=research.get("issue_results"),
+        progress=progress,
     )
     return {"research": research, "analysis": analysis}
 

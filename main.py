@@ -2491,7 +2491,11 @@ def analysis_run():
         if not facts or not issues:
             raise ValueError("The case register has no facts or issues yet. Process the case documents first.")
         _set_phase(job_id, "researching_law", "Retrieving SAMA authorities and evaluating legal defenses…")
-        result = run_legal_analysis(data["case"], facts, issues, register["evidence_requests"])
+        result = run_legal_analysis(
+            data["case"], facts, issues, register["evidence_requests"],
+            progress=lambda done, total: _set_phase(
+                job_id, "researching_law", f"Analysing the legal issues ({done}/{total})…", done, total),
+        )
         if session_id:
             increment_usage(session_id, "llm_request_count", 1)
             increment_usage(session_id, "message_count", 1)

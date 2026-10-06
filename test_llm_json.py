@@ -73,6 +73,81 @@ check("an answer cut off at the end keeps what was written",
 check("valid JSON is read exactly as before", read(pretty) == GOOD)
 check("an answer with no JSON at all still fails clearly", isinstance(read("I cannot help with that."), ValueError))
 
+# Reasoning and prose around the answer
+answer = json.dumps(GOOD, ensure_ascii=False)
+check("a closed reasoning block is removed", read("<think>let me think {about it}</think>\n" + answer) == GOOD)
+check("reasoning before a lone closing tag is removed",
+      read('the format is {"issue_id": ""} so...</think>\n' + answer) == GOOD)
+check("an answer still reasoning when it stopped has no answer", llm.strip_think("<think>the issues are {") == "")
+check("prose with an example object before the answer: the answer is read",
+      read('Use the format {"issue_id": ""} as asked.\n' + answer) == GOOD)
+check("an object nested in a cut-off answer is not taken for the answer",
+      isinstance(read(pretty[:pretty.index('"opponent_position"')]).get("issues"), list))
+
+
+def refused(text, keys):
+    try:
+        llm.parse_json_lenient(text, keys)
+        return False
+    except llm.MissingFields:
+        return True
+
+
+check("expected fields: an answer with none of them is refused", refused('{"error": "no"}', ("issues",)))
+check("expected fields: an answer with them is read", not refused(answer, ("issues",)))
+
+
+# complete_json: what the second call carries
+class _Response:
+    def __init__(self, text):
+        self.text, self.success = text, True
+
+
+class _Completion:
+    def __init__(self, owner):
+        self.owner, self.settings, self.messages = owner, {}, []
+
+    def with_message(self, text, role="user"):
+        self.messages.append((role, text))
+
+    def execute(self):
+        self.owner.sent.append(self.messages)
+        return _Response(self.owner.answers.pop(0))
+
+
+class _Model:
+    def __init__(self, answers):
+        self.answers, self.sent = list(answers), []
+
+    def new_completion(self):
+        return _Completion(self)
+
+
+def run(answers, keys=()):
+    model = _Model(answers)
+    project = types.SimpleNamespace(get_llm=lambda llm_id: model)
+    llm.dataiku.api_client = lambda: types.SimpleNamespace(get_default_project=lambda: project)
+    try:
+        result = llm.complete_json("SYSTEM", {"issues": ["x" * 5000]}, llm_id="m", expect_keys=keys)
+    except Exception as error:
+        result = error
+    return result, model.sent
+
+
+result, sent = run(["<think>" + "reasoning " * 500, answer])
+check("an answer cut off while reasoning: the same request again, without reasoning, not bigger",
+      result == GOOD and len(sent) == 2 and sent[1][0][1].startswith("/no_think")
+      and len(sent[1]) == 2 and len(sent[1][1][1]) < len(sent[0][1][1]) + 200)
+result, sent = run(["{\n", answer])
+check("unreadable JSON: only the answer is sent back to be fixed, never the request",
+      result == GOOD and len(sent) == 2 and sent[1][0][1] == llm.FIX_JSON_PROMPT and sent[1][1][1] == "{")
+result, sent = run(['{"error": "no"}', answer], ("issues",))
+check("an answer without the expected fields: asked again", result == GOOD and len(sent) == 2)
+result, sent = run(["no json here", "still nothing"])
+check("two unusable answers: the first error is raised", isinstance(result, ValueError) and len(sent) == 2)
+result, sent = run([answer])
+check("a good answer takes one call", result == GOOD and len(sent) == 1)
+
 print()
 if failures:
     print(f"{len(failures)} check(s) failed: {failures}")
