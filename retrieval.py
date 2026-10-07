@@ -216,6 +216,29 @@ def _normalise_search_type(
     return value
 
 
+# Dataiku sends the Knowledge Bank query in the request URL. An Arabic
+# character takes 6 characters there (%D8%A7), so a long clause gave
+# "HTTP ERROR 414 URI Too Long". Queries are cut to fit this encoded size.
+MAX_ENCODED_QUERY = 6000
+
+
+def _fit_query(query: str, limit: int = MAX_ENCODED_QUERY) -> str:
+    from urllib.parse import quote
+
+    if len(quote(query, safe="")) <= limit:
+        return query
+    low, high = 0, len(query)
+    while low < high:                       # the longest prefix that fits
+        middle = (low + high + 1) // 2
+        if len(quote(query[:middle], safe="")) <= limit:
+            low = middle
+        else:
+            high = middle - 1
+    cut = query[:low]
+    space = cut.rfind(" ")
+    return (cut[:space] if space > low * 0.8 else cut).strip()
+
+
 def search_knowledge_bank(
     query: str,
     limit: int = DEFAULT_RETRIEVAL_LIMIT,
@@ -236,9 +259,9 @@ def search_knowledge_bank(
     """
     import dataiku
 
-    query = str(
+    query = _fit_query(str(
         query or ""
-    ).strip()
+    ).strip())
 
     if not query:
         return []
@@ -308,7 +331,8 @@ def search_knowledge_bank(
         f"kb_id={LEGAL_KB_ID} "
         f"search_type={resolved_search_type} "
         f"max_documents={limit} "
-        f"query={query!r}"
+        f"query_chars={len(query)} "
+        f"query={query[:300]!r}"
     )
 
     result = knowledge_bank.search(

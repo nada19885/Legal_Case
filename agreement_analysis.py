@@ -119,7 +119,29 @@ def review_large_agreement(
         raise ValueError("The consolidated agreement map contains no reviewable clauses.")
 
     def review_one(index: int, unit: dict) -> tuple[int, dict, list[dict]]:
-        authorities = retrieve_authorities_for_unit(unit, confirmed_profile)
+        # One clause that cannot be reviewed never stops the whole review.
+        try:
+            return _review_one(index, unit)
+        except Exception as error:
+            clause = unit.get("target_clause", {}) or {}
+            clause_id = str(clause.get("clause_id", "") or index)
+            print(f"[agreement clause review] {clause_id} could not be reviewed: {error!r}"[:500])
+            return index, {
+                "clause_id": clause_id, "clause_number": clause.get("clause_number", ""),
+                "heading": clause.get("heading", ""), "risk_level": "", "review_status": "provisional",
+                "legal_finding_en": "This clause could not be reviewed automatically. Run the review again.",
+                "legal_finding_ar": "تعذّرت مراجعة هذا البند آلياً. أعد تشغيل المراجعة.",
+                "authority_node_ids": [], "support_status": "unsupported", "edits": [],
+                "source_page_ids": list(clause.get("source_page_ids", []) or []),
+                "review_failed": True, "_order": index,
+            }, []
+
+    def _review_one(index: int, unit: dict) -> tuple[int, dict, list[dict]]:
+        try:
+            authorities = retrieve_authorities_for_unit(unit, confirmed_profile)
+        except Exception as error:
+            print(f"[agreement clause review] knowledge-base search failed, reviewing without authorities: {error!r}"[:500])
+            authorities = []
         context = {
             "confirmed_profile": confirmed_profile,
             "attorney_instructions": instructions,
