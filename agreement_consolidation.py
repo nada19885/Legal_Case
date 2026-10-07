@@ -6,12 +6,15 @@ and produces the single consolidated clause_map the rest of the agreement
 workflow (agreement_retrieval, agreement_analysis, discuss_agreement, and
 Legal.js's clause/review tabs) all depend on.
 
-Three stages:
-  A. Per-chunk consolidation (parallel LLM calls) — stitches clause
-     fragments into complete clauses within one chunk of pages.
-  B. Deterministic chunk-boundary stitching (no LLM) — a clause split
-     across two chunks is merged in Python, not re-guessed by a model.
-  C. One final LLM call over compact clause summaries (not full text) for
+Two stages:
+  A. Stitching in code (no LLM): the page structures already carry each
+     clause fragment's text and whether it continues from the previous
+     page or onto the next one, so fragments are joined in page order.
+     (This used to be one LLM call per ~10 pages that re-typed every
+     clause; on a 25-page contract those calls ran past the endpoint's
+     5-minute limit and failed.) The text stays exactly as read from the
+     page, which the review's page marks rely on.
+  B. One final LLM call over compact clause summaries (not full text) for
      the package-level dependency graph, missing dependencies,
      cross-document conflicts, contract overview and summary.
 Location: lib/python/legal_platform/agreement_consolidation.py
@@ -19,49 +22,10 @@ Location: lib/python/legal_platform/agreement_consolidation.py
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 
 from .agreement_llm import agreement_complete_json
-from .config import AGREEMENT_CHUNK_MAX_WORKERS
-from .context_budget import make_char_chunks, select_with_char_budget
-
-CHUNK_CONSOLIDATION_PROMPT = """
-You are consolidating one contiguous chunk of page-by-page structured
-extractions from a legal agreement package, in page order.
-
-Stitch clause fragments that continue across pages WITHIN this chunk into
-single complete clauses. If the chunk's very first clause fragment is
-marked continues_from_previous_page, mark the resulting clause
-continues_from_previous_chunk=true instead of inventing new content for
-what came before this chunk — the previous chunk's output already covers
-it, and it will be merged afterward. Likewise, if the chunk's last clause
-fragment is marked continues_on_next_page, mark that clause
-continues_into_next_chunk=true.
-
-Deduplicate definitions introduced more than once in this chunk. Note any
-section that looks referenced but is not present.
-
-Return JSON only:
-{
-  "clauses": [
-    {
-      "clause_number": "",
-      "heading": "",
-      "full_text": "",
-      "category": "",
-      "exceptions_or_carve_outs": [],
-      "source_page_ids": [],
-      "continues_from_previous_chunk": false,
-      "continues_into_next_chunk": false
-    }
-  ],
-  "definitions": [
-    {"term": "", "definition": "", "source_page_ids": []}
-  ],
-  "missing_or_unclear_sections": []
-}
-""".strip()
+from .context_budget import select_with_char_budget
 
 PACKAGE_SYNTHESIS_PROMPT = """
 You are synthesizing the package-level view of a legal agreement from its
@@ -99,87 +63,66 @@ Return JSON only:
 """.strip()
 
 
-def _consolidate_one_chunk(chunk_index: int, chunk: list[dict]) -> dict:
-    result = agreement_complete_json(
-        CHUNK_CONSOLIDATION_PROMPT,
-        {"page_structures": chunk},
-        operation=f"agreement chunk consolidation {chunk_index}",
-    )
-    result.setdefault("clauses", [])
-    result.setdefault("definitions", [])
-    result.setdefault("missing_or_unclear_sections", [])
-    return result
-
-
-def _stitch_chunk_boundaries(chunk_results: list[dict]) -> tuple[list[dict], list[dict], list[str]]:
-    """Stage B: deterministic merge of clauses split across chunk
-    boundaries. Chunks are processed in page order, so a trailing
-    continues_into_next_chunk clause and the next chunk's leading
-    continues_from_previous_chunk clause are the same clause.
-    """
-    merged_clauses: list[dict] = []
-    all_definitions: dict[str, dict] = {}
-    missing_sections: list[str] = []
-    pending: dict | None = None
-
-    for chunk_result in chunk_results:
-        clauses = list(chunk_result.get("clauses", []) or [])
-        for index, clause in enumerate(clauses):
-            is_first = index == 0
-            is_last = index == len(clauses) - 1
-
-            if is_first and pending is not None and clause.get("continues_from_previous_chunk"):
-                # The chunk consolidation prompt already stitches fragments
-                # WITHIN a chunk; only a chunk's first/last clause can ever
-                # be a continuation of the previous/next chunk.
-                pending["full_text"] = (pending.get("full_text", "") + "\n" + clause.get("full_text", "")).strip()
-                pending["exceptions_or_carve_outs"] = list(dict.fromkeys(
-                    (pending.get("exceptions_or_carve_outs") or []) + (clause.get("exceptions_or_carve_outs") or [])
-                ))
-                pending["source_page_ids"] = list(dict.fromkeys(
-                    (pending.get("source_page_ids") or []) + (clause.get("source_page_ids") or [])
-                ))
-                if not pending.get("clause_number"):
-                    pending["clause_number"] = clause.get("clause_number", "")
-                if not pending.get("heading"):
-                    pending["heading"] = clause.get("heading", "")
-                if not pending.get("category"):
-                    pending["category"] = clause.get("category", "")
-                current = pending
+def stitch_page_structures(page_structures: list[dict]) -> dict:
+    """Join the clause fragments of the page structures, in reading order,
+    into whole clauses (same shape the chunk consolidation returned)."""
+    pages = sorted((p for p in page_structures or [] if isinstance(p, dict)),
+                   key=lambda p: (str(p.get("document_id", "")), int(p.get("page_number", 0) or 0)))
+    clauses: list[dict] = []
+    definitions: list[dict] = []
+    notes: list[str] = []
+    open_clause: dict | None = None
+    previous_document = None
+    for page in pages:
+        page_id = str(page.get("page_id", "") or "")
+        document = str(page.get("document_id", "") or "")
+        if document != previous_document:
+            open_clause = None                      # a clause never runs into another document
+            previous_document = document
+        fragments = [f for f in page.get("clause_fragments") or [] if isinstance(f, dict)]
+        for index, fragment in enumerate(fragments):
+            text = str(fragment.get("text", "") or "").strip()
+            number = str(fragment.get("clause_number", "") or "").strip()
+            heading = str(fragment.get("heading", "") or "").strip()
+            continues = bool(fragment.get("continues_from_previous_page")) or (
+                index == 0 and open_clause is not None and open_clause.get("_open")
+                and not number and not heading)
+            if continues and index == 0 and open_clause is not None:
+                open_clause["full_text"] = (open_clause["full_text"] + "\n" + text).strip()
+                if page_id and page_id not in open_clause["source_page_ids"]:
+                    open_clause["source_page_ids"].append(page_id)
+                open_clause["exceptions_or_carve_outs"] = list(dict.fromkeys(
+                    open_clause["exceptions_or_carve_outs"] + list(fragment.get("exceptions_or_carve_outs") or [])))
+                for key, value in (("clause_number", number), ("heading", heading),
+                                   ("category", str(fragment.get("category", "") or ""))):
+                    if not open_clause.get(key) and value:
+                        open_clause[key] = value
+                current = open_clause
             else:
-                if pending is not None:
-                    merged_clauses.append(pending)
-                    pending = None
-                current = dict(clause)
-
-            if is_last and clause.get("continues_into_next_chunk"):
-                pending = current  # carry forward; do not flush yet
-            else:
-                merged_clauses.append(current)
-                pending = None
-
-        for definition in chunk_result.get("definitions", []) or []:
-            term = str(definition.get("term", "")).strip()
-            if not term:
-                continue
-            key = term.casefold()
-            if key not in all_definitions:
-                all_definitions[key] = {
-                    "term": term,
-                    "definition": definition.get("definition", ""),
-                    "source_page_ids": list(definition.get("source_page_ids", []) or []),
+                if fragment.get("continues_from_previous_page") and index == 0:
+                    notes.append("Page {} starts in the middle of a clause whose start was not found.".format(
+                        page.get("page_number", "")))
+                current = {
+                    "clause_number": number, "heading": heading, "full_text": text,
+                    "category": str(fragment.get("category", "") or "other"),
+                    "exceptions_or_carve_outs": list(fragment.get("exceptions_or_carve_outs") or []),
+                    "source_page_ids": [page_id] if page_id else [],
+                    "continues_from_previous_chunk": False, "continues_into_next_chunk": False,
                 }
-            else:
-                all_definitions[key]["source_page_ids"] = list(dict.fromkeys(
-                    all_definitions[key]["source_page_ids"] + list(definition.get("source_page_ids", []) or [])
-                ))
-
-        missing_sections.extend(chunk_result.get("missing_or_unclear_sections", []) or [])
-
-    if pending is not None:
-        merged_clauses.append(pending)
-
-    return merged_clauses, list(all_definitions.values()), missing_sections
+                clauses.append(current)
+            current["_open"] = bool(fragment.get("continues_on_next_page"))
+            open_clause = current
+        if not fragments:
+            open_clause = open_clause if open_clause and open_clause.get("_open") else None
+        for definition in page.get("definitions_introduced") or []:
+            if isinstance(definition, dict) and str(definition.get("term", "")).strip():
+                definitions.append({"term": str(definition["term"]).strip(),
+                                    "definition": definition.get("definition", ""),
+                                    "source_page_ids": [page_id] if page_id else []})
+    for clause in clauses:
+        clause.pop("_open", None)
+    return {"clauses": [c for c in clauses if c["full_text"] or c["heading"]],
+            "definitions": definitions, "missing_or_unclear_sections": notes}
 
 
 def _assign_clause_ids(clauses: list[dict], definitions: list[dict]) -> list[dict]:
@@ -199,6 +142,7 @@ def _assign_clause_ids(clauses: list[dict], definitions: list[dict]) -> list[dic
             "completeness_status": (
                 "spans_multiple_pages"
                 if clause.get("continues_from_previous_chunk") or clause.get("continues_into_next_chunk")
+                or len(clause.get("source_page_ids") or []) > 1
                 else "complete"
             ),
             "exceptions_or_carve_outs": clause.get("exceptions_or_carve_outs", []) or [],
@@ -227,29 +171,22 @@ def consolidate_page_structures(
     if not page_structures:
         raise ValueError("No page structures are available to consolidate.")
 
-    chunks = make_char_chunks(page_structures, target_chars=25200, hard_limit_chars=32200)
-    if not chunks:
-        chunks = [page_structures]
+    stitched = stitch_page_structures(page_structures)
+    ordered_chunk_maps = [stitched]
+    if chunk_progress_callback:
+        chunk_progress_callback(1, 1, "stitched")
 
-    chunk_results: list[tuple[int, dict]] = []
-    workers = max(1, min(int(AGREEMENT_CHUNK_MAX_WORKERS or 1), len(chunks)))
-    completed = 0
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {
-            executor.submit(_consolidate_one_chunk, index, chunk): index
-            for index, chunk in enumerate(chunks, start=1)
-        }
-        for future in as_completed(futures):
-            index = futures[future]
-            chunk_results.append((index, future.result()))
-            completed += 1
-            if chunk_progress_callback:
-                chunk_progress_callback(completed, len(chunks), f"chunk_{index}")
-
-    chunk_results.sort(key=lambda item: item[0])
-    ordered_chunk_maps = [result for _, result in chunk_results]
-
-    raw_clauses, definitions, missing_or_unclear_sections = _stitch_chunk_boundaries(ordered_chunk_maps)
+    raw_clauses = stitched["clauses"]
+    missing_or_unclear_sections = stitched["missing_or_unclear_sections"]
+    by_term: dict[str, dict] = {}
+    for definition in stitched["definitions"]:
+        key = definition["term"].casefold()
+        if key in by_term:
+            by_term[key]["source_page_ids"] = list(dict.fromkeys(
+                by_term[key]["source_page_ids"] + definition["source_page_ids"]))
+        else:
+            by_term[key] = dict(definition)
+    definitions = list(by_term.values())
     clauses = _assign_clause_ids(raw_clauses, definitions)
 
     synthesis = agreement_complete_json(
