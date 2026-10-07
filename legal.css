@@ -782,3 +782,16 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-ov .bsf-next { display: flex; gap: .75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .bsf-docs-table { margin-bottom: 1rem; }
 @media (max-width: 900px) { .bsf-ov, .bsf-new-case { grid-template-columns: 1fr; } }
+
+/* Contract review: changes marked on the agreement pages. */
+.bsf-mk-page { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); padding: .5rem .8rem; margin: .5rem 0; }
+.bsf-mk-page > summary { cursor: pointer; font-weight: 600; display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.bsf-mk-text { white-space: pre-wrap; line-height: 1.9; margin-top: .5rem; font-size: .92rem; }
+.bsf-mk-old { color: var(--flag); background: var(--flag-bg); font-weight: 600; border-radius: 3px; padding: 0 .15rem; }
+.bsf-mk-arrow { color: var(--flag); font-weight: 700; margin: 0 .35rem; }
+.bsf-mk-new { color: var(--ok); background: var(--ok-bg); font-weight: 600; border-radius: 3px; padding: 0 .15rem; }
+.bsf-mk-del { color: var(--flag); font-style: italic; }
+.bsf-mk { cursor: help; }
+.bsf-mk-list { margin: .3rem 0 .6rem; padding-inline-start: 1.2rem; }
+.bsf-mk-list li { margin-bottom: .4rem; }
+.bsf-mk-old.is-deleted { text-decoration: line-through; }

@@ -30,8 +30,23 @@ is missing, mark the review provisional. Return JSON only:
  "weaknesses":[], "affected_related_clause_ids":[], "missing_dependencies":[],
  "recommended_change_ar":"", "recommended_change_en":"",
  "proposed_wording_ar":"", "proposed_wording_en":"",
- "client_question_ar":"", "client_question_en":""
+ "client_question_ar":"", "client_question_en":"",
+ "edits":[
+  {"type":"replace|delete|add", "original":"", "replacement":"",
+   "reason_ar":"", "reason_en":""}
+ ]
 }
+edits are the exact changes to the clause wording, shown to the attorney as
+marks on the agreement pages:
+- original: the words to change, copied CHARACTER FOR CHARACTER from the
+  supplied clause wording (full_text of the target clause), in the agreement's
+  own language. Keep it short: one sentence or the phrase that must change.
+  Never paraphrase or translate it.
+- replacement: how it should read instead, in the same language as original.
+- type replace: original -> replacement. type delete: original is removed
+  (replacement empty). type add: replacement is new wording; original is the
+  existing sentence it should follow (or empty).
+- Only changes that protect the represented party; [] when the clause is fine.
 If no supplied authority supports a legal conclusion, say insufficient applicable
 authority was retrieved and do not fill the gap from model memory.
 """
@@ -64,6 +79,35 @@ def _clean_authority_ids(review: dict, allowed: set[str]) -> None:
         review["legal_finding_en"] = "Insufficient applicable authority was retrieved from the knowledge base for this conclusion."
 
 
+EDIT_TYPES = ("replace", "delete", "add")
+
+
+def clean_edits(edits, clause_id: str) -> list[dict]:
+    """The usable wording edits of one clause review, each with an id."""
+    out = []
+    for edit in edits if isinstance(edits, list) else []:
+        if not isinstance(edit, dict):
+            continue
+        kind = str(edit.get("type") or "replace").strip().lower()
+        kind = kind if kind in EDIT_TYPES else "replace"
+        original = str(edit.get("original") or "").strip()
+        replacement = str(edit.get("replacement") or "").strip()
+        if (kind in {"replace", "delete"} and not original) or (kind in {"replace", "add"} and not replacement):
+            continue
+        if kind == "replace" and original == replacement:
+            continue
+        out.append({
+            "edit_id": "{}-E{}".format(clause_id, len(out) + 1),
+            "clause_id": clause_id,
+            "type": kind,
+            "original": original,
+            "replacement": "" if kind == "delete" else replacement,
+            "reason_ar": str(edit.get("reason_ar") or "").strip(),
+            "reason_en": str(edit.get("reason_en") or "").strip(),
+        })
+    return out
+
+
 def review_large_agreement(
     clause_map: dict,
     confirmed_profile: dict,
@@ -92,6 +136,9 @@ def review_large_agreement(
         )
         allowed = {str(x.get("node_id", "") or "") for x in authorities}
         _clean_authority_ids(review, allowed)
+        clause = unit.get("target_clause", {}) or {}
+        review["source_page_ids"] = list(clause.get("source_page_ids", []) or [])
+        review["edits"] = clean_edits(review.get("edits"), clause_id or str(index))
         review["_order"] = index
         return index, review, authorities
 
@@ -121,7 +168,9 @@ def review_large_agreement(
             SYNTHESIS_PROMPT,
             {
                 "package_map": {"package_summary": clause_map.get("package_summary", "")},
-                "clause_reviews": group,
+                # The wording edits are shown on the pages; the summary does not need them.
+                "clause_reviews": [{k: v for k, v in item.items() if k not in {"edits", "source_page_ids"}}
+                                   for item in group],
             },
             operation=f"agreement review synthesis group {index}",
         )

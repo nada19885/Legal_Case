@@ -301,6 +301,15 @@ const I18N = {
     "issues_without_authority_note": "No retrieved text or authority nodes were found for these issues, so they are not analysed legally here and remain for attorney review.",
     "issues_not_analysed": "Issues not analysed ({count})",
     "issues_not_analysed_note": "The model's answer for these issues could not be read. Run the legal analysis again.",
+    "marked_agreement": "The agreement with the proposed changes",
+    "marked_caption": "The words in red should change; the arrow shows how they should read instead. Hover a change to see why.",
+    "marked_page": "{file} — page {page}",
+    "marked_changes": "{count} change(s)",
+    "marked_no_change": "no change",
+    "marked_delete": "delete",
+    "marked_add": "add",
+    "marked_unplaced": "Changes whose words were not found on the pages",
+    "proposed_changes": "Proposed changes to the wording",
     "no_clause_text": "No text captured for this clause.",
     "no_dated_events": "No dated events were identified.",
     "no_english_summary": "A separate English summary was not generated. Refresh the attorney summary.",
@@ -750,6 +759,15 @@ const I18N = {
     "issues_without_authority_note": "لم يُعثر على نصوص مسترجعة أو عُقد سند نظامي لهذه المسائل، لذا لا تُحلل قانونياً هنا وتبقى لمراجعة المحامي.",
     "issues_not_analysed": "مسائل لم يكتمل تحليلها ({count})",
     "issues_not_analysed_note": "تعذّرت قراءة إجابة النموذج لهذه المسائل. أعد تشغيل التحليل القانوني.",
+    "marked_agreement": "الاتفاقية مع التعديلات المقترحة",
+    "marked_caption": "العبارات باللون الأحمر يجب تعديلها، والسهم يبيّن الصياغة الصحيحة. مرّر المؤشر على التعديل لمعرفة السبب.",
+    "marked_page": "{file} — صفحة {page}",
+    "marked_changes": "{count} تعديل",
+    "marked_no_change": "بلا تعديل",
+    "marked_delete": "حذف",
+    "marked_add": "إضافة",
+    "marked_unplaced": "تعديلات لم يُعثر على عباراتها في الصفحات",
+    "proposed_changes": "التعديلات المقترحة على الصياغة",
     "no_clause_text": "لم يُلتقط نص لهذا البند.",
     "no_dated_events": "لم تُحدد أي أحداث مؤرخة.",
     "no_english_summary": "لم يتم إنشاء ملخص إنجليزي مستقل. أعد إعداد ملخص المحامي.",
@@ -4096,6 +4114,8 @@ function renderAgreementReviewTab(state) {
     ${listExpander("missing_protections_expander", missing)}
     ${listExpander("cross_clause_conflicts_expander", conflicts)}
 
+    ${markedAgreementMarkup(state.markup)}
+
     <h4 class="bsf-subsection">${esc(t("clause_by_clause_review"))}</h4>
     ${(review.clause_reviews || []).map(clauseReviewMarkup).join("")}
 
@@ -4127,8 +4147,11 @@ function clauseReviewMarkup(item) {
         ? alertBox(t("missing_dependencies_provisional") + " " + item.missing_dependencies.join("; "), "warn") : ""}
       ${(item.affected_related_clause_ids || []).length
         ? `<p class="bsf-caption">${esc(t("also_affects_clauses"))} ${esc(item.affected_related_clause_ids.join(", "))}</p>` : ""}
+      ${(item.edits || []).length ? `
+        <div class="bsf-kv"><strong>${esc(t("proposed_changes"))}</strong></div>
+        <ul class="bsf-mk-list">${item.edits.map((edit) => `<li>${editMarkup(edit)}</li>`).join("")}</ul>` : `
       ${change ? `<div class="bsf-kv"><strong>${esc(t("recommended_action"))}</strong> ${esc(change)}</div>` : ""}
-      ${wording ? `<div class="bilingual-panel ${ar ? "arabic-block" : "english-block"}">${esc(wording)}</div>` : ""}
+      ${wording ? `<div class="bilingual-panel ${ar ? "arabic-block" : "english-block"}">${esc(wording)}</div>` : ""}`}
       ${question ? alertBox(t("question_for_client", { question }), "info") : ""}
       <p class="bsf-caption">${esc(t("kb_authority_ids"))}
         ${esc((item.authority_node_ids || []).join(", ") || t("none_retrieved"))}</p>
@@ -4143,6 +4166,62 @@ function clauseReviewMarkup(item) {
         ${flagControls("agreement_clause", item.clause_id)}
       </div>
     </div>`;
+}
+
+/* One wording change: the words to change in red, an arrow, and how they
+   should read in green (delete: struck out; add: the new words only). */
+const ARABIC_RE = /[\u0600-\u06FF]/;
+
+function editArrow(text) { return ARABIC_RE.test(text || "") ? "\u2190" : "\u2192"; }
+
+function editReason(edit) {
+  return (isRTL() ? (edit.reason_ar || edit.reason_en) : (edit.reason_en || edit.reason_ar)) || "";
+}
+
+function editNew(edit) {
+  const arrow = editArrow(edit.original || edit.replacement);
+  if (edit.type === "delete") {
+    return `<span class="bsf-mk-arrow">${arrow}</span><span class="bsf-mk-del">${esc(t("marked_delete"))}</span>`;
+  }
+  return `<span class="bsf-mk-arrow">${arrow}</span><span class="bsf-mk-new">${edit.type === "add" ? "+ " : ""}${esc(edit.replacement || "")}</span>`;
+}
+
+function editMarkup(edit) {
+  const old = edit.type === "add" ? "" : `<span class="bsf-mk-old${edit.type === "delete" ? " is-deleted" : ""}">${esc(edit.original || "")}</span>`;
+  const reason = editReason(edit);
+  return `<span class="bsf-mk" dir="auto" title="${esc(reason)}">${old}${editNew(edit)}</span>
+    ${reason ? `<div class="bsf-caption">${esc(reason)}</div>` : ""}`;
+}
+
+/* The agreement pages with every placed change shown where it is. */
+function markedAgreementMarkup(markup) {
+  if (!markup || !(markup.pages || []).length) return "";
+  const edits = markup.edits || {};
+  const segment = (part) => {
+    const edit = edits[part.edit_id];
+    if (!edit) return esc(part.text);
+    const reason = editReason(edit);
+    if (part.kind === "insert") {
+      return `<span class="bsf-mk" title="${esc(reason)}">${editNew(edit)}</span>`;
+    }
+    return `<span class="bsf-mk" title="${esc(reason)}"><span class="bsf-mk-old${edit.type === "delete" ? " is-deleted" : ""}">${esc(part.text)}</span>${editNew(edit)}</span>`;
+  };
+  const unplaced = (markup.unplaced || []).map((id) => edits[id]).filter(Boolean);
+  return `
+    <h4 class="bsf-subsection">${esc(t("marked_agreement"))}</h4>
+    <p class="bsf-caption">${esc(t("marked_caption"))}</p>
+    ${markup.pages.map((page) => `
+      <details class="bsf-mk-page" ${page.changes ? "open" : ""}>
+        <summary>${esc(t("marked_page", { file: page.document_name || "", page: page.page_number }))}
+          ${page.changes ? badge(t("marked_changes", { count: page.changes }), "flagged")
+                         : `<span class="bsf-caption">${esc(t("marked_no_change"))}</span>`}</summary>
+        <div class="bsf-mk-text" dir="auto">${(page.segments || []).map(segment).join("")}</div>
+      </details>`).join("")}
+    ${unplaced.length ? `
+      <div class="bsf-mk-page">
+        <strong>${esc(t("marked_unplaced"))}</strong>
+        <ul class="bsf-mk-list">${unplaced.map((edit) => `<li>${editMarkup(edit)}</li>`).join("")}</ul>
+      </div>` : ""}`;
 }
 
 function negotiationMarkup(negotiation) {
