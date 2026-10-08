@@ -1232,10 +1232,10 @@ def case_endpoint():
         if review.get("clause_reviews"):
             # The contract's extracted text as one document, the proposed
             # wording changes in place (agreement_markup.contract_document).
-            response["agreement_state"]["contract"] = contract_document(
+            contract = contract_document(
                 data["pages"], data["documents"], review.get("clause_reviews") or [], stored.get("clause_map"))
-            response["agreement_state"]["has_edits"] = any(
-                (item or {}).get("edits") for item in review.get("clause_reviews") or [])
+            response["agreement_state"]["contract"] = contract
+            response["agreement_state"]["has_edits"] = bool(contract.get("edits"))
         return _ok(response)
 
     state = restore_workflow_state(data)

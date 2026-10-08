@@ -167,6 +167,49 @@ check("each reason is a Word comment", package.read("word/comments.xml").decode(
 check("Arabic paragraphs are right-to-left", body.find(f".//{NS}bidi") is not None)
 check("the changes not found are listed at the end", "تعديلات مقترحة أخرى" in accepted and "not in this contract" in accepted)
 
+# --- Changes worked out from a clause's proposed wording ---------------------
+from legal_platform.agreement_markup import derive_edits                # noqa: E402
+
+CLAUSE10 = ("تتم تسوية أي خلافات بشكل ،ودّي وفي حالة تعذر ذلك خلال (15) ،يوم يحال الخالف إلى املحاكم املختصة في "
+            "مدينة جدة وفق أحكام نظام املرافعات الشرعية في اململكة العربية السعودية.")
+REVIEW10 = {"clause_id": "CL_0010", "risk_level": "medium",
+            "proposed_wording_ar": "تتم تسوية أي خلافات بشكل ودي وفي حالة تعذر ذلك خلال (30) يوماً، يحال الخلاف إلى "
+                                   "المحاكم المختصة في مدينة جدة وفق أحكام نظام المرافعات الشرعية في المملكة العربية "
+                                   "السعودية، ولا يمنع ذلك الطرفين من الاتفاق كتابةً على تمديد هذه المدة.",
+            "proposed_wording_en": "Any disputes shall be resolved amicably within (30) days ...",
+            "recommended_change_en": "Extend the amicable settlement period to 30 days."}
+derived = derive_edits(REVIEW10, CLAUSE10)
+check("a proposed wording gives only the words that differ",
+      [(e["type"], e["original"], e["replacement"]) for e in derived]
+      == [("replace", "(15)", "(30)"),
+          ("add", "العربية السعودية.", "ولا يمنع ذلك الطرفين من الاتفاق كتابةً على تمديد هذه المدة.")])
+check("the PDF's letter-order damage is not taken for a change", len(derived) == 2)
+check("the clause's recommended change is the reason", derived[0]["reason_en"].startswith("Extend"))
+check("an instruction with blanks is not a wording", derive_edits(
+    {"clause_id": "C9", "proposed_wording_ar": "إضافة إشارة إلى المادة ___ من النظام"}, "تكون جميع املراسالت") == [])
+check("a wording in another language than the clause is not used", derive_edits(
+    {"clause_id": "C9", "proposed_wording_en": "All notices in writing."}, "تكون جميع املراسالت على العناوين") == [])
+rewrite = derive_edits({"clause_id": "C7", "proposed_wording_ar": "على المحامي أداء عمله وفق الأصول المهنية المعتمدة."},
+                       "يلتزم الطرف الأول ببذل العناية الالزمة")
+check("a full rewrite replaces the whole clause", len(rewrite) == 1 and rewrite[0]["original"] == "يلتزم الطرف الأول ببذل العناية الالزمة")
+
+PAGE_TWO = ("املادة الثامنة: إنهاء العقد: للطرف الأول الحق في إنهاء العقد بموجب إخطار ال تقل مدته عن عشرة أيام.\n\n"
+            "املادة العاشرة: حل النزاعات: " + CLAUSE10 + "\n\n2\n\n[picture 1] [picture 2]")
+derived_contract = contract_document(
+    [{"page_id": "R2", "case_document_id": "D9", "page_number": 2, "page_text": PAGE_TWO}], [], [REVIEW10],
+    {"clauses": [{"clause_id": "CL_0010", "heading": "حل النزاعات", "full_text": CLAUSE10},
+                 {"clause_id": "CL_0008", "heading": "إنهاء العقد"}]})
+dblocks = derived_contract["blocks"]
+check("a review without exact edits still shows its changes in the contract",
+      derived_contract["changes"] == 2 and derived_contract["unplaced"] == [])
+check("a short change is placed in its own sentence",
+      any(r["kind"] == "mark" and r["text"] == "15" for b in dblocks for r in b.get("runs") or []))
+check("a title on the same line as its text becomes a heading",
+      [text_of(b) for b in dblocks if b["type"] == "heading"] == ["املادة الثامنة: إنهاء العقد", "املادة العاشرة: حل النزاعات"]
+      and text_of(dblocks[1]).startswith("للطرف الأول"))
+check("page numbers and picture markers are not shown as contract text",
+      not any(text_of(b).strip() in {"2", "[picture 1] [picture 2]"} for b in dblocks))
+
 print()
 if failures:
     print(f"{len(failures)} check(s) failed: {failures}")

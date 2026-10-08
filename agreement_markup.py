@@ -17,6 +17,7 @@ wrong place.
 
 from __future__ import annotations
 
+import difflib
 import re
 from typing import Any, Optional
 
@@ -34,11 +35,11 @@ def _records(value: Any) -> list[dict]:
     return [row for row in value if isinstance(row, dict)] if isinstance(value, list) else []
 
 
-def _pattern(words: str) -> Optional[re.Pattern]:
+def _pattern(words: str, minimum: int = 3) -> Optional[re.Pattern]:
     """A pattern for `words` that tolerates different spacing, line breaks,
     Arabic diacritics / tatweel and letter case."""
     clean = "".join(ch for ch in words if ch not in _IGNORABLE).strip(_TRIM)
-    if len(clean) < 3:
+    if len(clean) < minimum:
         return None
     parts = []
     for token in clean.split():
@@ -47,8 +48,8 @@ def _pattern(words: str) -> Optional[re.Pattern]:
     return re.compile(between.join(parts), re.IGNORECASE)
 
 
-def _find(text: str, words: str, taken: list) -> Optional[tuple]:
-    pattern = _pattern(words)
+def _find(text: str, words: str, taken: list, minimum: int = 3) -> Optional[tuple]:
+    pattern = _pattern(words, minimum)
     if pattern is None:
         return None
     for match in pattern.finditer(text):
@@ -56,6 +57,92 @@ def _find(text: str, words: str, taken: list) -> Optional[tuple]:
         if all(end <= a or start >= b for a, b in taken):
             return start, end
     return None
+
+
+# -----------------------------------------------------------------------------
+# Changes worked out from a clause's proposed wording
+# -----------------------------------------------------------------------------
+# When a clause review has no exact edits but proposes a new wording for the
+# clause, the changes are found by comparing the clause text with that
+# wording word by word: only the words that differ are marked. Words are
+# compared on a skeleton that ignores diacritics, tatweel, alef / lam forms
+# and ta marbuta / alef maqsura, so the PDF's letter-order damage
+# ("املادة" for "المادة", "الالزمة" for "اللازمة") is not taken for a change.
+_SKELETON_DROP = set("اأإآٱلـ") | set(_IGNORABLE)
+_SKELETON_MAP = str.maketrans({"ة": "ه", "ى": "ي", "ؤ": "و", "ئ": "ي"})
+_PLACEHOLDER = re.compile(r"_{3,}|\[[^\]]*\]|…|\.\.\.")
+MIN_SIMILARITY = 0.3            # below this the proposal is a rewrite: the clause is replaced whole
+CONTEXT_WORDS = 2               # unchanged words kept around a change to find it in the right place
+
+
+def _skeleton(word: str) -> str:
+    core = str(word).strip(_TRIM + "-–—").translate(_SKELETON_MAP).casefold()
+    return "".join(ch for ch in core if ch not in _SKELETON_DROP) or core
+
+
+def _arabic_share(text: str) -> float:
+    letters = re.findall(r"[^\W\d_]", text or "")
+    return sum(1 for ch in letters if "؀" <= ch <= "ۿ") / len(letters) if letters else 0.0
+
+
+def derive_edits(review: dict, clause_text: str) -> list[dict]:
+    """Edits for one clause review, from its proposed wording (see above)."""
+    arabic = _arabic_share(clause_text) >= 0.5
+    proposed = str(review.get("proposed_wording_ar" if arabic else "proposed_wording_en") or "").strip()
+    clause_id = str(review.get("clause_id") or "")
+    if not proposed or not clause_text.strip() or _PLACEHOLDER.search(proposed) \
+            or (_arabic_share(proposed) >= 0.5) != arabic:
+        return []
+    reason = {"reason_ar": str(review.get("recommended_change_ar") or "").strip()[:400],
+              "reason_en": str(review.get("recommended_change_en") or "").strip()[:400], "derived": True}
+    old, new = clause_text.split(), proposed.split()
+    matcher = difflib.SequenceMatcher(None, [_skeleton(w) for w in old], [_skeleton(w) for w in new], autojunk=False)
+    if matcher.ratio() >= 0.999:
+        return []
+    if matcher.ratio() < MIN_SIMILARITY:
+        if not 0.4 <= len(proposed) / max(len(clause_text), 1) <= 3:
+            return []
+        return [{"edit_id": f"{clause_id}-D1", "clause_id": clause_id, "type": "replace",
+                 "original": clause_text.strip(), "replacement": proposed, **reason}]
+
+    # Neighbouring changes (one or two unchanged words apart) become one change.
+    groups = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        if groups and i1 - groups[-1][1] <= 2 and j1 - groups[-1][3] <= 2:
+            groups[-1] = (groups[-1][0], i2, groups[-1][2], j2)
+        else:
+            groups.append((i1, i2, j1, j2))
+    edits = []
+    for i1, i2, j1, j2 in groups:
+        before = " ".join(old[max(0, i1 - CONTEXT_WORDS):i1])
+        after = " ".join(old[i2:i2 + CONTEXT_WORDS])
+        original, replacement = " ".join(old[i1:i2]), " ".join(new[j1:j2])
+        if original and replacement:
+            kind = "replace"
+        elif original:
+            kind = "delete"
+        elif before:
+            kind, original = "add", ""
+        else:                                   # added before the first word: replace that word
+            kind, original, replacement = "replace", old[0], replacement + " " + old[0]
+            after = " ".join(old[1:1 + CONTEXT_WORDS])
+        edits.append({"edit_id": f"{clause_id}-D{len(edits) + 1}", "clause_id": clause_id, "type": kind,
+                      "original": original if kind != "add" else before, "replacement": replacement,
+                      "context_before": "" if kind == "add" else before, "context_after": after, **reason})
+    return edits
+
+
+def _with_derived_edits(clause_reviews: list, clause_map: Optional[dict]) -> list:
+    texts = {str(c.get("clause_id") or ""): str(c.get("full_text") or "")
+             for c in (clause_map or {}).get("clauses") or [] if isinstance(c, dict)}
+    out = []
+    for review in clause_reviews or []:
+        if isinstance(review, dict) and not review.get("edits") and texts.get(str(review.get("clause_id") or "")):
+            review = dict(review, edits=derive_edits(review, texts[str(review["clause_id"])]))
+        out.append(review)
+    return out
 
 
 def _page_rows(pages: Any, documents: Any) -> tuple[list[dict], dict]:
@@ -97,7 +184,7 @@ def _placements(rows: list[dict], clause_reviews: list) -> tuple[dict, dict, lis
             if words:
                 for page_id in search:
                     taken = [] if kind == "insert" else [(a, b) for a, b, _, k in placements[page_id] if k == "mark"]
-                    span = _find(by_id[page_id]["text"], words, taken)
+                    span = _find_in_context(by_id[page_id]["text"], edit, taken)
                     if span:
                         placements[page_id].append((span[0], span[1], edit_id, kind))
                         edits[edit_id]["page_id"] = page_id
@@ -106,6 +193,23 @@ def _placements(rows: list[dict], clause_reviews: list) -> tuple[dict, dict, lis
             if not placed:
                 unplaced.append(edit_id)
     return edits, placements, unplaced
+
+
+def _find_in_context(text: str, edit: dict, taken: list) -> Optional[tuple]:
+    """The span of the edit's words; with its context words when it has
+    them (a short change like one number is then found in its own sentence,
+    not wherever the number first appears)."""
+    words = edit.get("original") or ""
+    before, after = edit.get("context_before") or "", edit.get("context_after") or ""
+    if before or after:
+        whole = _find(text, " ".join(x for x in (before, words, after) if x), [])
+        if whole:
+            inner = _find(text[whole[0]:whole[1]], words, [], minimum=1)
+            if inner:
+                span = (whole[0] + inner[0], whole[0] + inner[1])
+                if all(span[1] <= a or span[0] >= b for a, b in taken):
+                    return span
+    return _find(text, words, taken)
 
 
 def mark_pages(pages: Any, documents: Any, clause_reviews: list) -> dict:
@@ -148,7 +252,7 @@ def mark_pages(pages: Any, documents: Any, clause_reviews: list) -> dict:
 # A mark's "last" piece is where its new wording is shown.
 
 _HEADING_WORDS = re.compile(
-    r"^\s*(#{1,6}\s|المادة|مادة|البند|بند|الفصل|الباب|الملحق|ملحق|التمهيد|تمهيد|"
+    r"^\s*(#{1,6}\s|المادة|املادة|مادة|البند|بند|الفصل|الباب|الملحق|ملحق|التمهيد|تمهيد|"
     r"article\b|clause\b|section\b|schedule\b|annex\b|appendix\b|preamble\b)", re.IGNORECASE)
 _ITEM_START = re.compile(r"^\s*([-•*·▪●]\s+|\(\s*[☒☐✓✔xX]?\s*\)\s*)")
 _NUMBERED_START = re.compile(
@@ -161,6 +265,40 @@ def _norm(text: str) -> str:
     clean = "".join(ch for ch in str(text or "") if ch not in _IGNORABLE)
     clean = re.sub(r"^[\s#\-–:.()0-9٠-٩]+", "", clean)
     return re.sub(r"\s+", " ", clean).strip(_TRIM).casefold()
+
+
+_LABEL = re.compile(r"^\s*(المادة|املادة|مادة|البند|بند|article|clause|section)\s+[^:：\n]{1,25}?\s*[:：]\s*",
+                    re.IGNORECASE)
+
+
+def _split_heading(line: str, heading_words: list) -> Optional[int]:
+    """Where the title ends in a line that starts with an article label and
+    goes on with the article's text ("المادة العاشرة: حل النزاعات: تتم ...").
+    The title is the label, then a known clause heading (from the clause
+    map) or the words up to a second colon. None when the line has no
+    label or is only a title."""
+    match = _LABEL.match(line)
+    if not match:
+        return None
+    rest = line[match.end():]
+    words = list(re.finditer(r"\S+", rest))
+    if len(words) <= 6 and not re.search(r"[.،,؛;]\s*\S", rest):
+        return None                             # the line is only a title
+    end = match.end()
+    best = 0
+    for heading in heading_words:
+        n = len(heading)
+        if n and len(words) > n and tuple(_skeleton(w.group()) for w in words[:n]) == heading:
+            best = max(best, n)
+    if best:
+        end = match.end() + words[best - 1].end()
+    else:
+        colon = re.search(r"[:：]", rest[:45])
+        if colon:
+            end = match.end() + colon.end()
+    while end < len(line) and line[end] in " \t:：-–":
+        end += 1
+    return end if end < len(line.rstrip()) else None
 
 
 def _is_heading(line: str, headings: set) -> bool:
@@ -214,7 +352,7 @@ def _table_cells(text: str, line_start: int, line: str) -> list[tuple[int, int]]
     return cells
 
 
-def _page_blocks(text: str, marks: list, headings: set) -> list[dict]:
+def _page_blocks(text: str, marks: list, headings: set, heading_words: Optional[list] = None) -> list[dict]:
     lines, offset = [], 0
     for line in text.split("\n"):
         lines.append((offset, line))
@@ -257,7 +395,13 @@ def _page_blocks(text: str, marks: list, headings: set) -> list[dict]:
             if rows:
                 blocks.append({"type": "table", "rows": rows})
             continue
-        if _is_heading(stripped, headings):
+        split = _split_heading(line, heading_words or [])
+        if split is not None:
+            close()
+            blocks.append({"type": "heading", "level": 2,
+                           "runs": _runs(text, start + lead, start + len(line[:split].rstrip(" \t:：-–")), marks)})
+            paragraph = ("paragraph", start + split, start + len(line.rstrip()))
+        elif _is_heading(stripped, headings):
             close()
             hashes = len(stripped) - len(stripped.lstrip("#"))
             skip = lead + (hashes + (1 if stripped[hashes:hashes + 1] == " " else 0) if hashes else 0)
@@ -278,6 +422,17 @@ def _page_blocks(text: str, marks: list, headings: set) -> list[dict]:
     return blocks
 
 
+_NOISE = re.compile(r"^\s*((\[picture \d+\]\s*)+|[0-9٠-٩]{1,3}|-\s*[0-9٠-٩]{1,3}\s*-|page \d+( of \d+)?)\s*$",
+                    re.IGNORECASE)
+
+
+def _is_noise(block: dict) -> bool:
+    """A reading marker ("[picture 1]") or a bare page number: not contract text."""
+    if block["type"] not in {"paragraph", "item"} or any(r["kind"] != "text" for r in block["runs"]):
+        return False
+    return bool(_NOISE.match("".join(r["text"] for r in block["runs"])))
+
+
 def _all_runs(block: dict):
     if block["type"] == "table":
         for row in block["rows"]:
@@ -291,9 +446,11 @@ def contract_document(pages: Any, documents: Any, clause_reviews: list, clause_m
     """The agreement's extracted text as one document, with each wording
     change in place (see the block format above)."""
     rows, names = _page_rows(pages, documents)
-    edits, placements, unplaced = _placements(rows, clause_reviews)
+    edits, placements, unplaced = _placements(rows, _with_derived_edits(clause_reviews, clause_map))
     headings = {_norm(c.get("heading")) for c in (clause_map or {}).get("clauses") or []
                 if isinstance(c, dict) and len(_norm(c.get("heading"))) >= 3}
+    heading_words = [tuple(_skeleton(w) for w in str(c.get("heading") or "").split())
+                     for c in (clause_map or {}).get("clauses") or [] if isinstance(c, dict) and c.get("heading")]
     several = len({r["document_id"] for r in rows}) > 1
     blocks, current = [], None
     for row in rows:
@@ -303,7 +460,8 @@ def contract_document(pages: Any, documents: Any, clause_reviews: list, clause_m
                 blocks.append({"type": "document", "text": names.get(current) or "Document"})
         else:                                       # where the next page of the original starts
             blocks.append({"type": "page", "page_number": row["page_number"]})
-        blocks.extend(_page_blocks(row["text"], sorted(placements[row["page_id"]]), headings))
+        blocks.extend(b for b in _page_blocks(row["text"], sorted(placements[row["page_id"]]), headings, heading_words)
+                      if not _is_noise(b))
 
     # The contract's own title: its first short line, when it reads as one.
     first = next((b for b in blocks if b["type"] not in {"document", "page"}), None)
