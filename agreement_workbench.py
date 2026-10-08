@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import re
 from typing import Any, Callable
 
 import pandas as pd
@@ -229,6 +230,79 @@ say so clearly. Return JSON only:
 """
 
 
+# The discussion request used to carry every clause, every clause review and
+# every retrieved authority in full (172,000 characters for a 2-page
+# contract), which the model endpoint refused at once ("The LLM request
+# failed."). It now carries what the question needs, within these limits.
+DISCUSSION_CLAUSE_CHARS = 9000
+DISCUSSION_REVIEW_CHARS = 8000
+DISCUSSION_AUTHORITY_CHARS = 7000
+_DISCUSSION_WORD = re.compile(r"\w{3,}")
+
+
+def _discussion_words(value) -> set:
+    return {word.lower() for word in _DISCUSSION_WORD.findall(str(value or ""))}
+
+
+def _within(items: list, limit: int) -> list:
+    out, used = [], 0
+    for item in items:
+        size = len(json.dumps(item, ensure_ascii=False, default=str))
+        if out and used + size > limit:
+            continue
+        out.append(item)
+        used += size
+    return out
+
+
+def discussion_material(question, clause_map, review, authority_nodes) -> dict:
+    """The clauses, clause reviews and authorities sent with one question:
+    those closest to the question first (clauses it names, then shared
+    words), cut to short text, within the character limits above."""
+    words = _discussion_words(question)
+    asked = str(question or "")
+
+    def score(*texts) -> int:
+        return len(words & set().union(*(_discussion_words(t) for t in texts)))
+
+    clauses = [c for c in (clause_map or {}).get("clauses", []) or [] if isinstance(c, dict)]
+    def clause_rank(item):
+        index, clause = item
+        named = any(str(clause.get(k) or "") and str(clause.get(k)) in asked for k in ("clause_id", "clause_number"))
+        return (-int(named), -score(clause.get("heading"), clause.get("full_text")), index)
+    ordered = [c for _, c in sorted(enumerate(clauses), key=clause_rank)]
+    picked_clauses = _within([{
+        "clause_id": c.get("clause_id", ""), "clause_number": c.get("clause_number", ""),
+        "heading": c.get("heading", ""), "category": c.get("category", ""),
+        "full_text": str(c.get("full_text", "") or "")[:1500],
+        "source_page_ids": c.get("source_page_ids", []) or [],
+    } for c in ordered], DISCUSSION_CLAUSE_CHARS)
+
+    position = {c["clause_id"]: n for n, c in enumerate(ordered)}
+    reviews = [r for r in (review or {}).get("clause_reviews", []) or [] if isinstance(r, dict)]
+    reviews.sort(key=lambda r: position.get(str(r.get("clause_id", "")), len(position)))
+    keep = ("clause_id", "risk_level", "review_status", "support_status", "authority_node_ids")
+    texts = ("commercial_finding_ar", "commercial_finding_en", "legal_finding_ar", "legal_finding_en",
+             "recommended_change_ar", "recommended_change_en")
+    picked_reviews = _within([
+        {**{k: r.get(k) for k in keep if r.get(k)}, **{k: str(r.get(k))[:400] for k in texts if r.get(k)}}
+        for r in reviews], DISCUSSION_REVIEW_CHARS)
+
+    cited = {str(i) for r in picked_reviews for i in r.get("authority_node_ids") or []}
+    nodes = [n for n in authority_nodes or [] if isinstance(n, dict) and n.get("node_id")]
+    nodes.sort(key=lambda n: (str(n.get("node_id")) not in cited,
+                              -score(n.get("heading_path"), n.get("canonical_text") or n.get("text"))))
+    seen, unique = set(), []
+    for node in nodes:
+        if str(node["node_id"]) not in seen:
+            seen.add(str(node["node_id"]))
+            unique.append({"node_id": str(node["node_id"]), "heading_path": str(node.get("heading_path", "") or "")[:200],
+                           "text": str(node.get("canonical_text") or node.get("text") or "")[:700],
+                           "source_url": str(node.get("source_url", "") or "")})
+    return {"clauses": picked_clauses, "clause_reviews": picked_reviews,
+            "knowledge_base_authorities": _within(unique, DISCUSSION_AUTHORITY_CHARS)}
+
+
 def discuss_agreement(
     question: str,
     confirmed_profile: dict,
@@ -241,7 +315,8 @@ def discuss_agreement(
     The answer is grounded in stored agreement material and validated against the
     clause, page, and authority identifiers supplied to the model.
     """
-    authorities = authority_nodes or []
+    material = discussion_material(question, clause_map, review, authority_nodes)
+    authorities = material["knowledge_base_authorities"]
     result = agreement_complete_json(
         AGREEMENT_DISCUSSION_PROMPT,
         {
@@ -249,10 +324,10 @@ def discuss_agreement(
             "confirmed_profile": confirmed_profile or {},
             "contract_overview": (clause_map or {}).get("contract_overview", {}),
             "package_summary": (clause_map or {}).get("package_summary", ""),
-            "clauses": (clause_map or {}).get("clauses", []),
-            "dependency_graph": (clause_map or {}).get("dependency_graph", []),
-            "missing_dependencies": (clause_map or {}).get("missing_dependencies", []),
-            "clause_reviews": (review or {}).get("clause_reviews", []),
+            "clauses": material["clauses"],
+            "dependency_graph": ((clause_map or {}).get("dependency_graph", []) or [])[:60],
+            "missing_dependencies": ((clause_map or {}).get("missing_dependencies", []) or [])[:30],
+            "clause_reviews": material["clause_reviews"],
             "knowledge_base_authorities": authorities,
         },
         operation="agreement discussion",
