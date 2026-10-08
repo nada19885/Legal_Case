@@ -26,11 +26,13 @@ RED, GREEN, GREY = "C00000", "00804A", "6B6B6B"
 TEXT = {
     "ar": {"note": "التعديلات المقترحة ظاهرة كتعديلات متعقّبة: راجع كل تعديل واختر قبول أو رفض. سبب كل تعديل في التعليق المرفق به.",
            "other": "تعديلات مقترحة أخرى", "other_note": "لم يُعثر على هذه العبارات حرفياً في النص المستخرج، لذا لم تُوضع في موضعها.",
+           "advice": "توصيات المراجعة (ليست صياغة للعقد)",
            "clause": "البند", "delete": "حذف", "add": "إضافة", "title": "مراجعة العقد"},
     "en": {"note": "Proposed changes are shown as tracked changes: review each one and choose Accept or Reject. "
                    "The reason for each change is in its comment.",
            "other": "Other proposed changes", "other_note": "These words were not found exactly in the extracted text, "
                                                             "so they are not placed in it.",
+           "advice": "Advice from the review (not contract wording)",
            "clause": "Clause", "delete": "delete", "add": "add", "title": "Contract review"},
 }
 
@@ -156,12 +158,14 @@ class _Writer:
         return "".join(out) + "<w:p/>"
 
     def other_changes(self) -> str:
-        unplaced = [self.edits[e] for e in self.contract.get("unplaced") or [] if e in self.edits]
-        if not unplaced:
-            return ""
+        listed = [self.edits[e] for e in self.contract.get("unplaced") or [] if e in self.edits]
+        unplaced = [e for e in listed if e.get("type") != "advice"]
+        advice = [e for e in listed if e.get("type") == "advice"]
         words = self.words
-        out = [self.paragraph(self.run(words["other"]), words["other"], "Heading1"),
-               self.paragraph(self.run(words["other_note"], f'<w:i/><w:color w:val="{GREY}"/>'), words["other_note"])]
+        out = []
+        if unplaced:
+            out += [self.paragraph(self.run(words["other"]), words["other"], "Heading1"),
+                    self.paragraph(self.run(words["other_note"], f'<w:i/><w:color w:val="{GREY}"/>'), words["other_note"])]
         for edit in unplaced:
             label = "{} {}: ".format(words["clause"], edit.get("clause_number") or edit.get("clause_id") or "").strip()
             old = edit.get("original") or ""
@@ -178,6 +182,12 @@ class _Writer:
             reason = self.reason(edit)
             if reason:
                 out.append(self.paragraph(self.run(reason, f'<w:i/><w:color w:val="{GREY}"/>'), reason))
+        if advice:
+            out.append(self.paragraph(self.run(words["advice"]), words["advice"], "Heading1"))
+        for edit in advice:
+            label = "{} {}: ".format(words["clause"], edit.get("clause_number") or edit.get("clause_id") or "").strip()
+            text = str(edit.get("replacement") or "")
+            out.append(self.paragraph(self.run(label + " ", "<w:b/>") + self.run(text, "<w:i/>"), label + text))
         return "".join(out)
 
     def document(self, title: str) -> str:

@@ -21,9 +21,10 @@ import difflib
 import re
 from typing import Any, Optional
 
+from .arabic_text import repair_ligatures
+
 # Arabic diacritics and tatweel, ignored when matching.
 _IGNORABLE = "ـًٌٍَُِّْٰ"
-_GAP = "[\\s{}]*".format(_IGNORABLE)
 _TRIM = " \t\r\n.,;:،؛!?\"'«»()[]"
 
 
@@ -35,28 +36,54 @@ def _records(value: Any) -> list[dict]:
     return [row for row in value if isinstance(row, dict)] if isinstance(value, list) else []
 
 
-def _pattern(words: str, minimum: int = 3) -> Optional[re.Pattern]:
-    """A pattern for `words` that tolerates different spacing, line breaks,
-    Arabic diacritics / tatweel and letter case."""
-    clean = "".join(ch for ch in words if ch not in _IGNORABLE).strip(_TRIM)
-    if len(clean) < minimum:
-        return None
-    parts = []
-    for token in clean.split():
-        parts.append(_GAP.join(re.escape(ch) for ch in token))
-    between = "[{}]*\\s+[{}]*".format(_IGNORABLE, _IGNORABLE)
-    return re.compile(between.join(parts), re.IGNORECASE)
+# Words are matched on a projection of the text that ignores diacritics,
+# tatweel, punctuation, spacing, letter case, and the letters a PDF often
+# stores out of order (alef forms and lam: "املادة" and "المادة" match, and
+# "خلال (15) ،يوم" matches "خلال (15) يوم"). Each projected character keeps
+# its position in the real text, so the marked span is exact.
+_DROP_FOR_MATCH = set(_IGNORABLE) | set("اأإآٱل")
+_MATCH_MAP = {"ة": "ه", "ى": "ي", "ؤ": "و", "ئ": "ي"}
+_DROPPABLE_LETTERS = set("اأإآٱل")
+
+
+def _projection(text: str) -> tuple[str, list[int]]:
+    chars, index, space = [], [], True
+    for position, char in enumerate(text):
+        if char in _DROP_FOR_MATCH:
+            continue
+        char = _MATCH_MAP.get(char, char).lower()[:1]
+        if not char.isalnum():
+            if not space:
+                chars.append(" ")
+                index.append(position)
+                space = True
+            continue
+        chars.append(char)
+        index.append(position)
+        space = False
+    return "".join(chars), index
 
 
 def _find(text: str, words: str, taken: list, minimum: int = 3) -> Optional[tuple]:
-    pattern = _pattern(words, minimum)
-    if pattern is None:
+    projected, index = _projection(text)
+    needle = _projection(words)[0].strip()
+    if len(needle.replace(" ", "")) < minimum:
         return None
-    for match in pattern.finditer(text):
-        start, end = match.span()
-        if all(end <= a or start >= b for a, b in taken):
-            return start, end
-    return None
+    start = 0
+    while True:
+        at = projected.find(needle, start)
+        if at < 0:
+            return None
+        stop = at + len(needle)
+        if (at == 0 or projected[at - 1] == " ") and (stop == len(projected) or projected[stop] == " "):
+            a, b = index[at], index[stop - 1] + 1
+            while a > 0 and text[a - 1] in _DROPPABLE_LETTERS:          # the word's own leading alef / lam
+                a -= 1
+            while b < len(text) and (text[b] in _DROPPABLE_LETTERS or text[b] in _IGNORABLE):
+                b += 1
+            if all(b <= x or a >= y for x, y in taken):
+                return a, b
+        start = at + 1
 
 
 # -----------------------------------------------------------------------------
@@ -71,7 +98,17 @@ def _find(text: str, words: str, taken: list, minimum: int = 3) -> Optional[tupl
 _SKELETON_DROP = set("اأإآٱلـ") | set(_IGNORABLE)
 _SKELETON_MAP = str.maketrans({"ة": "ه", "ى": "ي", "ؤ": "و", "ئ": "ي"})
 _PLACEHOLDER = re.compile(r"_{3,}|\[[^\]]*\]|…|\.\.\.")
-MIN_SIMILARITY = 0.3            # below this the proposal is a rewrite: the clause is replaced whole
+_NODE_ID = re.compile(r"\s*[(\[]?\s*NODE_[0-9A-Za-z]{6,}\s*[)\]]?")
+# Advice about the clause, not wording for it ("يُستحسن إضافة جملة ...",
+# "يُعدل النص ليُشترط ...", "Add a reference to ...").
+_ADVICE = re.compile(
+    r"يُ?ستحسن|يُ?قترح|نقترح|يُ?نصح|نوصي|يُ?وصى|يُ?عدل النص|تعديل (النص|البند|الصياغة)|يُ?ضاف|إضافة (جملة|بند|فقرة|نص|شرط|عبارة)"
+    r"|بعد ذكر|ليُ?شترط|ينبغي|يجب (تعديل|إضافة|حذف)|استبدال (النص|البند|عبارة|الجملة)|حذف (عبارة|الجملة|النص)"
+    r"|^\s*(add|consider|recommend|suggest|amend|insert|replace|include|ensure|clarify|specify|revise|delete)\b"
+    r"|\bit is (recommended|advisable)\b|\bshould be (amended|added|replaced|revised)\b", re.IGNORECASE)
+_QUOTED = re.compile(r"[\"'«“‘]([^\"'«»“”‘’]{12,})[\"'»”’]")
+SIMILAR_ENOUGH = 0.6            # at least this alike: only the differing words are marked
+MAX_CHANGES = 5                 # more separate changes than this: the clause is replaced whole
 CONTEXT_WORDS = 2               # unchanged words kept around a change to find it in the right place
 
 
@@ -86,34 +123,50 @@ def _arabic_share(text: str) -> float:
 
 
 def derive_edits(review: dict, clause_text: str) -> list[dict]:
-    """Edits for one clause review, from its proposed wording (see above)."""
+    """Edits for one clause review, from its proposed wording (see above):
+    - advice instead of wording: a quoted sentence in it is added at the end
+      of the clause; otherwise it is listed apart (type "advice");
+    - a wording close to the clause: only the differing words are marked;
+    - a rewrite: the clause is replaced whole."""
     arabic = _arabic_share(clause_text) >= 0.5
-    proposed = str(review.get("proposed_wording_ar" if arabic else "proposed_wording_en") or "").strip()
+    proposed = _NODE_ID.sub("", str(review.get("proposed_wording_ar" if arabic else "proposed_wording_en") or "")).strip()
     clause_id = str(review.get("clause_id") or "")
-    if not proposed or not clause_text.strip() or _PLACEHOLDER.search(proposed) \
-            or (_arabic_share(proposed) >= 0.5) != arabic:
+    if not proposed or not clause_text.strip() or (_arabic_share(proposed) >= 0.5) != arabic:
         return []
-    reason = {"reason_ar": str(review.get("recommended_change_ar") or "").strip()[:400],
-              "reason_en": str(review.get("recommended_change_en") or "").strip()[:400], "derived": True}
-    old, new = clause_text.split(), proposed.split()
+    reason = {"reason_ar": _NODE_ID.sub("", str(review.get("recommended_change_ar") or "")).strip()[:400],
+              "reason_en": _NODE_ID.sub("", str(review.get("recommended_change_en") or "")).strip()[:400],
+              "derived": True}
+    old = clause_text.split()
+
+    if _ADVICE.search(proposed):
+        quoted = [q.strip() for q in _QUOTED.findall(proposed) if (_arabic_share(q) >= 0.5) == arabic]
+        if quoted and not _PLACEHOLDER.search(quoted[0]):
+            return [{"edit_id": f"{clause_id}-D1", "clause_id": clause_id, "type": "add",
+                     "original": clause_text.strip(), "fallback_original": " ".join(old[-CONTEXT_WORDS - 1:]),
+                     "replacement": _end_without_stop(quoted[0], clause_text), **reason}]
+        return [{"edit_id": f"{clause_id}-D1", "clause_id": clause_id, "type": "advice",
+                 "original": "", "replacement": proposed, **reason}]
+    if _PLACEHOLDER.search(proposed):
+        return []
+
+    new = proposed.split()
     matcher = difflib.SequenceMatcher(None, [_skeleton(w) for w in old], [_skeleton(w) for w in new], autojunk=False)
     if matcher.ratio() >= 0.999:
         return []
-    if matcher.ratio() < MIN_SIMILARITY:
-        if not 0.4 <= len(proposed) / max(len(clause_text), 1) <= 3:
-            return []
-        return [{"edit_id": f"{clause_id}-D1", "clause_id": clause_id, "type": "replace",
-                 "original": clause_text.strip(), "replacement": proposed, **reason}]
-
-    # Neighbouring changes (one or two unchanged words apart) become one change.
     groups = []
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
             continue
-        if groups and i1 - groups[-1][1] <= 2 and j1 - groups[-1][3] <= 2:
+        if groups and i1 - groups[-1][1] <= 3 and j1 - groups[-1][3] <= 3:
             groups[-1] = (groups[-1][0], i2, groups[-1][2], j2)
         else:
             groups.append((i1, i2, j1, j2))
+    if matcher.ratio() < SIMILAR_ENOUGH or len(groups) > MAX_CHANGES:
+        if not 0.3 <= len(proposed) / max(len(clause_text), 1) <= 3:
+            return []
+        return [{"edit_id": f"{clause_id}-D1", "clause_id": clause_id, "type": "replace",
+                 "original": clause_text.strip(), "replacement": _end_without_stop(proposed, clause_text), **reason}]
+
     edits = []
     for i1, i2, j1, j2 in groups:
         before = " ".join(old[max(0, i1 - CONTEXT_WORDS):i1])
@@ -128,10 +181,34 @@ def derive_edits(review: dict, clause_text: str) -> list[dict]:
         else:                                   # added before the first word: replace that word
             kind, original, replacement = "replace", old[0], replacement + " " + old[0]
             after = " ".join(old[1:1 + CONTEXT_WORDS])
+        if kind == "replace":
+            original, replacement = _trim_shared_punctuation(original, replacement)
+        # the page's own punctuation after the changed words (or after an addition's anchor) stays
+        followed = (original if kind == "replace" else before if kind == "add" else "")[-1:]
+        replacement = _end_without_stop(replacement, followed) if kind != "delete" else replacement
         edits.append({"edit_id": f"{clause_id}-D{len(edits) + 1}", "clause_id": clause_id, "type": kind,
                       "original": original if kind != "add" else before, "replacement": replacement,
                       "context_before": "" if kind == "add" else before, "context_after": after, **reason})
     return edits
+
+
+_STOPS = ".،,؛;:"
+
+
+def _end_without_stop(text: str, followed_by: str) -> str:
+    """No full stop at the end of new wording that the page's own
+    punctuation follows (it would show twice)."""
+    text = text.strip()
+    return text.rstrip(_STOPS).rstrip() if followed_by.strip()[-1:] in _STOPS and text[-1:] in _STOPS else text
+
+
+def _trim_shared_punctuation(original: str, replacement: str) -> tuple[str, str]:
+    """"(15)" -> "(30)" becomes "15" -> "30": the brackets stay as they are."""
+    while original and replacement and original[0] == replacement[0] and not original[0].isalnum():
+        original, replacement = original[1:], replacement[1:]
+    while original and replacement and original[-1] == replacement[-1] and not original[-1].isalnum():
+        original, replacement = original[:-1], replacement[:-1]
+    return original.strip() or original, replacement.strip() or replacement
 
 
 def _with_derived_edits(clause_reviews: list, clause_map: Optional[dict]) -> list:
@@ -154,7 +231,7 @@ def _page_rows(pages: Any, documents: Any) -> tuple[list[dict], dict]:
         if page_id:
             rows.append({"page_id": page_id, "document_id": str(row.get("case_document_id") or ""),
                          "page_number": int(float(row.get("page_number") or 0)),
-                         "text": str(row.get("page_text") or "")})
+                         "text": repair_ligatures(str(row.get("page_text") or ""))})
     rows.sort(key=lambda r: (r["document_id"], r["page_number"]))
     return rows, names
 
@@ -175,16 +252,18 @@ def _placements(rows: list[dict], clause_reviews: list) -> tuple[dict, dict, lis
             if not isinstance(edit, dict) or not edit.get("edit_id"):
                 continue
             edit_id = str(edit["edit_id"])
-            edits[edit_id] = dict(edit, risk_level=review.get("risk_level", ""),
+            edits[edit_id] = dict(edit, original=repair_ligatures(str(edit.get("original") or "")),
+                                  risk_level=review.get("risk_level", ""),
                                   clause_number=review.get("clause_number", ""),
                                   heading=review.get("heading", ""), page_id="")
             words = edit.get("original") or ""
             kind = "insert" if edit.get("type") == "add" else "mark"
             placed = False
-            if words:
-                for page_id in search:
+            if words and edit.get("type") != "advice":
+                attempts = [edit] + ([dict(edit, original=edit["fallback_original"])] if edit.get("fallback_original") else [])
+                for page_id, attempt in [(page_id, attempt) for attempt in attempts for page_id in search]:
                     taken = [] if kind == "insert" else [(a, b) for a, b, _, k in placements[page_id] if k == "mark"]
-                    span = _find_in_context(by_id[page_id]["text"], edit, taken)
+                    span = _find_in_context(by_id[page_id]["text"], attempt, taken)
                     if span:
                         placements[page_id].append((span[0], span[1], edit_id, kind))
                         edits[edit_id]["page_id"] = page_id

@@ -318,6 +318,8 @@ const I18N = {
     "contract_docx_note": "In Word the changes are tracked changes: accept or reject each one; the reason is in its comment.",
     "contract_page": "Page {page}",
     "contract_other_changes": "Other proposed changes",
+    "contract_advice": "Advice from the review (not contract wording)",
+    "contract_advice_caption": "These clauses got advice instead of a wording to put in the contract; the attorney decides how to word them.",
     "contract_other_caption": "These words were not found exactly in the extracted text, so they are listed here instead of placed in it.",
     "contract_no_edits": "No change to the contract's wording was found in this review (no clause has a proposed wording or exact change). Run the review again to get them.",
     "review_details": "Review details (summary, clause-by-clause findings, negotiation)",
@@ -787,6 +789,8 @@ const I18N = {
     "contract_docx_note": "في ملف Word تظهر التعديلات كتعديلات متعقّبة: اقبل أو ارفض كل تعديل، وسببه في التعليق المرفق.",
     "contract_page": "صفحة {page}",
     "contract_other_changes": "تعديلات مقترحة أخرى",
+    "contract_advice": "توصيات المراجعة (ليست صياغة للعقد)",
+    "contract_advice_caption": "قدّمت المراجعة لهذه البنود توصية بدلاً من صياغة توضع في العقد؛ يقرر المحامي صياغتها.",
     "contract_other_caption": "لم يُعثر على هذه العبارات حرفياً في النص المستخرج، لذا أُدرجت هنا بدلاً من وضعها في النص.",
     "contract_no_edits": "لم يُعثر في هذه المراجعة على تعديل لصياغة العقد (لا يوجد بند بصياغة مقترحة أو تعديل محدد). أعد تشغيل المراجعة للحصول عليها.",
     "review_details": "تفاصيل المراجعة (الملخص، نتائج كل بند، التفاوض)",
@@ -4212,6 +4216,10 @@ function editNew(edit) {
 }
 
 function editMarkup(edit) {
+  if (edit.type === "advice") {
+    return `<span class="bsf-mk-advice" dir="auto">${esc(edit.replacement || "")}</span>
+      ${editReason(edit) ? `<div class="bsf-caption">${esc(editReason(edit))}</div>` : ""}`;
+  }
   const old = edit.type === "add" ? "" : `<span class="bsf-mk-old${edit.type === "delete" ? " is-deleted" : ""}">${esc(edit.original || "")}</span>`;
   const reason = editReason(edit);
   return `<span class="bsf-mk" dir="auto" title="${esc(reason)}">${old}${editNew(edit)}</span>
@@ -4262,7 +4270,10 @@ function contractDocumentMarkup(state) {
   const sample = (contract.blocks || []).slice(0, 40).map((b) => (b.runs || []).map((r) => r.text || "").join("")).join(" ");
   const direction = ARABIC_RE.test(sample) && (sample.match(/[؀-ۿ]/g) || []).length * 2
     >= (sample.match(/[A-Za-z؀-ۿ]/g) || []).length ? "rtl" : "ltr";
-  const unplaced = (contract.unplaced || []).map((id) => edits[id]).filter(Boolean);
+  const unplacedAll = (contract.unplaced || []).map((id) => edits[id]).filter(Boolean);
+  const unplaced = unplacedAll.filter((edit) => edit.type !== "advice");
+  const advice = unplacedAll.filter((edit) => edit.type === "advice");
+  const clauseLabel = (edit) => [t("clause"), edit.clause_number || edit.clause_id || ""].join(" ").trim();
   return `
     <div class="bsf-ct-bar">
       <div>
@@ -4283,8 +4294,14 @@ function contractDocumentMarkup(state) {
         <h4 class="bsf-subsection">${esc(t("contract_other_changes"))}</h4>
         <p class="bsf-caption">${esc(t("contract_other_caption"))}</p>
         <ul class="bsf-mk-list">${unplaced.map((edit) => `
-          <li><strong>${esc([t("clause"), edit.clause_number || edit.clause_id || ""].join(" ").trim())}</strong>
-            ${editMarkup(edit)}</li>`).join("")}</ul>
+          <li><strong>${esc(clauseLabel(edit))}</strong> ${editMarkup(edit)}</li>`).join("")}</ul>
+      </div>` : ""}
+    ${advice.length ? `
+      <div class="bsf-ct-other">
+        <h4 class="bsf-subsection">${esc(t("contract_advice"))}</h4>
+        <p class="bsf-caption">${esc(t("contract_advice_caption"))}</p>
+        <ul class="bsf-mk-list">${advice.map((edit) => `
+          <li><strong>${esc(clauseLabel(edit))}</strong> ${editMarkup(edit)}</li>`).join("")}</ul>
       </div>` : ""}`;
 }
 

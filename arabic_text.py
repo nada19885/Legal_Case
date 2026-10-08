@@ -99,3 +99,38 @@ def fix_structure(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: fix_structure(item) for key, item in value.items()}
     return value
+
+
+# -----------------------------------------------------------------------------
+# Ligatures stored in the wrong order
+# -----------------------------------------------------------------------------
+# Some PDFs (Word exports with Arabic fonts) store a ligature's letters in
+# the wrong order: "لم" as "مل" (المادة -> املادة), "لا / لأ / لإ / لآ" as
+# "ال / أل / إل / آل" (لا تقل -> ال تقل, الأتعاب -> األتعاب), and "لله" as
+# "هلل". The page then reads wrongly although every glyph is present.
+_NOT_LETTER_BEFORE = r"(?<![ء-يٱ-ۓ])"
+_NOT_LETTER_AFTER = r"(?![ء-يٱ-ۓ])"
+_PREFIX = r"([وفبكل]?)"
+_LIGATURE_REPAIRS = [
+    (re.compile(_NOT_LETTER_BEFORE + _PREFIX + r"امل(?=[ء-ي])"), r"\1الم"),           # املادة -> المادة
+    (re.compile(_NOT_LETTER_BEFORE + _PREFIX + r"ا([إأآ])ل"), r"\1ال\2"),                     # األتعاب -> الأتعاب
+    (re.compile(_NOT_LETTER_BEFORE + _PREFIX + r"اال(?=[ء-ي])"), r"\1الا"),          # االتفاق -> الاتفاق
+    (re.compile(_NOT_LETTER_BEFORE + r"([وف]?)ال" + _NOT_LETTER_AFTER), r"\1لا"),              # ال تقل -> لا تقل
+    (re.compile(_NOT_LETTER_BEFORE + r"هللا" + _NOT_LETTER_AFTER), "الله"),                    # عبد هللا -> عبد الله
+    (re.compile(_NOT_LETTER_BEFORE + r"هلل" + _NOT_LETTER_AFTER), "لله"),                      # الحمد هلل -> الحمد لله
+]
+
+
+def ligature_damage(text: str) -> int:
+    """How many words show a ligature stored in the wrong order (only
+    forms no correct Arabic word has are counted)."""
+    return sum(len(pattern.findall(str(text or ""))) for pattern, _ in _LIGATURE_REPAIRS)
+
+
+def repair_ligatures(text: str) -> str:
+    """Put back the forms ligature_damage counts. Damage inside a word
+    (الخالف for الخلاف) cannot be told apart from correct words (خالد) and
+    is left as it is; a page with damage is read from its image instead."""
+    for pattern, replacement in _LIGATURE_REPAIRS:
+        text = pattern.sub(replacement, text)
+    return text

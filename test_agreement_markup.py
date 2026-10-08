@@ -181,8 +181,8 @@ REVIEW10 = {"clause_id": "CL_0010", "risk_level": "medium",
 derived = derive_edits(REVIEW10, CLAUSE10)
 check("a proposed wording gives only the words that differ",
       [(e["type"], e["original"], e["replacement"]) for e in derived]
-      == [("replace", "(15)", "(30)"),
-          ("add", "العربية السعودية.", "ولا يمنع ذلك الطرفين من الاتفاق كتابةً على تمديد هذه المدة.")])
+      == [("replace", "15", "30"),
+          ("add", "العربية السعودية.", "ولا يمنع ذلك الطرفين من الاتفاق كتابةً على تمديد هذه المدة")])
 check("the PDF's letter-order damage is not taken for a change", len(derived) == 2)
 check("the clause's recommended change is the reason", derived[0]["reason_en"].startswith("Extend"))
 check("an instruction with blanks is not a wording", derive_edits(
@@ -204,11 +204,51 @@ check("a review without exact edits still shows its changes in the contract",
       derived_contract["changes"] == 2 and derived_contract["unplaced"] == [])
 check("a short change is placed in its own sentence",
       any(r["kind"] == "mark" and r["text"] == "15" for b in dblocks for r in b.get("runs") or []))
+check("the brackets around a changed number stay as they are",
+      derived_contract["edits"]["CL_0010-D1"]["replacement"] == "30")
 check("a title on the same line as its text becomes a heading",
-      [text_of(b) for b in dblocks if b["type"] == "heading"] == ["املادة الثامنة: إنهاء العقد", "املادة العاشرة: حل النزاعات"]
+      [text_of(b) for b in dblocks if b["type"] == "heading"] == ["المادة الثامنة: إنهاء العقد", "المادة العاشرة: حل النزاعات"]
       and text_of(dblocks[1]).startswith("للطرف الأول"))
 check("page numbers and picture markers are not shown as contract text",
       not any(text_of(b).strip() in {"2", "[picture 1] [picture 2]"} for b in dblocks))
+
+# --- Advice, rewrites and matching despite the PDF's punctuation ----------------
+CLAUSE3 = ("للطرف الأول إنهاء العقد بإخطار مدته عشرة (10) أيام، وللطرف الثاني إنهاء العقد مع سداد كامل الأتعاب "
+           "بإخطار مدته عشرة (10) أيام.")
+advice_with_quote = derive_edits({"clause_id": "C3", "proposed_wording_ar":
+    "يُستحسن إضافة جملة: 'يُطبق أحكام المادة 15 من الصيغ النموذجية في حالة إنهاء العقد' بعد ذكر التزام الطرف الثاني."},
+    CLAUSE3)
+check("advice quoting a sentence: the sentence is added at the end of the clause",
+      advice_with_quote[0]["type"] == "add" and advice_with_quote[0]["replacement"].startswith("يُطبق أحكام المادة 15")
+      and advice_with_quote[0]["original"] == CLAUSE3)
+plain_advice = derive_edits({"clause_id": "C8", "proposed_wording_ar":
+    "يُعدل النص ليُشترط أن يُحتسب دفع الأتعاب بناءً على النسبة الزمنية المنقضية."}, CLAUSE3)
+check("advice without a sentence to add is not put in the contract", [e["type"] for e in plain_advice] == ["advice"])
+with_node = derive_edits({"clause_id": "C5", "proposed_wording_ar":
+    "يتعهد الطرف الثاني بتقديم الوكالات اللازمة المحددة في النظام (NODE_05EA806F15D7F9B14CAE) لتقديم الشكوى."},
+    "زود المحامي بكافة المستندات والوكالات الالزمة وتقديم الشكوى")
+check("knowledge-base ids are never written into the contract", all("NODE_" not in e["replacement"] for e in with_node))
+check("a rewrite replaces the clause whole instead of mixing words",
+      len(with_node) == 1 and with_node[0]["type"] == "replace")
+
+NOTICE_PAGE = ("املادة التاسعة: املراسالت\nتكون جميع املراسالت واإلشعارات على العناوين املثبتة في صدر هذا ،العقد وتعد "
+               "منتجة آثارها ،النظامية ويلتزم من يغير عنوانه بإشعار الطرف اآلخر كتابة.")
+notice = contract_document(
+    [{"page_id": "N1", "case_document_id": "D7", "page_number": 1, "page_text": NOTICE_PAGE}], [],
+    [{"clause_id": "CL_0009", "proposed_wording_ar": "تُرسل جميع المراسلات إلى العناوين المذكورة في بداية العقد، مع خيار "
+                                                     "الإشعار الإلكتروني بموافقة الطرفين."},
+     {"clause_id": "CL_0003", "proposed_wording_ar": "يُعدل النص ليُشترط أن يُحتسب دفع الأتعاب بالتناسب."}],
+    {"clauses": [{"clause_id": "CL_0009", "heading": "المراسلات", "full_text":
+                  "تكون جميع املراسالت واإلشعارات على العناوين املثبتة في صدر هذا العقد وتعد منتجة آثارها النظامية "
+                  "ويلتزم من يغير عنوانه بإشعار الطرف اآلخر كتابة"},
+                 {"clause_id": "CL_0003", "heading": "مدة العقد", "full_text": CLAUSE3}]})
+check("a clause is found although the page has stray commas and letter-order damage",
+      notice["edits"]["CL_0009-D1"]["page_id"] == "N1" and "CL_0009-D1" not in notice["unplaced"])
+check("advice is listed apart, not placed", notice["unplaced"] == ["CL_0003-D1"]
+      and notice["edits"]["CL_0003-D1"]["type"] == "advice")
+check("the page text is shown with its ligatures repaired",
+      text_of(notice["blocks"][0]).startswith("المادة التاسعة") and "الإشعارات" in "".join(
+          r["text"] for b in notice["blocks"] for r in b.get("runs") or []))
 
 print()
 if failures:

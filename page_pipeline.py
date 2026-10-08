@@ -12,7 +12,9 @@ Location: lib/python/legal_platform/page_pipeline.py
                              pass that may repair words only.
                  native+vlm  reliable text around embedded pictures: the text
                              is kept and each picture is read by the VLM.
-                 vlm         scans, photos, screenshots, damaged text layers:
+                 vlm         scans, photos, screenshots, damaged text layers
+                             (broken glyphs, or Arabic ligatures stored out
+                             of order: املادة for المادة, ال for لا):
                              the page image is read by the VLM (the text layer,
                              if any, is passed as a hint).
   3. kind        Each picture is classified: photo (camera shot), scan,
@@ -49,7 +51,7 @@ import cv2
 import numpy as np
 
 from . import image_tables as it
-from .arabic_text import fix_visual_arabic
+from .arabic_text import fix_visual_arabic, ligature_damage, repair_ligatures
 
 VisionCall = Callable[[str, bytes], str]
 TextLLM = Callable[[str, dict], dict]
@@ -61,6 +63,7 @@ CONTEXT_CHARS = 4000
 MIN_PICTURE_SHARE = 0.04           # an embedded picture smaller than this share of the page is decoration
 PICTURE_SHARE_FOR_VLM = 0.15       # reliable text + pictures covering this much -> the pictures are read too
 PICTURE_SHARE_IS_IMAGE = 0.6       # pictures covering this much: the page is an image (scan with OCR layer)
+ARABIC_DAMAGE_WORDS = 3            # Arabic words with ligatures stored out of order: the words are read from the image
 PHOTO_VIEWS = 2
 
 _ARABIC = re.compile(r"[ء-ي]")
@@ -130,7 +133,7 @@ def native_text(page: Any) -> Tuple[str, List[str]]:
     items += [(box[1], box[0], markdown) for box, markdown in boxes]
     items.sort(key=lambda item: (round(item[0], 0), item[1]))
     text = "\n\n".join(fix_visual_arabic(text) if not text.startswith("|") else text for _, _, text in items)
-    return text.strip(), tables
+    return repair_ligatures(text).strip(), tables
 
 
 def page_count(data: bytes) -> int:
@@ -224,6 +227,10 @@ def route(page: dict) -> str:
         return "vlm"
     share = float(page.get("picture_share") or 0.0)
     if share >= PICTURE_SHARE_IS_IMAGE:
+        return "vlm"
+    # Arabic stored with ligatures out of order (املادة, ال تقل, هلل): the words
+    # are read from the image; the PDF's numbers stay exact (layer is clean).
+    if ligature_damage(page.get("text_layer", "")) >= ARABIC_DAMAGE_WORDS:
         return "vlm"
     if share >= PICTURE_SHARE_FOR_VLM and page.get("pictures"):
         return "native+vlm"

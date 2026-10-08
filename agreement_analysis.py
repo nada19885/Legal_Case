@@ -36,6 +36,11 @@ is missing, mark the review provisional. Return JSON only:
    "reason_ar":"", "reason_en":""}
  ]
 }
+proposed_wording_ar / proposed_wording_en: the whole clause AS IT SHOULD READ,
+written as contract text ready to sign (not advice such as "add a sentence",
+"it is recommended", "يُستحسن", "يُعدل النص"; no node_ids; no blanks like ___).
+The one in the contract's own language is shown inside the contract. Leave
+both empty when the clause needs no change.
 edits are the exact changes to the clause wording, shown to the attorney as
 marks on the agreement pages:
 - original: the words to change, copied CHARACTER FOR CHARACTER from the
