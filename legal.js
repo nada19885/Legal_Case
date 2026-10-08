@@ -310,6 +310,17 @@ const I18N = {
     "marked_add": "add",
     "marked_unplaced": "Changes whose words were not found on the pages",
     "proposed_changes": "Proposed changes to the wording",
+    "contract_with_changes": "The contract with the proposed changes",
+    "contract_changes_caption": "{count} change(s) in the text. Hover over a change to see why.",
+    "contract_legend_old": "wording to change or remove",
+    "contract_legend_new": "proposed wording",
+    "download_contract_docx": "Download Word (.docx)",
+    "contract_docx_note": "In Word the changes are tracked changes: accept or reject each one; the reason is in its comment.",
+    "contract_page": "Page {page}",
+    "contract_other_changes": "Other proposed changes",
+    "contract_other_caption": "These words were not found exactly in the extracted text, so they are listed here instead of placed in it.",
+    "contract_no_edits": "This review was made before changes were marked in the contract. Run the review again to see them in the text and in Word.",
+    "review_details": "Review details (summary, clause-by-clause findings, negotiation)",
     "no_clause_text": "No text captured for this clause.",
     "no_dated_events": "No dated events were identified.",
     "no_english_summary": "A separate English summary was not generated. Refresh the attorney summary.",
@@ -768,6 +779,17 @@ const I18N = {
     "marked_add": "إضافة",
     "marked_unplaced": "تعديلات لم يُعثر على عباراتها في الصفحات",
     "proposed_changes": "التعديلات المقترحة على الصياغة",
+    "contract_with_changes": "العقد مع التعديلات المقترحة",
+    "contract_changes_caption": "{count} تعديل في النص. مرّر المؤشر على التعديل لمعرفة سببه.",
+    "contract_legend_old": "صياغة يجب تعديلها أو حذفها",
+    "contract_legend_new": "الصياغة المقترحة",
+    "download_contract_docx": "تنزيل ملف Word (.docx)",
+    "contract_docx_note": "في ملف Word تظهر التعديلات كتعديلات متعقّبة: اقبل أو ارفض كل تعديل، وسببه في التعليق المرفق.",
+    "contract_page": "صفحة {page}",
+    "contract_other_changes": "تعديلات مقترحة أخرى",
+    "contract_other_caption": "لم يُعثر على هذه العبارات حرفياً في النص المستخرج، لذا أُدرجت هنا بدلاً من وضعها في النص.",
+    "contract_no_edits": "أُجريت هذه المراجعة قبل إضافة التعديلات داخل نص العقد. أعد تشغيل المراجعة لتظهر في النص وفي ملف Word.",
+    "review_details": "تفاصيل المراجعة (الملخص، نتائج كل بند، التفاوض)",
     "no_clause_text": "لم يُلتقط نص لهذا البند.",
     "no_dated_events": "لم تُحدد أي أحداث مؤرخة.",
     "no_english_summary": "لم يتم إنشاء ملخص إنجليزي مستقل. أعد إعداد ملخص المحامي.",
@@ -4098,6 +4120,10 @@ function renderAgreementReviewTab(state) {
   const negotiation = review.negotiation_position || {};
 
   html(body, `
+    ${contractDocumentMarkup(state)}
+
+    <details class="bsf-review-details">
+    <summary>${esc(t("review_details"))}</summary>
     <div class="bilingual-panel ${ar ? "arabic-block" : "english-block"}">
       ${renderMarkdown((ar ? review.executive_summary_ar : review.executive_summary_en) || "")}
     </div>
@@ -4114,13 +4140,12 @@ function renderAgreementReviewTab(state) {
     ${listExpander("missing_protections_expander", missing)}
     ${listExpander("cross_clause_conflicts_expander", conflicts)}
 
-    ${markedAgreementMarkup(state.markup)}
-
     <h4 class="bsf-subsection">${esc(t("clause_by_clause_review"))}</h4>
     ${(review.clause_reviews || []).map(clauseReviewMarkup).join("")}
 
     <h4 class="bsf-subsection">${esc(t("negotiation_prep"))}</h4>
-    ${negotiationMarkup(negotiation)}`);
+    ${negotiationMarkup(negotiation)}
+    </details>`);
 }
 
 function clauseReviewMarkup(item) {
@@ -4193,34 +4218,73 @@ function editMarkup(edit) {
     ${reason ? `<div class="bsf-caption">${esc(reason)}</div>` : ""}`;
 }
 
-/* The agreement pages with every placed change shown where it is. */
-function markedAgreementMarkup(markup) {
-  if (!markup || !(markup.pages || []).length) return "";
-  const edits = markup.edits || {};
-  const segment = (part) => {
-    const edit = edits[part.edit_id];
-    if (!edit) return esc(part.text);
-    const reason = editReason(edit);
-    if (part.kind === "insert") {
-      return `<span class="bsf-mk" title="${esc(reason)}">${editNew(edit)}</span>`;
-    }
-    return `<span class="bsf-mk" title="${esc(reason)}"><span class="bsf-mk-old${edit.type === "delete" ? " is-deleted" : ""}">${esc(part.text)}</span>${editNew(edit)}</span>`;
+/* The contract as one document (agreement_markup.contract_document):
+   headings, paragraphs, lists and tables from the extracted text, each
+   proposed change in place - the wording to change in red, struck
+   through, the proposed wording in green right after it. */
+function contractDocumentMarkup(state) {
+  const contract = state.contract;
+  if (!contract || !(contract.blocks || []).length) return "";
+  const edits = contract.edits || {};
+  const change = (edit, inner) => `<span class="bsf-ct-change" title="${esc(editReason(edit))}">${inner}</span>`;
+  const proposed = (edit) => edit.type === "delete" ? ""
+    : `<ins class="bsf-ct-new">${esc(edit.replacement || "")}</ins>`;
+  const run = (item) => {
+    const edit = edits[item.edit_id];
+    if (item.kind === "text" || !edit) return esc(item.text || "");
+    if (item.kind === "insert") return " " + change(edit, proposed(edit));
+    const old = `<del class="bsf-ct-old">${esc(item.text || "")}</del>`;
+    return change(edit, item.last && edit.type !== "delete" ? `${old} ${proposed(edit)}` : old);
   };
-  const unplaced = (markup.unplaced || []).map((id) => edits[id]).filter(Boolean);
+  const runs = (list) => (list || []).map(run).join("");
+  const table = (block) => `
+    <div class="bsf-table-scroll"><table class="bsf-table bsf-ct-table">${(block.rows || []).map((row) => `
+      <tr>${(row.cells || []).map((cell) => row.header
+        ? `<th dir="auto">${runs(cell)}</th>` : `<td dir="auto">${runs(cell)}</td>`).join("")}</tr>`).join("")}
+    </table></div>`;
+
+  const parts = [];
+  let items = [];
+  const flush = () => { if (items.length) { parts.push(`<ul class="bsf-ct-list">${items.join("")}</ul>`); items = []; } };
+  (contract.blocks || []).forEach((block) => {
+    if (block.type === "item") { items.push(`<li dir="auto">${runs(block.runs)}</li>`); return; }
+    flush();
+    if (block.type === "document") parts.push(`<h2 class="bsf-ct-file">${esc(block.text || "")}</h2>`);
+    else if (block.type === "page") parts.push(`<div class="bsf-ct-page"><span>${esc(t("contract_page", { page: block.page_number }))}</span></div>`);
+    else if (block.type === "heading") {
+      const tag = block.level === 1 ? "h2" : (block.level === 2 ? "h3" : "h4");
+      parts.push(`<${tag} class="bsf-ct-h${block.level || 2}" dir="auto">${runs(block.runs)}</${tag}>`);
+    } else if (block.type === "table") parts.push(table(block));
+    else parts.push(`<p dir="auto">${runs(block.runs)}</p>`);
+  });
+  flush();
+
+  const sample = (contract.blocks || []).slice(0, 40).map((b) => (b.runs || []).map((r) => r.text || "").join("")).join(" ");
+  const direction = ARABIC_RE.test(sample) && (sample.match(/[؀-ۿ]/g) || []).length * 2
+    >= (sample.match(/[A-Za-z؀-ۿ]/g) || []).length ? "rtl" : "ltr";
+  const unplaced = (contract.unplaced || []).map((id) => edits[id]).filter(Boolean);
   return `
-    <h4 class="bsf-subsection">${esc(t("marked_agreement"))}</h4>
-    <p class="bsf-caption">${esc(t("marked_caption"))}</p>
-    ${markup.pages.map((page) => `
-      <details class="bsf-mk-page" ${page.changes ? "open" : ""}>
-        <summary>${esc(t("marked_page", { file: page.document_name || "", page: page.page_number }))}
-          ${page.changes ? badge(t("marked_changes", { count: page.changes }), "flagged")
-                         : `<span class="bsf-caption">${esc(t("marked_no_change"))}</span>`}</summary>
-        <div class="bsf-mk-text" dir="auto">${(page.segments || []).map(segment).join("")}</div>
-      </details>`).join("")}
+    <div class="bsf-ct-bar">
+      <div>
+        <h4 class="bsf-subsection">${esc(t("contract_with_changes"))}</h4>
+        <p class="bsf-caption">${esc(t("contract_changes_caption", { count: contract.changes || 0 }))}
+          <span class="bsf-ct-legend"><del class="bsf-ct-old">${esc(t("contract_legend_old"))}</del>
+          <ins class="bsf-ct-new">${esc(t("contract_legend_new"))}</ins></span></p>
+      </div>
+      <div class="bsf-ct-actions">
+        <button type="button" class="bsf-btn bsf-btn-primary" data-action="download-contract-docx">${esc(t("download_contract_docx"))}</button>
+        <div class="bsf-caption">${esc(t("contract_docx_note"))}</div>
+      </div>
+    </div>
+    ${state.has_edits ? "" : alertBox(t("contract_no_edits"), "info")}
+    <article class="bsf-ct-paper" dir="${direction}">${parts.join("")}</article>
     ${unplaced.length ? `
-      <div class="bsf-mk-page">
-        <strong>${esc(t("marked_unplaced"))}</strong>
-        <ul class="bsf-mk-list">${unplaced.map((edit) => `<li>${editMarkup(edit)}</li>`).join("")}</ul>
+      <div class="bsf-ct-other">
+        <h4 class="bsf-subsection">${esc(t("contract_other_changes"))}</h4>
+        <p class="bsf-caption">${esc(t("contract_other_caption"))}</p>
+        <ul class="bsf-mk-list">${unplaced.map((edit) => `
+          <li><strong>${esc([t("clause"), edit.clause_number || edit.clause_id || ""].join(" ").trim())}</strong>
+            ${editMarkup(edit)}</li>`).join("")}</ul>
       </div>` : ""}`;
 }
 
@@ -4395,6 +4459,13 @@ const ACTIONS = {
       S.compareVersion = null;
       await refreshCase();
     } catch (error) { fail(error); }
+  },
+
+  "download-contract-docx": () => {
+    const url = backendUrl("/agreement/review_docx") + "?" + new URLSearchParams({
+      case_id: S.caseId, lang: isRTL() ? "ar" : "en",
+    }).toString();
+    window.open(url, "_blank");
   },
 
   "download": (el) => {

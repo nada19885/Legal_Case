@@ -73,8 +73,8 @@ check("a sentence is found despite a line break and extra spaces",
 check("a deletion is marked on its words", marks[1]["edit_id"] == "C7-E2" and marks[1]["text"] == "The Bank waives all claims")
 page2 = markup["pages"][1]
 check("an addition is placed after its sentence on another page of the clause",
-      [s["kind"] for s in page2["segments"]][:3] == ["text", "text", "insert"]
-      and page2["segments"][1]["text"] == "Payments are due monthly" and markup["edits"]["C7-E3"]["page_id"] == "P2")
+      [s["kind"] for s in page2["segments"]][:2] == ["text", "insert"]
+      and page2["segments"][0]["text"].endswith("Payments are due monthly") and markup["edits"]["C7-E3"]["page_id"] == "P2")
 page3 = markup["pages"][2]
 check("Arabic words are found despite tatweel and diacritics",
       any(s["kind"] == "mark" and s["edit_id"] == "C9-E1" for s in page3["segments"]))
@@ -85,6 +85,87 @@ check("each change knows its clause risk", markup["edits"]["C7-E1"]["risk_level"
 check("pages count their changes", [p["changes"] for p in markup["pages"]] == [2, 1, 2])
 check("no review edits: plain pages", mark_pages(pages, documents, [{"clause_id": "X"}])["pages"][0]["segments"]
       == [{"text": PAGE1, "edit_id": "", "kind": "text"}])
+
+# --- The contract as one document, and its Word file -------------------------
+import io                                                              # noqa: E402
+import zipfile                                                         # noqa: E402
+import xml.etree.ElementTree as ET                                     # noqa: E402
+from legal_platform.agreement_markup import contract_document          # noqa: E402
+from legal_platform.agreement_docx import contract_docx                # noqa: E402
+
+CONTRACT = ("عقد تقديم خدمات محاماة\n\nالمادة الأولى: الأتعاب\nاتفق الطرفان على أتعاب قدرها 2000 ريال تستحق:\n"
+            "- 1000 ريال عند صدور الحكم.\n- 1000 ريال عند كسب الدعوى.\n\n| البند | المبلغ |\n|---|---|\n"
+            "| الدفعة الأولى | 1000 |\n\nإنهاء العقد\n3.1- للطرف الأول إنهاء العقد بإخطار مدته عشرة أيام\n"
+            "ولا يستحق أي أتعاب.")
+contract_pages = [{"page_id": "Q1", "case_document_id": "D1", "page_number": 1, "page_text": CONTRACT},
+                  {"page_id": "Q2", "case_document_id": "D1", "page_number": 2, "page_text": "المادة الرابعة: النزاعات\nتحال النزاعات إلى محاكم جدة."}]
+contract_edits = clean_edits([
+    {"type": "replace", "original": "1000 ريال عند كسب الدعوى", "replacement": "1000 ريال عند صدور حكم نهائي لصالح الموكل",
+     "reason_ar": "تحديد معنى كسب الدعوى"},
+    {"type": "replace", "original": "بإخطار مدته عشرة أيام ولا", "replacement": "بإخطار كتابي مدته ثلاثون يوماً ولا",
+     "reason_en": "Longer notice"},
+    {"type": "add", "original": "تحال النزاعات إلى محاكم جدة", "replacement": "بعد محاولة التسوية الودية خلال 15 يوماً."},
+    {"type": "delete", "original": "الدفعة الأولى", "reason_en": "inside the table"},
+    {"type": "replace", "original": "not in this contract", "replacement": "x"}], "C1")
+contract = contract_document(contract_pages, [{"case_document_id": "D1", "original_filename": "c.pdf"}],
+                             [{"clause_id": "C1", "clause_number": "1", "source_page_ids": ["Q1"], "edits": contract_edits}],
+                             {"clauses": [{"heading": "إنهاء العقد"}]})
+blocks = contract["blocks"]
+kinds = [b["type"] for b in blocks]
+text_of = lambda b: "".join(r["text"] for r in b.get("runs") or [])
+check("the contract's first line is its title", blocks[0]["type"] == "heading" and blocks[0]["level"] == 1)
+check("clause titles become headings (by wording and by the clause map)",
+      [text_of(b) for b in blocks if b["type"] == "heading"][1:] == ["المادة الأولى: الأتعاب", "إنهاء العقد", "المادة الرابعة: النزاعات"])
+check("bullet lines become list items without their dash", kinds.count("item") == 2
+      and text_of([b for b in blocks if b["type"] == "item"][0]).startswith("1000 ريال عند صدور"))
+table = next(b for b in blocks if b["type"] == "table")
+check("a markdown table becomes a table with its header row",
+      table["rows"][0]["header"] and ["".join(r["text"] for r in c) for c in table["rows"][1]["cells"]] == ["الدفعة الأولى", "1000"])
+check("a page break of the original is marked", {"type": "page", "page_number": 2} in blocks)
+wrapped = next(b for b in blocks if b["type"] == "paragraph" and text_of(b).startswith("3.1"))
+check("a change running over a wrapped line stays one change in one paragraph",
+      [r["kind"] for r in wrapped["runs"]].count("mark") == 1 and "\n" in text_of(wrapped))
+check("an addition goes after its sentence", any(r["kind"] == "insert" for b in blocks for r in b.get("runs") or []))
+check("a change inside a table cell is placed in the cell",
+      any(r["kind"] == "mark" for row in table["rows"] for cell in row["cells"] for r in cell))
+check("changes whose words are not in the text are listed apart", contract["unplaced"] == ["C1-E5"] and contract["changes"] == 4)
+
+docx_bytes = contract_docx(contract, "عقد تقديم خدمات محاماة", "ar")
+package = zipfile.ZipFile(io.BytesIO(docx_bytes))
+NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+body = ET.fromstring(package.read("word/document.xml"))
+
+
+def version(accept: bool) -> str:
+    out = []
+
+    def walk(node, inside_ins=False, inside_del=False):
+        tag = node.tag.replace(NS, "")
+        inside_ins = inside_ins or tag == "ins"
+        inside_del = inside_del or tag == "del"
+        if tag == "t" and (accept or not inside_ins):
+            out.append(node.text or "")
+        if tag == "delText" and not accept:
+            out.append(node.text or "")
+        for child in node:
+            walk(child, inside_ins, inside_del)
+    walk(body)
+    return "".join(out)
+
+
+rejected, accepted = version(False), version(True)
+check("the Word file holds every part of a .docx", {"[Content_Types].xml", "word/document.xml", "word/styles.xml",
+                                                    "word/comments.xml"} <= set(package.namelist()))
+check("every change is a tracked change (insertions and deletions)",
+      len(body.findall(f".//{NS}ins")) == 3 and len(body.findall(f".//{NS}del")) == 3)
+check("rejecting all changes gives back the contract's own words",
+      "1000 ريال عند كسب الدعوى" in rejected and "بإخطار مدته عشرة أيام" in rejected and "ثلاثون" not in rejected)
+check("accepting all changes gives the proposed wording",
+      "عند صدور حكم نهائي لصالح الموكل" in accepted and "عند كسب الدعوى." not in accepted
+      and "بعد محاولة التسوية الودية" in accepted)
+check("each reason is a Word comment", package.read("word/comments.xml").decode("utf-8").count("<w:comment ") == 3)
+check("Arabic paragraphs are right-to-left", body.find(f".//{NS}bidi") is not None)
+check("the changes not found are listed at the end", "تعديلات مقترحة أخرى" in accepted and "not in this contract" in accepted)
 
 print()
 if failures:

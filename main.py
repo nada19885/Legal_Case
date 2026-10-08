@@ -70,7 +70,8 @@ from legal_platform.case_map_storage import persist_case_map
 from legal_platform.case_register import build_case_register, prioritise_pages_for_summary
 from legal_platform.facts import add_fact_candidate
 from legal_platform.chat_orchestrator import assess_next_step, run_legal_analysis
-from legal_platform.agreement_markup import mark_pages
+from legal_platform.agreement_markup import contract_document
+from legal_platform.agreement_docx import contract_docx
 from legal_platform.interview_state import persist_interview_state
 from legal_platform.case_summary import generate_case_summary, approve_case_summary
 from legal_platform.attorney_workbench import answer_case_question, revise_bilingual_pleading
@@ -1228,9 +1229,13 @@ def case_endpoint():
             "review": stored.get("review"),
         }
         review = stored.get("review") or {}
-        if any((item or {}).get("edits") for item in review.get("clause_reviews") or []):
-            response["agreement_state"]["markup"] = mark_pages(
-                data["pages"], data["documents"], review.get("clause_reviews") or [])
+        if review.get("clause_reviews"):
+            # The contract's extracted text as one document, the proposed
+            # wording changes in place (agreement_markup.contract_document).
+            response["agreement_state"]["contract"] = contract_document(
+                data["pages"], data["documents"], review.get("clause_reviews") or [], stored.get("clause_map"))
+            response["agreement_state"]["has_edits"] = any(
+                (item or {}).get("edits") for item in review.get("clause_reviews") or [])
         return _ok(response)
 
     state = restore_workflow_state(data)
@@ -2735,6 +2740,28 @@ def pleading_export():
         text,
         mimetype="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="pleading_{language}.md"'},
+    )
+
+
+@app.route("/agreement/review_docx")
+def agreement_review_docx():
+    """The reviewed contract as a Word file: the proposed changes as tracked
+    changes (accept / reject in Word), each reason as a comment."""
+    case_id = request.args.get("case_id", "")
+    language = "ar" if str(request.args.get("lang", "ar")).lower().startswith("ar") else "en"
+    stored = load_agreement_states(case_id)
+    review = stored.get("review") or {}
+    if not review.get("clause_reviews"):
+        return jsonify({"error": "Run the legal and commercial review first."}), 404
+    data = load_case_data(case_id)
+    contract = contract_document(data["pages"], data["documents"], review["clause_reviews"], stored.get("clause_map"))
+    title = first_case_value(data["case"], "case_name", "client_name", default="") or short_case_reference(case_id)
+    payload = contract_docx(contract, title, language)
+    return send_file(
+        io.BytesIO(payload),
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        as_attachment=True,
+        download_name=f"contract_review_{short_case_reference(case_id)}.docx",
     )
 
 

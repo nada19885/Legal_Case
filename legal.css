@@ -795,3 +795,31 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-mk-list { margin: .3rem 0 .6rem; padding-inline-start: 1.2rem; }
 .bsf-mk-list li { margin-bottom: .4rem; }
 .bsf-mk-old.is-deleted { text-decoration: line-through; }
+
+/* Contract review: the contract as one document with the changes in place. */
+.bsf-ct-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin: .4rem 0 .6rem; }
+.bsf-ct-bar .bsf-subsection { margin: 0 0 .2rem; }
+.bsf-ct-actions { display: flex; flex-direction: column; align-items: flex-end; gap: .3rem; max-width: 22rem; text-align: end; }
+.bsf-ct-legend { display: inline-flex; gap: .5rem; margin-inline-start: .5rem; }
+.bsf-ct-paper { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .06); padding: 2.2rem 2.6rem; margin: .4rem 0 1rem; max-width: 60rem;
+  line-height: 1.95; font-size: .97rem; color: var(--ink); }
+.bsf-ct-paper h2, .bsf-ct-paper h3, .bsf-ct-paper h4 { color: var(--bsf-green-700, var(--ink)); line-height: 1.5; }
+.bsf-ct-paper .bsf-ct-h1 { font-size: 1.35rem; text-align: center; margin: 0 0 1.2rem; }
+.bsf-ct-paper .bsf-ct-file { font-size: 1.15rem; border-bottom: 2px solid var(--line); padding-bottom: .3rem; margin: 1.6rem 0 .8rem; }
+.bsf-ct-paper .bsf-ct-h2 { font-size: 1.08rem; margin: 1.3rem 0 .4rem; }
+.bsf-ct-paper .bsf-ct-h3, .bsf-ct-paper .bsf-ct-h4 { font-size: 1rem; margin: 1rem 0 .3rem; }
+.bsf-ct-paper p { margin: 0 0 .7rem; }
+.bsf-ct-list { margin: 0 0 .7rem; padding-inline-start: 1.4rem; }
+.bsf-ct-list li { margin-bottom: .25rem; }
+.bsf-ct-table { margin: .4rem 0 .9rem; font-size: .9rem; }
+.bsf-ct-page { display: flex; align-items: center; gap: .6rem; margin: 1.2rem 0; color: var(--ink-faint); font-size: .75rem; }
+.bsf-ct-page::before, .bsf-ct-page::after { content: ""; flex: 1; border-top: 1px dashed var(--line); }
+.bsf-ct-old { color: var(--flag); background: var(--flag-bg); text-decoration: line-through; text-decoration-thickness: 1.5px;
+  border-radius: 3px; padding: 0 .15rem; }
+.bsf-ct-new { color: var(--ok); background: var(--ok-bg); text-decoration: none; font-weight: 600; border-radius: 3px; padding: 0 .15rem; }
+.bsf-ct-change { cursor: help; }
+.bsf-ct-other { margin: 0 0 1rem; }
+.bsf-review-details { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .6rem .9rem; margin: .8rem 0; background: var(--surface); }
+.bsf-review-details > summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 700px) { .bsf-ct-paper { padding: 1.2rem 1rem; } .bsf-ct-actions { align-items: flex-start; text-align: start; } }
