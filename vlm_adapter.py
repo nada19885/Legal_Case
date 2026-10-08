@@ -114,6 +114,41 @@ def vlm_transcribe(
         return "", str(error)
 
 
+def vision_call(
+    prompt: str,
+    png_bytes: bytes,
+    model_id: str | None = None,
+    attempts: int = 3,
+    mime: str = "image/png",
+) -> str:
+    """One image and one instruction to the vision model (the page
+    pipeline's reader). Retries transient failures; raises with the last
+    error when every attempt failed."""
+    import base64
+
+    image_b64 = base64.b64encode(png_bytes).decode("utf-8")
+    last_error = ""
+    for attempt in range(1, int(attempts) + 1):
+        try:
+            project = dataiku.api_client().get_default_project()
+            completion = project.get_llm(model_id or FAST_OCR_VLM_ID).new_completion()
+            try:
+                completion.settings["temperature"] = float(VLM_TEMPERATURE)
+            except Exception:
+                pass
+            multipart = completion.new_multipart_message(role="user")
+            multipart.with_text(prompt)
+            multipart.with_inline_image(image_b64, mime)
+            multipart.add()
+            return _response_text(completion.execute())
+        except Exception as error:
+            last_error = repr(error)
+            print(f"[vision call failure] attempt={attempt} error={last_error}")
+            if attempt < int(attempts):
+                time.sleep(2.0 * attempt)
+    raise RuntimeError(f"The vision request failed after {attempts} attempts: {last_error}")
+
+
 def _transcribe_once(
     rendered_page,
     model_id: str,

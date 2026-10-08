@@ -17,7 +17,7 @@ import os
 import sys
 
 import pandas as pd
-from flask import request, jsonify, send_file, Response, copy_current_request_context
+from flask import request, jsonify, send_file, Response, copy_current_request_context, g
 from dataiku.customwebapp import *  
 import dataiku
 
@@ -49,6 +49,7 @@ def increment_usage(session_id, field, amount=1, use_case="litigation"):
 # CORE LEGAL PLATFORM IMPORTS
 # -----------------------------------------------------------------------------
 from legal_platform.intake import create_case, add_message
+from legal_platform import access
 from legal_platform.storage import list_cases, latest_case, case_rows, replace_case_rows
 from legal_platform.workflow import (
     COMPLETED,
@@ -59,20 +60,21 @@ from legal_platform.workflow import (
     WAITING,
     build_stage_overview,
     read_workflow_state,
-    restore_workflow_state as restore_state_from_frames,
     stage_patch,
     update_workflow_state,
 )
 from legal_platform.files import save_upload
-from legal_platform.extraction import extract_pdf_page_by_page
+from legal_platform.extraction import extract_pdf_page_by_page, load_page_extraction
 from legal_platform.case_mapping import build_case_map
 from legal_platform.case_map_storage import persist_case_map
 from legal_platform.case_register import build_case_register, prioritise_pages_for_summary
 from legal_platform.facts import add_fact_candidate
-from legal_platform.chat_orchestrator import assess_next_step, run_legal_analysis, run_defence_plan
+from legal_platform.chat_orchestrator import assess_next_step, run_legal_analysis
+from legal_platform.agreement_markup import contract_document
+from legal_platform.agreement_docx import contract_docx
 from legal_platform.interview_state import persist_interview_state
 from legal_platform.case_summary import generate_case_summary, approve_case_summary
-from legal_platform.attorney_workbench import generate_bilingual_memo, answer_case_question, revise_bilingual_pleading
+from legal_platform.attorney_workbench import answer_case_question, revise_bilingual_pleading
 from legal_platform.audit import audit
 from legal_platform.agreement_workbench import (
     AGREEMENT_TYPES, RELATIONSHIP_TYPES, classify_agreement, extract_clause_map,
@@ -98,23 +100,43 @@ from legal_platform.financial_corrections import (
     load_latest_corrections,
     submit_correction,
     submit_fact_resolution,
+    submit_fact_resolutions,
 )
 from legal_platform.financial_facts import (
     PROPOSAL_ACTION,
     format_amount,
     parse_amount,
+    UNCERTAIN,
     build_fact_ledger,
     build_fact_review_items,
+    build_fact_table,
+    fact_from_row,
+    user_fact_row,
+    count_uncertain,
     effective_fact,
     validate_fact_fields,
 )
-from legal_platform.financial_reconciliation import reinterpret_fact
+from legal_platform.financial_reconciliation import persist_reconciled_rows, reinterpret_fact
 from legal_platform.financial_fields import FIELD_NAMES
-from legal_platform.financial_extraction_pipeline import run_financial_extraction
+from legal_platform.financial_extraction_pipeline import (
+    load_document_claims,
+    run_financial_extraction,
+    save_document_claims,
+)
 from legal_platform.financial_forensics import (
     build_and_save_financial_timeline,
+    ledger_summary,
     load_saved_forensic_results,
     run_claim_based_accounting_analysis,
+)
+from legal_platform.pleading import (
+    build_drafting_record,
+    draft_pleading,
+    is_full_pleading,
+    pleading_language,
+    pleading_languages,
+    pleading_to_markdown,
+    revise_pleading,
 )
 from legal_platform.financial_normalizer import (
     normalize_amount,
@@ -123,6 +145,17 @@ from legal_platform.financial_normalizer import (
 
 APP_ASSETS_FOLDER_ID = "qx2RWzgX"
 APP_LOGO_PATH = "logo.png"
+
+class _QuietProgressPolls:
+    """Keep the browser's once-a-second progress checks out of the log, so
+    page messages and errors stay readable."""
+    def filter(self, record):
+        message = record.getMessage()
+        return not ("/job_status" in message and '" 200 ' in message)
+
+
+import logging as _logging  # noqa: E402
+_logging.getLogger("werkzeug").addFilter(_QuietProgressPolls())
 
 RUN_JOBS_INLINE = False
 JOBS = {}
@@ -288,11 +321,13 @@ def load_case_data(case_id):
         "issues": case_rows("case_issues", case_id),
         "issue_candidates": case_rows("case_issue_candidates", case_id),
         "evidence": case_rows("case_evidence", case_id),
-        "approvals": case_rows("case_approvals", case_id),
-        "audit_events": case_rows("audit_events", case_id),
+        # Workflow state is read per case from its state file (see
+        # legal_platform.workflow); audit_events and case_approvals are not
+        # loaded here: they hold every case's history and are large.
         "financial_line_items": case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id),
         "financial_classifications": case_rows(FINANCIAL_DOCUMENT_CLASSIFICATION_DATASET, case_id),
     }
+    data["financial_line_items"] = _facts_on_financial_pages(data)
 
     forensic = load_saved_forensic_results(case_id)
     data["financial_timeline"] = forensic.get("timeline", [])
@@ -302,6 +337,23 @@ def load_case_data(case_id):
     data["cross_check_summary"] = forensic.get("cross_check_summary", {})
 
     return data
+
+
+def _facts_on_financial_pages(data):
+    """Facts of pages classified financial or mixed (or not classified yet). A page
+    later classified as an email, letter or claim keeps its rows on record,
+    but they leave the review table and the ledger. Facts the user added
+    are always kept."""
+    frame = data.get("financial_line_items")
+    if not isinstance(frame, pd.DataFrame) or frame.empty or "page_id" not in frame.columns:
+        return frame
+    latest = _latest_classifications_by_page(data)
+    excluded = {pid for pid, info in latest.items()
+                if info.get("status") != "failed" and info.get("page_type") and info["page_type"] not in {"financial", "mixed"}}
+    if not excluded:
+        return frame
+    user_added = frame["row_id"].astype(str).str.startswith("FACTU") if "row_id" in frame.columns else False
+    return frame[~frame["page_id"].astype(str).isin(excluded) | user_added].copy()
 
 
 def _latest_classifications_by_page(data):
@@ -334,7 +386,7 @@ def best(data, approved_key, candidate_key):
 # jobs keep each other's results. Routes pass only the keys they change.
 # =============================================================================
 def restore_workflow_state(data):
-    return restore_state_from_frames(data.get("audit_events"), data.get("approvals"))
+    return read_workflow_state(str((data.get("case") or {}).get("case_id", "")))
 
 
 def invalidation_changes(reason):
@@ -387,6 +439,7 @@ def accounting_state(data, state, review_items=None):
         "pending_count": pending_count,
         "pending_field_count": len(review_items),
         "has_forensic_output": has_forensic_output,
+        "facts_confirmed": bool(state.get("accounting_facts_confirmed")),
     }
 
 
@@ -557,12 +610,6 @@ def serialise_summary_support(summary, data):
     chronology_list = summary.get("chronology") or []
     parties_list = summary.get("parties") or []
 
-    evidence_list = []
-    for item in summary.get("available_evidence", []) or []:
-        if isinstance(item, dict):
-            page_ids = item.get("source_page_ids", []) or item.get("page_ids", []) or []
-            evidence_list.append({"item": item, "page_ids": page_ids, "page_labels": _page_labels(page_ids, data)})
-
     contradictions_list = []
     contradictions_frame = data.get("contradictions")
     if isinstance(contradictions_frame, pd.DataFrame) and not contradictions_frame.empty:
@@ -586,13 +633,14 @@ def serialise_summary_support(summary, data):
             {"item": item, "page_labels": _page_labels(item.get("source_page_ids", []), data)}
             for item in _ordered_chronology(chronology_list)
         ],
-        "ordered_evidence": evidence_list,
         "contradictions": contradictions_list,
     }
 
 def memo_to_markdown(memo, language):
     if not isinstance(memo, dict):
         return str(memo or "")
+    if is_full_pleading(memo):
+        return pleading_to_markdown(memo, language)
     section = memo.get("pleading_ar" if language == "ar" else "pleading_en", {})
     if isinstance(section, str):
         return section
@@ -652,7 +700,10 @@ def memo_to_markdown(memo, language):
     return "\n\n".join(lines)
 
 
-def build_pleading_docx_bytes(memo, case_reference=""):
+def build_pleading_docx_bytes(memo, case_reference="", languages=("ar", "en")):
+    """Word version of the pleading, in the given languages (Arabic
+    right-to-left). Headings, tables, lists and **bold** labels of the
+    markdown are kept."""
     from io import BytesIO
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -664,10 +715,39 @@ def build_pleading_docx_bytes(memo, case_reference=""):
         bidi = OxmlElement("w:bidi")
         p_pr.append(bidi)
 
+    def _add_runs(paragraph, text):
+        for index, part in enumerate(re.split(r"\*\*(.+?)\*\*", text.replace("`", ""))):
+            if part:
+                paragraph.add_run(part).bold = index % 2 == 1
+
+    def _add_table(document, rows, rtl):
+        cells = [[cell.strip() for cell in row.strip().strip("|").split("|")] for row in rows]
+        cells = [row for row in cells if not all(re.fullmatch(r"-{3,}", cell) for cell in row)]
+        if not cells:
+            return
+        table = document.add_table(rows=len(cells), cols=len(cells[0]))
+        table.style = "Table Grid"
+        for r, row in enumerate(cells):
+            for c, value in enumerate(row[:len(cells[0])]):
+                paragraph = table.cell(r, c).paragraphs[0]
+                _add_runs(paragraph, f"**{value}**" if r == 0 else value)
+                if rtl:
+                    _set_rtl(paragraph)
+        if rtl:
+            tbl_pr = table._tbl.tblPr
+            tbl_pr.append(OxmlElement("w:bidiVisual"))
+
     def _add_markdown_text(document, markdown_text, rtl=False):
-        for raw_line in str(markdown_text or "").split("\n"):
+        table_rows = []
+        for raw_line in str(markdown_text or "").split("\n") + [""]:
             line = raw_line.strip()
-            if not line:
+            if line.startswith("|"):
+                table_rows.append(line)
+                continue
+            if table_rows:
+                _add_table(document, table_rows, rtl)
+                table_rows = []
+            if not line or line == "---":
                 continue
             if line.startswith("### "):
                 paragraph = document.add_heading(line[4:], level=3)
@@ -675,8 +755,12 @@ def build_pleading_docx_bytes(memo, case_reference=""):
                 paragraph = document.add_heading(line[3:], level=2)
             elif line.startswith("# "):
                 paragraph = document.add_heading(line[2:], level=1)
+            elif line.startswith("- "):
+                paragraph = document.add_paragraph(style="List Bullet")
+                _add_runs(paragraph, line[2:])
             else:
-                paragraph = document.add_paragraph(line)
+                paragraph = document.add_paragraph()
+                _add_runs(paragraph, line)
             if rtl:
                 _set_rtl(paragraph)
 
@@ -684,9 +768,10 @@ def build_pleading_docx_bytes(memo, case_reference=""):
     if case_reference:
         title_paragraph = document.add_paragraph(case_reference)
         title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _add_markdown_text(document, memo_to_markdown(memo, "ar"), rtl=True)
-    document.add_page_break()
-    _add_markdown_text(document, memo_to_markdown(memo, "en"), rtl=False)
+    for index, language in enumerate(languages):
+        if index:
+            document.add_page_break()
+        _add_markdown_text(document, memo_to_markdown(memo, language), rtl=language == "ar")
 
     buffer = BytesIO()
     document.save(buffer)
@@ -809,9 +894,14 @@ def _prune_jobs():
 def _new_job(case_id="", stage=""):
     _prune_jobs()
     job_id = uuid.uuid4().hex
+    try:
+        owner = getattr(g, "user", "")
+    except RuntimeError:                       # outside a request
+        owner = ""
     with JOBS_LOCK:
         JOBS[job_id] = {
             "status": "running",
+            "user": owner,
             "case_id": str(case_id or ""),
             "stage": stage,
             "progress": {"stage": stage, "phase": "", "current": 0, "total": 0, "detail": ""},
@@ -926,6 +1016,40 @@ def _start_stage_job(case_id, stage, phase, detail, task, session_id=None, use_c
     return jsonify({"job_id": job_id})
 
 
+# =============================================================================
+# SIGNED-IN USER AND CASE OWNERSHIP (every request)
+#
+# The user is the one signed in to Dataiku. A request about a case (its
+# case_id in the query, the form or the JSON body) or about a background job
+# is answered only for that case's owner; anything else gets "Case not
+# found", the same as a case that does not exist.
+# =============================================================================
+@app.before_request
+def _authorise_request():
+    if request.method == "OPTIONS":
+        return None
+    user = access.user_from_headers(request.headers)
+    g.user = user
+    body = request.get_json(silent=True) if request.is_json else None
+    case_id = access.requested_case_id(request.args, request.form, body)
+    job_case = None
+    if request.path.endswith("/job_status"):
+        with JOBS_LOCK:
+            job = JOBS.get(request.args.get("job_id", ""))
+        if job and job.get("user") and job["user"] != user:
+            return jsonify({"status": "unknown"}), 404
+        job_case = (job or {}).get("case_id") or None
+    status, message = access.authorise(user, case_id, job_case)
+    if status != 200:
+        return jsonify({"error": message}), status
+    return None
+
+
+@app.route("/me")
+def me():
+    return _ok({"user": g.user})
+
+
 @app.route("/job_status")
 def job_status():
     job_id = request.args.get("job_id", "")
@@ -988,15 +1112,59 @@ def bootstrap():
 
 @app.route("/cases")
 def cases_endpoint():
+    """The signed-in user's own cases only (others' are never listed)."""
     workflow = request.args.get("workflow", "litigation")
     query = request.args.get("query", "")
+    show_archived = str(request.args.get("archived", "")).lower() in {"1", "true", "yes"}
+    records = {r["case_id"]: r for r in access.user_cases(g.user)}
     cases = list_cases()
+    if not cases.empty and "case_id" in cases.columns:
+        cases = cases[cases["case_id"].astype(str).isin(records)]
+        keep = cases["case_id"].astype(str).map(lambda cid: bool(records[cid].get("archived")) == show_archived)
+        cases = cases[keep]
     filtered = filter_cases_by_workflow(cases, workflow)
     filtered = case_search_frame(filtered, query)
     if "updated_at" in filtered.columns:
         filtered = filtered.sort_values("updated_at", ascending=False)
-    cards = [serialise_case_card(row, workflow) for row in frame_to_records(filtered)]
+    cards = []
+    for row in frame_to_records(filtered):
+        card = serialise_case_card(row, workflow)
+        record = records.get(card["case_id"]) or {}
+        card["details"] = record.get("details") or {}
+        card["archived"] = bool(record.get("archived"))
+        card["progress"] = _case_progress(card["case_id"], workflow)
+        cards.append(card)
     return _ok({"cases": cards})
+
+
+def _case_progress(case_id, workflow):
+    """Where a case stands, from its saved workflow state only (cheap):
+    new / documents_uploaded / processing / accounting_review /
+    legal_analysis / ready_for_pleading / attorney_review / completed."""
+    if workflow == "agreement_review":
+        return ""
+    state = read_workflow_state(case_id)
+    stages = state.get("stages") or {}
+    accounting_done = str(state.get("accounting_status") or "") in {"forensic_complete", "complete_no_transactions"}
+    if state.get("memo"):
+        return "completed" if state.get("pleading_status") == "final" else "attorney_review"
+    if any((stage or {}).get("status") == RUNNING for stage in stages.values()):
+        return "processing"
+    if state.get("analysis") and accounting_done:
+        return "ready_for_pleading"
+    if str(state.get("accounting_status") or "") not in {"", "not_started"} and not accounting_done:
+        return "accounting_review"
+    if (stages.get("documents") or {}).get("status") == COMPLETED:
+        return "legal_analysis" if state.get("attorney_summary") or accounting_done else "documents_uploaded"
+    return "new"
+
+
+@app.route("/case/archive", methods=["POST"])
+def case_archive():
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    access.update_case_record(case_id, g.user, {"archived": bool(body.get("archived", True))})
+    return _ok({"archived": bool(body.get("archived", True))})
 
 
 @app.route("/create_case", methods=["POST"])
@@ -1007,12 +1175,18 @@ def create_case_endpoint():
     workflow_type = body.get("workflow_type", "litigation")
     if not case_name:
         return jsonify({"error": "case_name is required"}), 400
+    details = {key: body.get(key, "") for key in access.DETAIL_FIELDS}
     case_id = create_case(
         case_name=case_name,
         intake_mode="mixed",
         language=language,
         workflow_type=workflow_type,
+        created_by=g.user,
+        description=str(body.get("description", "") or ""),
+        client_name=str(body.get("client_name", "") or ""),
+        matter_type=str(body.get("case_type", "") or body.get("contract_type", "") or ""),
     )
+    access.register_case(case_id, g.user, workflow_type, details)
     return jsonify({"case_id": case_id})
 
 
@@ -1031,7 +1205,11 @@ def case_endpoint():
         "reference": short_case_reference(case_id),
         "workflow_type": workflow_type,
         "case": {k: _clean_scalar(v) for k, v in case.items()},
-        "display_name": first_case_value(case, "client_name", "customer_name", "case_name", default=""),
+        "display_name": first_case_value(case, "case_name", "client_name", "customer_name", default=""),
+        "owner": g.user,
+        "details": (access.case_record(case_id) or {}).get("details") or {},
+        "progress": _case_progress(case_id, workflow_type),
+        "last_updated": _last_updated(case_id, case),
         "counts": {
             "documents": int(len(data["documents"])),
             "pages": int(len(data["pages"])),
@@ -1050,6 +1228,14 @@ def case_endpoint():
             "authorities": stored.get("authorities"),
             "review": stored.get("review"),
         }
+        review = stored.get("review") or {}
+        if review.get("clause_reviews"):
+            # The contract's extracted text as one document, the proposed
+            # wording changes in place (agreement_markup.contract_document).
+            contract = contract_document(
+                data["pages"], data["documents"], review.get("clause_reviews") or [], stored.get("clause_map"))
+            response["agreement_state"]["contract"] = contract
+            response["agreement_state"]["has_edits"] = bool(contract.get("edits"))
         return _ok(response)
 
     state = restore_workflow_state(data)
@@ -1070,6 +1256,7 @@ def case_endpoint():
     response["steps"] = overview["stages"]
     response["next_action_key"] = overview["next_stage"]
 
+    response["documents_overview"] = _documents_overview(data, _latest_classifications_by_page(data))
     response["chat_messages"] = serialise_chat_messages(data)
     response["case_register"] = register
     response["facts_register"] = serialise_facts_register(data)
@@ -1106,8 +1293,126 @@ def case_endpoint():
         "cross_check_summary": data.get("cross_check_summary") or {},
         "discrepancies": data.get("discrepancies") or [],
         "findings": _claims_with_evidence(data.get("forensic_findings"), ledger, data),
+        "facts_table": _fact_table(case_id, data, corrections, resolutions),
+        "document_claims": _document_claims(case_id, data),
+        "financial_pages": _financial_pages(case_id, data, classifications),
+        "facts_confirmed": bool(state.get("accounting_facts_confirmed")),
+        "facts_confirmed_by": state.get("accounting_facts_confirmed_by", ""),
+        "facts_confirmed_at": state.get("accounting_facts_confirmed_at", ""),
     }
     return _ok(response)
+
+
+def _last_updated(case_id, case):
+    """The latest change to the case: its workflow state or its record."""
+    stamps = [str(case.get("updated_at") or case.get("created_at") or "")]
+    for stage in (read_workflow_state(case_id).get("stages") or {}).values():
+        stamps.append(str((stage or {}).get("finished_at") or (stage or {}).get("started_at") or ""))
+    latest = max((s for s in stamps if s and s != "nan"), default="")
+    return latest.replace("T", " ")[:16]
+
+
+def _documents_overview(data, classifications):
+    """One line per uploaded document: pages, how many were read, need a
+    look or failed, how many are financial records, and its facts."""
+    pages = frame_to_records(data.get("pages"))
+    facts = data.get("financial_line_items")
+    fact_pages = {}
+    if isinstance(facts, pd.DataFrame) and not facts.empty and "page_id" in facts.columns:
+        fact_pages = facts["page_id"].astype(str).value_counts().to_dict()
+    out = []
+    for document in frame_to_records(data.get("documents")):
+        doc_id = str(document.get("case_document_id", ""))
+        own = [p for p in pages if str(p.get("case_document_id", "")) == doc_id]
+        ids = [str(p.get("page_id", "")) for p in own]
+        statuses = [str(p.get("processing_status", "")) for p in own]
+        financial = [pid for pid in ids if (classifications.get(pid) or {}).get("page_type") in {"financial", "mixed"}]
+        types = sorted({str(p.get("document_type", "") or "").strip() for p in own} - {"", "nan"})
+        out.append({
+            "case_document_id": doc_id,
+            "file": document.get("original_filename") or doc_id,
+            "purpose": document.get("document_type", ""),
+            "uploaded_at": str(document.get("uploaded_at", "") or "").replace("T", " ")[:16],
+            "pages": len(own),
+            "pages_read": sum(s == "completed" for s in statuses),
+            "pages_to_check": sum(s == "completed_review_required" for s in statuses),
+            "pages_failed": sum(s not in {"completed", "completed_review_required"} for s in statuses),
+            "document_types": types[:4],
+            "financial_pages": len(financial),
+            "classified_pages": sum(1 for pid in ids if pid in classifications),
+            "facts": int(sum(fact_pages.get(pid, 0) for pid in ids)),
+            "first_page_id": ids[0] if ids else "",
+        })
+    return out
+
+
+def _document_claims(case_id, data):
+    """Financial claims found in the accounting pages (what an email or a
+    narrative section SAYS about money): to be verified, never evidence."""
+    labels = _page_reference_map(data)
+    out = []
+    for page_id, claims in (load_document_claims(case_id) or {}).items():
+        for claim in claims or []:
+            out.append({**claim, "page_id": page_id, "page_label": labels.get(page_id, "")})
+    out.sort(key=lambda c: (str(c.get("case_document_id", "")), int(float(c.get("page_number") or 0))))
+    return out
+
+
+def _fact_table(case_id, data, corrections=None, resolutions=None):
+    """Every atomic fact for the review table (ledger, uncertain, deleted)."""
+    line_items = data.get("financial_line_items")
+    if not isinstance(line_items, pd.DataFrame) or line_items.empty:
+        return []
+    if corrections is None:
+        corrections = load_latest_corrections(case_id)
+    if resolutions is None:
+        resolutions = load_fact_resolutions(case_id)
+    return build_fact_table(line_items.to_dict(orient="records"), corrections, resolutions)
+
+
+def _financial_pages(case_id, data, classifications=None):
+    """The pages shown beside the fact table: pages classified financial /
+    mixed and pages that have facts, in document and page order."""
+    pages = data.get("pages")
+    if not isinstance(pages, pd.DataFrame) or pages.empty:
+        return []
+    if classifications is None:
+        classifications = _latest_classifications_by_page(data)
+    with_facts = set()
+    line_items = data.get("financial_line_items")
+    if isinstance(line_items, pd.DataFrame) and not line_items.empty and "page_id" in line_items.columns:
+        with_facts = set(line_items["page_id"].astype(str))
+    documents = {str(r.get("case_document_id", "")): r for r in frame_to_records(data["documents"])}
+    document_order = list(documents)
+    labels = _page_reference_map(data)
+    id_col = _page_id_column(pages)
+    out = []
+    for row in frame_to_records(pages):
+        page_id = str(row.get(id_col, "") or row.get("page_id", ""))
+        info = classifications.get(page_id, {})
+        financial = info.get("page_type") in {"financial", "mixed"} and info.get("status") != "failed"
+        if not (financial or page_id in with_facts):
+            continue
+        document_id = str(row.get("case_document_id", ""))
+        try:
+            number = int(float(row.get("page_number") or 0))
+        except (TypeError, ValueError):
+            number = 0
+        out.append({
+            "page_id": page_id,
+            "page_number": number,
+            "case_document_id": document_id,
+            "document_name": (documents.get(document_id) or {}).get("original_filename") or document_id,
+            "label": labels.get(page_id, ""),
+            "page_type": info.get("page_type", ""),
+            "image_url": f"/page_image?case_id={case_id}&page_id={page_id}",
+            "_order": (document_order.index(document_id) if document_id in document_order else 999, number),
+        })
+    unique = {item["page_id"]: item for item in out}
+    ordered = sorted(unique.values(), key=lambda item: item["_order"])
+    for item in ordered:
+        item.pop("_order", None)
+    return ordered
 
 
 CLAIM_RESULT_ORDER = (
@@ -1259,9 +1564,23 @@ class _MemoryUpload:
     def close(self): self._buffer.close()
 
 
+def _intake_context(case_id):
+    """What the page reader may use as a hint: the case record and the
+    parties already known (from documents processed earlier)."""
+    case = latest_case(case_id) or {}
+    parties = []
+    for row in frame_to_records(case_rows("case_parties", case_id))[:20]:
+        name = str(row.get("party_name") or row.get("name") or "").strip()
+        role = str(row.get("party_role") or row.get("role") or "").strip()
+        if name and name not in [p.split(" (")[0] for p in parties]:
+            parties.append(f"{name} ({role})" if role else name)
+    return {"case": {k: _clean_scalar(v) for k, v in case.items()}, "parties": parties}
+
+
 @app.route("/documents/process", methods=["POST"])
 def documents_process():
-    """Stage "documents": pages -> images -> OCR -> page summaries ->
+    """Stage "documents": pages -> page pipeline (PDF text or VLM reading,
+    consolidated) -> page summaries ->
     parties / events / facts / issues / evidence merged into the case
     register. New material marks downstream work stale."""
     case_id = request.form.get("case_id", "")
@@ -1293,6 +1612,8 @@ def documents_process():
                 pdf_bytes=pdf_bytes,
                 zoom=render_zoom,
                 progress_callback=update_progress,
+                document_name=name,
+                case_context=_intake_context(case_id),
             )
             llm_call_count += len(pages)
             completed_pages = [p for p in pages if p.get("processing_status") in {"completed", "completed_review_required"}]
@@ -1443,7 +1764,10 @@ def _accounting_pipeline(job_id, case_id, document_ids=None, extract=True, sessi
                        f"Extracting financial data (page {current} of {total})…", current=current, total=total)
 
         try:
-            extraction = run_financial_extraction(case_id, financial_page_ids, progress_callback=_on_progress)
+            extraction = run_financial_extraction(
+                case_id, financial_page_ids, progress_callback=_on_progress,
+                page_types={pid: classifications.get(pid, {}).get("page_type", "financial") for pid in financial_page_ids},
+            )
         except ValueError as error:
             # No page text available for the selected pages.
             report["extraction_note"] = str(error)
@@ -1466,9 +1790,15 @@ def _accounting_pipeline(job_id, case_id, document_ids=None, extract=True, sessi
     report["pending_review_items"] = sum(len(item.get("fields") or []) for item in pending)
 
     changes = {"accounting_dirty": False, "accounting_dirty_reason": ""}
-    if pending:
+    confirmed = bool(before.get("accounting_facts_confirmed"))
+    if report["rows_added"]:
+        # New facts: the user reviews the table again before the analysis.
+        changes.update({"accounting_facts_confirmed": False, "accounting_facts_confirmed_by": "",
+                        "accounting_facts_confirmed_at": ""})
+        confirmed = False
+    if pending or (has_items and not confirmed):
         changes["accounting_status"] = "needs_review"
-        stage = stage_patch(WAITING, detail="review_items", report=report)
+        stage = stage_patch(WAITING, detail="review_items" if pending else "confirm_facts", report=report)
     elif (
         report["rows_added"] == 0
         and previous in {"forensic_complete", "complete_no_transactions"}
@@ -1560,6 +1890,12 @@ def accounting_clear():
         return jsonify({"error": "The accounting analysis is running. Wait for it to finish before clearing."}), 409
 
     deleted = {}
+    try:
+        deleted["financial_claims"] = sum(len(c or []) for c in load_document_claims(case_id).values())
+        save_document_claims(case_id, {}, replace=True)
+    except Exception:
+        traceback.print_exc()
+        deleted["financial_claims"] = "error"
     for label, dataset_name in ACCOUNTING_CLEAR_DATASETS.items():
         try:
             before = len(case_rows(dataset_name, case_id))
@@ -1575,6 +1911,9 @@ def accounting_clear():
             "accounting_status": "not_started",
             "accounting_dirty": False,
             "accounting_dirty_reason": "",
+            "accounting_facts_confirmed": False,
+            "accounting_facts_confirmed_by": "",
+            "accounting_facts_confirmed_at": "",
         },
         stages={"accounting": stage_patch(NOT_STARTED, finished_at="", report={})},
         action="accounting_cleared",
@@ -1629,16 +1968,21 @@ def _after_review_change(case_id, actor):
     still waiting, ready to continue (last item answered), or — when the
     analysis had already run — ready again with the old results marked
     out of date."""
-    data = load_case_data(case_id)
-    state = restore_workflow_state(data)
-    pending = _review_items(case_id, data)
+    rows = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
+    pending = count_uncertain(
+        rows.to_dict(orient="records") if not rows.empty else [],
+        load_latest_corrections(case_id),
+        load_fact_resolutions(case_id),
+    )
+    state = read_workflow_state(case_id)
     status = str(state.get("accounting_status", "") or "")
+    confirmed = bool(state.get("accounting_facts_confirmed"))
 
-    if pending:
+    if pending or not confirmed:
         update_workflow_state(
             case_id,
             changes={"accounting_status": "needs_review"},
-            stages={"accounting": stage_patch(WAITING, detail="review_items")},
+            stages={"accounting": stage_patch(WAITING, detail="review_items" if pending else "confirm_facts")},
             action="accounting_fact_reviewed",
             actor=actor,
         )
@@ -1665,15 +2009,16 @@ def _after_review_change(case_id, actor):
 
     return {
         "saved": True,
-        "pending_count": len(pending),
-        "ready_for_analysis": not pending,
+        "pending_count": pending,
+        "facts_confirmed": confirmed,
+        "ready_for_analysis": not pending and confirmed,
         "instructions": state.get("accounting_instructions", ""),
     }
 
 
-def _fact_row(data, row_id):
-    frame = data.get("financial_line_items")
-    if not isinstance(frame, pd.DataFrame) or frame.empty or "row_id" not in frame.columns:
+def _fact_row(case_id, row_id):
+    frame = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
+    if frame.empty or "row_id" not in frame.columns:
         return None
     match = frame[frame["row_id"].astype(str) == str(row_id)]
     return match.iloc[-1].to_dict() if not match.empty else None
@@ -1696,8 +2041,7 @@ def accounting_fact_resolve():
     if not (case_id and row_id) or action not in {"confirm", "correct", "ignore", "accept_proposal"}:
         return jsonify({"error": "case_id, row_id and a valid action are required."}), 400
 
-    data = load_case_data(case_id)
-    row = _fact_row(data, row_id)
+    row = _fact_row(case_id, row_id)
     if row is None:
         return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
 
@@ -1721,6 +2065,199 @@ def accounting_fact_resolve():
     return _ok(_after_review_change(case_id, actor))
 
 
+@app.route("/accounting/fact/resolve_bulk", methods=["POST"])
+def accounting_fact_resolve_bulk():
+    """Confirm or ignore several uncertain facts in one request (one
+    dataset write), e.g. "Confirm all on this page". Facts that are no
+    longer uncertain are skipped, so a repeated click is harmless."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    action = str(body.get("action", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    row_ids = [str(r) for r in (body.get("row_ids") or []) if str(r).strip()]
+    if not case_id or action not in {"confirm", "ignore"} or not row_ids:
+        return jsonify({"error": "case_id, row_ids and action (confirm or ignore) are required."}), 400
+
+    frame = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
+    rows = {str(r.get("row_id")): r for r in (frame.to_dict(orient="records") if not frame.empty else [])}
+    corrections, resolutions = load_latest_corrections(case_id), load_fact_resolutions(case_id)
+    wanted = [
+        row_id for row_id in dict.fromkeys(row_ids)
+        if row_id in rows and effective_fact(rows[row_id], corrections, resolutions)["status"] == UNCERTAIN
+    ]
+    if wanted:
+        submit_fact_resolutions(case_id, [{"row_id": row_id, "action": action} for row_id in wanted], actor)
+    result = _after_review_change(case_id, actor)
+    result["applied"] = len(wanted)
+    return _ok(result)
+
+
+@app.route("/accounting/page_extraction")
+def accounting_page_extraction():
+    """What the system extracted from one page before facts were made: the
+    consolidated text (markdown tables), uncertain values, the route and
+    image kinds, and the candidate names (from the stored extraction
+    record; pages processed before it existed show their page text)."""
+    case_id = request.args.get("case_id", "")
+    page_id = request.args.get("page_id", "")
+    if not (case_id and page_id):
+        return jsonify({"error": "case_id and page_id are required"}), 400
+    record = load_page_extraction(case_id, page_id) or {}
+    if not record:
+        page = _page_row(load_case_data(case_id), page_id) or {}
+        record = {"final_text": str(page.get("page_text", "") or ""), "route": "",
+                  "note": "This page was processed before extraction records were kept."}
+    return _ok({
+        "page_id": page_id,
+        "final_text": record.get("final_text", ""),
+        "route": record.get("route", ""),
+        "text_layer_quality": record.get("text_layer_quality", ""),
+        "regions": [{"region": r.get("region"), "kind": r.get("kind"), "flags": r.get("flags") or [],
+                     "views": r.get("variants") or [], "numbers_pass": bool(r.get("numbers_pass"))}
+                    for r in record.get("regions") or []],
+        "candidates": sorted((record.get("candidates") or {}).keys()),
+        "uncertain": record.get("uncertain") or [],
+        "corrections": record.get("corrections") or [],
+        "errors": record.get("errors") or [],
+        "document_type": record.get("document_type", ""),
+        "note": record.get("note", ""),
+    })
+
+
+def _fact_change_response(case_id, actor):
+    result = _after_review_change(case_id, actor)
+    data = load_case_data(case_id)
+    result["facts_table"] = _fact_table(case_id, data)
+    return result
+
+
+@app.route("/accounting/fact/update", methods=["POST"])
+def accounting_fact_update():
+    """The user edits cells of one fact (value, description, date, currency,
+    type...). Stored as a correction layered on the extraction, merged with
+    the user's earlier edits of the same fact; the AI's reading is kept."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    row_id = str(body.get("row_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    if not (case_id and row_id):
+        return jsonify({"error": "case_id and row_id are required."}), 400
+    fields, errors = validate_fact_fields(body.get("fields") or {})
+    if errors:
+        return jsonify({"error": "; ".join(errors)}), 400
+    if not fields:
+        return jsonify({"error": "Nothing to change."}), 400
+    row = _fact_row(case_id, row_id)
+    if row is None:
+        return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
+    current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
+    if current["status"] == "IGNORED":
+        return jsonify({"error": "Restore the deleted fact before editing it."}), 409
+    merged = dict(current.get("final_fields") or {}) if current.get("final_action") == "correct" else {}
+    merged.update(fields)
+    submit_fact_resolution(case_id, row_id, "correct", merged, str(body.get("note", "") or ""), actor,
+                           fingerprint=fact_from_row(row).get("fingerprint", ""))
+    return _ok(_fact_change_response(case_id, actor))
+
+
+@app.route("/accounting/fact/add", methods=["POST"])
+def accounting_fact_add():
+    """A fact the extraction missed, added by the user on a page."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    page_id = str(body.get("page_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    if not (case_id and page_id):
+        return jsonify({"error": "case_id and page_id are required."}), 400
+    fields, errors = validate_fact_fields(body.get("fields") or {})
+    if errors:
+        return jsonify({"error": "; ".join(errors)}), 400
+    if not any(value for name, value in fields.items() if name != "fact_type"):
+        return jsonify({"error": "Enter at least a value or a description."}), 400
+    data = load_case_data(case_id)
+    page = _page_row(data, page_id)
+    if not page:
+        return jsonify({"error": "That page was not found."}), 404
+    document_id = str(page.get("case_document_id", ""))
+    names = {str(r.get("case_document_id", "")): r.get("original_filename", "") for r in frame_to_records(data["documents"])}
+    row = user_fact_row(page_id, document_id, page.get("page_number", ""), {"fact_type": "other", **fields},
+                        names.get(document_id, ""), actor, created_at=pd.Timestamp.utcnow().isoformat())
+    persist_reconciled_rows(case_id, [row])
+    result = _fact_change_response(case_id, actor)
+    result["row_id"] = row["row_id"]
+    return _ok(result)
+
+
+@app.route("/accounting/fact/delete", methods=["POST"])
+def accounting_fact_delete():
+    """Leave a fact out of the ledger (kept on record, can be restored)."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    row_id = str(body.get("row_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    row = _fact_row(case_id, row_id) if case_id and row_id else None
+    if row is None:
+        return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
+    current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
+    # The user's earlier edits ride along, so a restore brings them back.
+    kept = current.get("final_fields") if current.get("final_action") == "correct" else {}
+    submit_fact_resolution(case_id, row_id, "ignore", kept or {}, "deleted in the review table", actor,
+                           fingerprint=fact_from_row(row).get("fingerprint", ""))
+    return _ok(_fact_change_response(case_id, actor))
+
+
+@app.route("/accounting/fact/restore", methods=["POST"])
+def accounting_fact_restore():
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    row_id = str(body.get("row_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    row = _fact_row(case_id, row_id) if case_id and row_id else None
+    if row is None:
+        return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
+    current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
+    fields = current.get("final_fields") or {}
+    fingerprint = fact_from_row(row).get("fingerprint", "")
+    if fields:
+        submit_fact_resolution(case_id, row_id, "correct", fields, "restored", actor, fingerprint=fingerprint)
+    else:
+        submit_fact_resolution(case_id, row_id, "confirm", {}, "restored", actor, fingerprint=fingerprint)
+    return _ok(_fact_change_response(case_id, actor))
+
+
+@app.route("/accounting/facts/confirm_all", methods=["POST"])
+def accounting_facts_confirm_all():
+    """The user has reviewed the fact table: every fact still marked
+    uncertain is confirmed as shown, and the accounting analysis unlocks."""
+    body = request.get_json(force=True)
+    case_id = str(body.get("case_id", ""))
+    actor = str(body.get("decided_by", "") or "attorney")
+    if not case_id:
+        return jsonify({"error": "case_id is required."}), 400
+    frame = case_rows(FINANCIAL_LINE_ITEMS_DATASET, case_id)
+    if frame.empty:
+        return jsonify({"error": "There are no financial facts to confirm. Run the extraction first."}), 409
+    corrections, resolutions = load_latest_corrections(case_id), load_fact_resolutions(case_id)
+    decisions = []
+    for row in frame.to_dict(orient="records"):
+        if effective_fact(row, corrections, resolutions)["status"] == UNCERTAIN:
+            decisions.append({"row_id": str(row.get("row_id", "")), "action": "confirm",
+                              "explanation": "confirmed with all pages",
+                              "fingerprint": fact_from_row(row).get("fingerprint", "")})
+    if decisions:
+        submit_fact_resolutions(case_id, decisions, actor)
+    update_workflow_state(
+        case_id,
+        changes={"accounting_facts_confirmed": True, "accounting_facts_confirmed_by": actor,
+                 "accounting_facts_confirmed_at": pd.Timestamp.utcnow().isoformat()},
+        action="accounting_facts_confirmed",
+        actor=actor,
+    )
+    result = _fact_change_response(case_id, actor)
+    result["confirmed_uncertain"] = len(decisions)
+    return _ok(result)
+
+
 @app.route("/accounting/fact/explain", methods=["POST"])
 def accounting_fact_explain():
     """The user explains how an uncertain fact should be read ("this is the
@@ -1736,7 +2273,7 @@ def accounting_fact_explain():
         return jsonify({"error": "case_id, row_id and an explanation are required."}), 400
 
     data = load_case_data(case_id)
-    row = _fact_row(data, row_id)
+    row = _fact_row(case_id, row_id)
     if row is None:
         return jsonify({"error": "That fact no longer exists. Refresh the case."}), 404
     current = effective_fact(row, load_latest_corrections(case_id), load_fact_resolutions(case_id))
@@ -1777,6 +2314,24 @@ def _financial_claims(state, data):
     return claims, "case_register"
 
 
+def _claims_to_verify(state, data):
+    """(claims, source): the claimant's claims plus the financial claims the
+    accounting pages make (e.g. an email saying an amount was transferred).
+    Claims are what the accountant verifies; they never enter the ledger."""
+    claims, source = _financial_claims(state, data)
+    case_id = str((data.get("case") or {}).get("case_id", ""))
+    extra = [
+        {
+            "allegation_text": claim["statement"],
+            "made_by": claim.get("made_by") or "document statement",
+            "source_page_ids": [claim.get("page_id")] if claim.get("page_id") else [],
+            "claim_kind": "financial_claim_in_document",
+        }
+        for claim in _document_claims(case_id, data)
+    ]
+    return claims + extra, (source + "+document_claims" if extra else source)
+
+
 @app.route("/accounting/synthesize", methods=["POST"])
 def accounting_synthesize():
     body = request.get_json(force=True)
@@ -1794,6 +2349,9 @@ def accounting_synthesize():
                      "Resolve them before running the analysis.",
             "pending_count": len(pending),
         }), 409
+    if not read_workflow_state(case_id).get("accounting_facts_confirmed"):
+        return jsonify({"error": "Review the financial facts and press \"Confirm all pages\" before running "
+                                 "the accounting analysis."}), 409
 
     def task(job_id):
         data = load_case_data(case_id)
@@ -1804,7 +2362,7 @@ def accounting_synthesize():
         if not normalized_ledger:
             raise ValueError("The reviewed ledger is empty. Run the accounting extraction first.")
 
-        claims, claims_source = _financial_claims(state, data)
+        claims, claims_source = _claims_to_verify(state, data)
 
         _set_phase(job_id, "building_timeline", "Building the chronological financial timeline…")
         build_and_save_financial_timeline(case_id, normalized_ledger)
@@ -1812,6 +2370,8 @@ def accounting_synthesize():
         _set_phase(job_id, "analysing_claims", f"Comparing {len(claims)} claim(s) with the reviewed ledger…")
         result = run_claim_based_accounting_analysis(
             case_id, normalized_ledger, claims, instructions, claims_source=claims_source,
+            progress=lambda detail, current, total: _set_phase(
+                job_id, "analysing_claims", detail, current=current, total=total),
         )
 
         if session_id:
@@ -1941,7 +2501,11 @@ def analysis_run():
         if not facts or not issues:
             raise ValueError("The case register has no facts or issues yet. Process the case documents first.")
         _set_phase(job_id, "researching_law", "Retrieving SAMA authorities and evaluating legal defenses…")
-        result = run_legal_analysis(data["case"], facts, issues, register["evidence_requests"])
+        result = run_legal_analysis(
+            data["case"], facts, issues, register["evidence_requests"],
+            progress=lambda done, total: _set_phase(
+                job_id, "researching_law", f"Analysing the legal issues ({done}/{total})…", done, total),
+        )
         if session_id:
             increment_usage(session_id, "llm_request_count", 1)
             increment_usage(session_id, "message_count", 1)
@@ -1959,43 +2523,21 @@ def analysis_run():
     )
 
 
-@app.route("/analysis/defence_plan", methods=["POST"])
-def analysis_defence_plan():
-    body = request.get_json(force=True)
-    case_id = body.get("case_id", "")
-    session_id = body.get("session_id")
-
-    def task(job_id):
-        data = load_case_data(case_id)
-        state = restore_workflow_state(data)
-        if not approval_gate_passed(state):
-            raise ValueError(_gate_error())
-        if not state.get("analysis") or not state.get("research"):
-            raise ValueError("Run the legal analysis before preparing the defence plan.")
-        _set_phase(job_id, "planning_defence", "Developing defence plan…")
-        register = case_register(data)
-        strategy = run_defence_plan(
-            data["case"], state["analysis"], register["facts"],
-            register["evidence_requests"], (state.get("research") or {}).get("authority_nodes", []),
-        )
-        if session_id:
-            increment_usage(session_id, "llm_request_count", 1)
-            increment_usage(session_id, "message_count", 1)
-        # The defence plan extends the analysis; it does not make it newer.
-        previous = (state.get("stages") or {}).get("analysis") or {}
-        patch = stage_patch(COMPLETED, detail="analysis_and_defence_plan")
-        if previous.get("finished_at"):
-            patch["finished_at"] = previous["finished_at"]
-        update_workflow_state(
-            case_id,
-            changes={"strategy": strategy},
-            stages={"analysis": patch},
-            action="defence_plan_prepared",
-        )
-        return {"strategy": strategy}
-
-    return _start_stage_job(
-        case_id, "analysis", "planning_defence", "Developing defence plan…", task, session_id=session_id,
+def _drafting_record(case_id, data, state, instructions=""):
+    """Everything the written pleading may rely on (see
+    legal_platform.pleading.build_drafting_record)."""
+    ledger, _ = _normalized_ledger(case_id, data.get("financial_line_items"))
+    return build_drafting_record(
+        data["case"],
+        state.get("attorney_summary"),
+        state.get("analysis"),
+        state.get("research"),
+        data,
+        case_register(data),
+        _page_reference_map(data),
+        ledger,
+        ledger_summary(ledger),
+        instructions,
     )
 
 
@@ -2006,10 +2548,18 @@ def pleading_generate():
     memo_instructions = body.get("instructions", "")
     direct = bool(body.get("direct", False))
     session_id = body.get("session_id")
+    requested_language = str(body.get("language", "") or "").strip().lower()
 
     def task(job_id):
         data = load_case_data(case_id)
         state = restore_workflow_state(data)
+        # The language chosen on the pleading tab (Arabic or English, drafted
+        # directly in that language), else the case's preferred one.
+        language = requested_language if requested_language in ("ar", "en") else (
+            state.get("pleading_language") or str(data["case"].get("preferred_language", "") or "").strip().lower()
+            or "en")
+        if language not in ("ar", "en"):
+            language = "en"
 
         # 1. Attorney review must be prepared / approved.
         if not approval_gate_passed(state):
@@ -2028,22 +2578,12 @@ def pleading_generate():
         if accounting["status"] not in {"forensic_complete", "complete_no_transactions"}:
             raise ValueError("Complete the accounting analysis before generating the written pleading.")
 
-        case = data["case"]
-        _set_phase(job_id, "generating_pleading", "Synthesizing bilingual court pleading…")
-        instructions = (
-            "Prepare a complete formal defence pleading exclusively on behalf of Banque Saudi Fransi (BSF)."
-            if direct else (memo_instructions or "Prepare a complete formal defence pleading on behalf of BSF.")
-        )
-        summary_obj = dict(state.get("attorney_summary") or {})
-        if data.get("forensic_findings"):
-            summary_obj["forensic_findings"] = data["forensic_findings"]
-        memo = generate_bilingual_memo(
-            case, summary_obj, state.get("analysis"), state.get("strategy"),
-            state.get("research"), instructions,
-            case_data=data,
-        )
+        _set_phase(job_id, "generating_pleading", "Collecting the record for the pleading…")
+        instructions = "" if direct else memo_instructions
+        record = _drafting_record(case_id, data, state, instructions)
+        memo = draft_pleading(record, language, progress=lambda message: _set_phase(job_id, "generating_pleading", message))
         if session_id:
-            increment_usage(session_id, "llm_request_count", 1)
+            increment_usage(session_id, "llm_request_count", 2)
             increment_usage(session_id, "message_count", 1)
         note = "Initial approved-summary draft" if direct else (memo_instructions or "Initial pleading draft")
         versions = [{"version": 1, "draft": memo, "note": note}]
@@ -2054,6 +2594,7 @@ def pleading_generate():
                 "pleading_versions": versions,
                 "pleading_status": "draft",
                 "pleading_finalised_by": "",
+                "pleading_language": language,
             },
             stages={"pleading": stage_patch(COMPLETED, detail="draft")},
             action="pleading_prepared",
@@ -2078,16 +2619,23 @@ def pleading_revise():
         if not state.get("memo"):
             raise ValueError("Generate the written pleading before revising it.")
         _set_phase(job_id, "revising_pleading", "Revising the written pleading…")
-        revised = revise_bilingual_pleading(
-            revision_request,
-            state["memo"],
-            data["case"],
-            state["attorney_summary"],
-            state["analysis"],
-            state["strategy"],
-            state["research"],
-            case_data=data,
-        )
+        if is_full_pleading(state["memo"]):
+            revised = revise_pleading(
+                state["memo"], revision_request, _drafting_record(case_id, data, state),
+                progress=lambda message: _set_phase(job_id, "revising_pleading", message),
+            )
+        else:
+            # Pleadings drafted before the full structure keep their format.
+            revised = revise_bilingual_pleading(
+                revision_request,
+                state["memo"],
+                data["case"],
+                state["attorney_summary"],
+                state["analysis"],
+                None,
+                state["research"],
+                case_data=data,
+            )
         if session_id:
             increment_usage(session_id, "llm_request_count", 1)
             increment_usage(session_id, "message_count", 1)
@@ -2169,27 +2717,51 @@ def pleading_export():
     case_id = request.args.get("case_id", "")
     fmt = request.args.get("fmt", "md")
     language = request.args.get("lang", "en")
-    data, state = _load_state(case_id)
-    memo = state.get("memo")
+    # Only the stored state is needed; the case datasets are not read.
+    memo = read_workflow_state(case_id).get("memo")
     if not memo:
         return jsonify({"error": "no pleading available"}), 404
     reference = short_case_reference(case_id)
     if fmt == "docx":
+        languages = pleading_languages(memo) if is_full_pleading(memo) else (
+            ("ar", "en") if language == "both" else (language,))
         try:
-            docx_bytes = build_pleading_docx_bytes(memo, reference)
+            docx_bytes = build_pleading_docx_bytes(memo, reference, languages)
         except ImportError:
             return jsonify({"error": "python-docx is not installed in this code environment."}), 501
         return send_file(
             io.BytesIO(docx_bytes),
             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             as_attachment=True,
-            download_name=f"pleading_{reference}.docx",
+            download_name=f"pleading_{reference}_{'_'.join(languages)}.docx",
         )
     text = memo_to_markdown(memo, language)
     return Response(
         text,
         mimetype="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="pleading_{language}.md"'},
+    )
+
+
+@app.route("/agreement/review_docx")
+def agreement_review_docx():
+    """The reviewed contract as a Word file: the proposed changes as tracked
+    changes (accept / reject in Word), each reason as a comment."""
+    case_id = request.args.get("case_id", "")
+    language = "ar" if str(request.args.get("lang", "ar")).lower().startswith("ar") else "en"
+    stored = load_agreement_states(case_id)
+    review = stored.get("review") or {}
+    if not review.get("clause_reviews"):
+        return jsonify({"error": "Run the legal and commercial review first."}), 404
+    data = load_case_data(case_id)
+    contract = contract_document(data["pages"], data["documents"], review["clause_reviews"], stored.get("clause_map"))
+    title = first_case_value(data["case"], "case_name", "client_name", default="") or short_case_reference(case_id)
+    payload = contract_docx(contract, title, language)
+    return send_file(
+        io.BytesIO(payload),
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        as_attachment=True,
+        download_name=f"contract_review_{short_case_reference(case_id)}.docx",
     )
 
 
@@ -2207,9 +2779,11 @@ def discussion_ask():
         data = load_case_data(case_id)
         state = restore_workflow_state(data)
         message_id = add_message(case_id, conversation_id, "user", question)
+        memo = state.get("memo")
         answer = answer_case_question(
             question, data["case"], state["attorney_summary"], state["analysis"],
-            state["strategy"], state["research"], case_data=data,
+            None, state["research"], case_data=data,
+            pleading=memo_to_markdown(memo, pleading_language(memo)) if memo else None,
         )
         increment_usage(session_id, "llm_request_count", 2)
         increment_usage(session_id, "message_count", 1)
@@ -2236,16 +2810,20 @@ def discussion_ask():
 
 @app.route("/page_image")
 def page_image():
+    """One page image. Reads only the page table (not the whole case): the
+    review screen requests many images at once. Images never change once
+    rendered, so the browser may cache them."""
     case_id = request.args.get("case_id", "")
     page_id = request.args.get("page_id", "")
-    data = load_case_data(case_id)
-    row = _page_row(data, page_id)
+    row = _page_row({"pages": case_rows("case_document_pages", case_id)}, page_id)
     if not row:
         return Response(status=404)
     image_bytes = _load_page_image_bytes(row.get("page_image_path", ""))
     if not image_bytes:
         return Response(status=404)
-    return send_file(io.BytesIO(image_bytes), mimetype="image/png")
+    response = send_file(io.BytesIO(image_bytes), mimetype="image/png")
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    return response
 
 
 @app.route("/page_text")

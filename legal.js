@@ -123,7 +123,6 @@ const I18N = {
     "attorney_decision": "Attorney decision",
     "attorney_note": "Attorney note",
     "automatic_classification": "Automatic classification with attorney confirmation",
-    "available_evidence": "Available evidence",
     "back_to_case_library": "Back to case library",
     "badge_ai_extracted": "AI-extracted",
     "badge_attorney_flagged": "Attorney-flagged",
@@ -171,12 +170,8 @@ const I18N = {
     "column_chronology_basis": "Chronology basis",
     "column_date": "Date",
     "column_event": "Event",
-    "column_evidence": "Evidence",
-    "column_limitations": "Limitations",
     "column_name": "Name",
-    "column_original_pages": "Original document pages",
     "column_related_evidence_pages": "Related evidence pages",
-    "column_relevance": "Relevance",
     "column_role": "Role",
     "column_status": "Status",
     "compare_with_current": "Compare with current draft",
@@ -187,7 +182,6 @@ const I18N = {
     "confirm_classification": "Confirm classification",
     "confirm_classification_first": "Confirm the agreement type, relationship, and represented party first.",
     "consolidated_attorney_review": "Consolidated attorney review",
-    "contradiction_caption": "These items may result from OCR, extraction, translation, or inconsistent source records. They are not treated as legal findings until an attorney verifies the original pages.",
     "correction_or_note": "Correction / note",
     "correction_placeholder": "Add a correction or note attorneys should see…",
     "counterparty": "Counterparty",
@@ -224,7 +218,10 @@ const I18N = {
     "documents_caption": "Upload all available material here. The system will extract, classify, and map it into the case record.",
     "docx_export_missing": "Word export needs `python-docx` in this code environment — add it to the environment's package list to enable this button.",
     "download_arabic_pleading": "Download Arabic pleading (.md)",
-    "download_combined_pleading": "Download combined pleading (.docx)",
+    "download_pleading_docx": "Download pleading (.docx)",
+    "pleading_language": "Pleading language",
+    "pleading_language_en": "English",
+    "pleading_language_ar": "Arabic — العربية",
     "download_english_pleading": "Download English pleading (.md)",
     "enter_clear_file_name": "Enter a clear file name",
     "essential_case_summary": "Essential case summary",
@@ -248,7 +245,6 @@ const I18N = {
     "hit_discussion": "Discussion",
     "hit_evidence": "Evidence",
     "hit_fact": "Fact",
-    "impact_level": "Impact level: ",
     "initial_pleading_draft": "Initial pleading draft",
     "item_fallback": "Item {number}",
     "iterative_attorney_review": "Iterative attorney review",
@@ -270,7 +266,6 @@ const I18N = {
     "locked_reason": "Locked — {reason}",
     "main_parties": "Main parties",
     "mark_final": "Mark final",
-    "material_contradictions": "Legally material contradictions",
     "metric_critical_points": "Critical points",
     "metric_cross_clause_conflicts": "Cross-clause conflicts",
     "metric_cross_document_conflicts": "Cross-document conflicts",
@@ -301,22 +296,45 @@ const I18N = {
     "next_review_new_material": "Review the newly added material before relying on earlier work",
     "next_summary": "Prepare and approve the consolidated attorney review",
     "no_arabic_summary": "A separate Arabic summary was not generated. Refresh the attorney summary.",
-    "no_citable_rule": "No citable knowledge-base rule supports this issue; it remains unresolved.",
+    "no_issue_with_authority": "No issue is supported by retrieved knowledge-base text yet.",
+    "issues_without_authority": "Issues without retrieved authority ({count})",
+    "issues_without_authority_note": "No retrieved text or authority nodes were found for these issues, so they are not analysed legally here and remain for attorney review.",
+    "issues_not_analysed": "Issues not analysed ({count})",
+    "issues_not_analysed_note": "The model's answer for these issues could not be read. Run the legal analysis again.",
+    "marked_agreement": "The agreement with the proposed changes",
+    "marked_caption": "The words in red should change; the arrow shows how they should read instead. Hover a change to see why.",
+    "marked_page": "{file} — page {page}",
+    "marked_changes": "{count} change(s)",
+    "marked_no_change": "no change",
+    "marked_delete": "delete",
+    "marked_add": "add",
+    "marked_unplaced": "Changes whose words were not found on the pages",
+    "proposed_changes": "Proposed changes to the wording",
+    "contract_with_changes": "The contract with the proposed changes",
+    "contract_changes_caption": "{count} change(s) in the text. Hover over a change to see why.",
+    "contract_legend_old": "wording to change or remove",
+    "contract_legend_new": "proposed wording",
+    "download_contract_docx": "Download Word (.docx)",
+    "contract_docx_note": "In Word the changes are tracked changes: accept or reject each one; the reason is in its comment.",
+    "contract_page": "Page {page}",
+    "contract_other_changes": "Other proposed changes",
+    "contract_advice": "Advice from the review (not contract wording)",
+    "contract_advice_caption": "These clauses got advice instead of a wording to put in the contract; the attorney decides how to word them.",
+    "contract_other_caption": "These words were not found exactly in the extracted text, so they are listed here instead of placed in it.",
+    "contract_no_edits": "No change to the contract's wording was found in this review (no clause has a proposed wording or exact change). Run the review again to get them.",
+    "review_details": "Review details (summary, clause-by-clause findings, negotiation)",
     "no_clause_text": "No text captured for this clause.",
     "no_dated_events": "No dated events were identified.",
     "no_english_summary": "A separate English summary was not generated. Refresh the attorney summary.",
-    "no_evidence_recorded": "No evidence list was recorded in the current summary.",
     "no_exposure_points": "No legal exposure points recorded.",
     "no_facts_extracted": "No facts have been extracted yet. Process documents above first.",
     "no_matching_agreements": "No matching agreement files",
     "no_matching_cases": "No matching litigation cases",
-    "no_material_contradiction": "No legally material contradiction affecting the bank's position was identified.",
     "no_negotiation_position": "No negotiation position was generated for this review yet — re-run the review above once clause reviews are available.",
     "no_pages_extracted": "No pages were extracted from {name}.",
     "no_parties_confirmed": "No parties were confirmed in the current summary.",
     "no_search_matches": "No matches yet — try a different term.",
     "no_summary_generated": "No consolidated summary has been generated in this session.",
-    "no_verification_alerts": "No separate source-verification alerts were recorded.",
     "none_retrieved": "None retrieved",
     "note": "Note",
     "note_recorded": "Note recorded in the case audit log.",
@@ -419,7 +437,6 @@ const I18N = {
     "source_ids_used": "Source IDs:",
     "source_page": "Source page",
     "source_policy_kb_only": "Source policy: knowledge base only",
-    "source_verification_alerts": "Source verification alerts",
     "start_by_preparing_review": "Start by preparing the review. Only the essential case summary will remain visible; supporting details will be available in closed sections.",
     "status_analysis": "Legal analysis",
     "status_default": "Intake",
@@ -577,7 +594,6 @@ const I18N = {
     "attorney_decision": "قرار المحامي",
     "attorney_note": "ملاحظة المحامي",
     "automatic_classification": "التصنيف الآلي مع تأكيد المحامي",
-    "available_evidence": "الأدلة المتاحة",
     "back_to_case_library": "العودة إلى المكتبة",
     "badge_ai_extracted": "مستخرج آلياً",
     "badge_attorney_flagged": "معلّم من المحامي",
@@ -625,12 +641,8 @@ const I18N = {
     "column_chronology_basis": "أساس الترتيب",
     "column_date": "التاريخ",
     "column_event": "الحدث",
-    "column_evidence": "الدليل",
-    "column_limitations": "القيود",
     "column_name": "الاسم",
-    "column_original_pages": "صفحات المستند الأصلي",
     "column_related_evidence_pages": "صفحات الأدلة المرتبطة",
-    "column_relevance": "الصلة",
     "column_role": "الصفة",
     "column_status": "الحالة",
     "compare_with_current": "مقارنة بالمسودة الحالية",
@@ -641,7 +653,6 @@ const I18N = {
     "confirm_classification": "تأكيد التصنيف",
     "confirm_classification_first": "أكّد نوع الاتفاقية والعلاقة والطرف الممثَّل أولاً.",
     "consolidated_attorney_review": "المراجعة الموحدة للمحامي",
-    "contradiction_caption": "قد تنتج هذه العناصر عن التعرف الضوئي أو الاستخراج أو الترجمة أو تباين السجلات المصدرية. ولا تُعد نتائج قانونية حتى يتحقق المحامي من الصفحات الأصلية.",
     "correction_or_note": "تصحيح أو ملاحظة",
     "correction_placeholder": "أضف تصحيحاً أو ملاحظة يطّلع عليها المحامون…",
     "counterparty": "الطرف المقابل",
@@ -678,7 +689,10 @@ const I18N = {
     "documents_caption": "ارفع هنا كل المواد المتاحة. سيقوم النظام باستخراجها وتصنيفها وربطها بسجل القضية.",
     "docx_export_missing": "يتطلب التصدير إلى Word حزمة `python-docx` في بيئة التنفيذ — أضفها إلى قائمة حزم البيئة لتفعيل هذا الزر.",
     "download_arabic_pleading": "تنزيل المرافعة العربية (.md)",
-    "download_combined_pleading": "تنزيل المرافعة الكاملة (.docx)",
+    "download_pleading_docx": "تنزيل المذكرة (.docx)",
+    "pleading_language": "لغة المذكرة",
+    "pleading_language_en": "English — الإنجليزية",
+    "pleading_language_ar": "العربية",
     "download_english_pleading": "تنزيل المرافعة الإنجليزية (.md)",
     "enter_clear_file_name": "أدخل اسماً واضحاً للملف",
     "essential_case_summary": "الملخص الأساسي للقضية",
@@ -702,7 +716,6 @@ const I18N = {
     "hit_discussion": "المناقشة",
     "hit_evidence": "الدليل",
     "hit_fact": "واقعة",
-    "impact_level": "درجة التأثير: ",
     "initial_pleading_draft": "المسودة الأولى للمرافعة",
     "item_fallback": "العنصر {number}",
     "iterative_attorney_review": "المراجعة التفاعلية للمحامي",
@@ -724,7 +737,6 @@ const I18N = {
     "locked_reason": "مقفل — {reason}",
     "main_parties": "الأطراف الرئيسية",
     "mark_final": "اعتماد نهائي",
-    "material_contradictions": "التعارضات ذات الأثر القانوني",
     "metric_critical_points": "نقاط حرجة",
     "metric_cross_clause_conflicts": "تعارضات بين البنود",
     "metric_cross_document_conflicts": "تعارضات بين المستندات",
@@ -755,22 +767,45 @@ const I18N = {
     "next_review_new_material": "راجع المواد الجديدة قبل الاعتماد على العمل السابق",
     "next_summary": "أعد المراجعة الموحدة واعتمدها",
     "no_arabic_summary": "لم يتم إنشاء ملخص عربي مستقل. أعد إعداد ملخص المحامي.",
-    "no_citable_rule": "لا توجد قاعدة قابلة للاستشهاد في قاعدة المعرفة تسند هذه المسألة؛ تبقى غير محسومة.",
+    "no_issue_with_authority": "لا توجد مسألة يسندها نص مسترجع من قاعدة المعرفة حتى الآن.",
+    "issues_without_authority": "مسائل بلا سند نظامي مسترجع ({count})",
+    "issues_without_authority_note": "لم يُعثر على نصوص مسترجعة أو عُقد سند نظامي لهذه المسائل، لذا لا تُحلل قانونياً هنا وتبقى لمراجعة المحامي.",
+    "issues_not_analysed": "مسائل لم يكتمل تحليلها ({count})",
+    "issues_not_analysed_note": "تعذّرت قراءة إجابة النموذج لهذه المسائل. أعد تشغيل التحليل القانوني.",
+    "marked_agreement": "الاتفاقية مع التعديلات المقترحة",
+    "marked_caption": "العبارات باللون الأحمر يجب تعديلها، والسهم يبيّن الصياغة الصحيحة. مرّر المؤشر على التعديل لمعرفة السبب.",
+    "marked_page": "{file} — صفحة {page}",
+    "marked_changes": "{count} تعديل",
+    "marked_no_change": "بلا تعديل",
+    "marked_delete": "حذف",
+    "marked_add": "إضافة",
+    "marked_unplaced": "تعديلات لم يُعثر على عباراتها في الصفحات",
+    "proposed_changes": "التعديلات المقترحة على الصياغة",
+    "contract_with_changes": "العقد مع التعديلات المقترحة",
+    "contract_changes_caption": "{count} تعديل في النص. مرّر المؤشر على التعديل لمعرفة سببه.",
+    "contract_legend_old": "صياغة يجب تعديلها أو حذفها",
+    "contract_legend_new": "الصياغة المقترحة",
+    "download_contract_docx": "تنزيل ملف Word (.docx)",
+    "contract_docx_note": "في ملف Word تظهر التعديلات كتعديلات متعقّبة: اقبل أو ارفض كل تعديل، وسببه في التعليق المرفق.",
+    "contract_page": "صفحة {page}",
+    "contract_other_changes": "تعديلات مقترحة أخرى",
+    "contract_advice": "توصيات المراجعة (ليست صياغة للعقد)",
+    "contract_advice_caption": "قدّمت المراجعة لهذه البنود توصية بدلاً من صياغة توضع في العقد؛ يقرر المحامي صياغتها.",
+    "contract_other_caption": "لم يُعثر على هذه العبارات حرفياً في النص المستخرج، لذا أُدرجت هنا بدلاً من وضعها في النص.",
+    "contract_no_edits": "لم يُعثر في هذه المراجعة على تعديل لصياغة العقد (لا يوجد بند بصياغة مقترحة أو تعديل محدد). أعد تشغيل المراجعة للحصول عليها.",
+    "review_details": "تفاصيل المراجعة (الملخص، نتائج كل بند، التفاوض)",
     "no_clause_text": "لم يُلتقط نص لهذا البند.",
     "no_dated_events": "لم تُحدد أي أحداث مؤرخة.",
     "no_english_summary": "لم يتم إنشاء ملخص إنجليزي مستقل. أعد إعداد ملخص المحامي.",
-    "no_evidence_recorded": "لم تُسجل قائمة أدلة في الملخص الحالي.",
     "no_exposure_points": "لا توجد نقاط تعرض قانوني مسجلة.",
     "no_facts_extracted": "لم تُستخرج أي وقائع بعد. عالج المستندات أعلاه أولاً.",
     "no_matching_agreements": "لا توجد ملفات اتفاقيات مطابقة",
     "no_matching_cases": "لا توجد قضايا مطابقة",
-    "no_material_contradiction": "لم يتم تحديد تعارض جوهري يؤثر قانونياً في موقف البنك.",
     "no_negotiation_position": "لم يُنشأ موقف تفاوضي لهذه المراجعة بعد — أعد تشغيل المراجعة أعلاه بعد توفر مراجعات البنود.",
     "no_pages_extracted": "لم تُستخرج أي صفحات من {name}.",
     "no_parties_confirmed": "لم تُعتمد أي أطراف في الملخص الحالي.",
     "no_search_matches": "لا توجد نتائج مطابقة — جرّب مصطلحاً آخر.",
     "no_summary_generated": "لم يُنشأ ملخص موحد في هذه الجلسة.",
-    "no_verification_alerts": "لا توجد تنبيهات تحقق منفصلة في الملخص الحالي.",
     "none_retrieved": "لم يُستخرج أي مرجع",
     "note": "ملاحظة",
     "note_recorded": "تم تسجيل الملاحظة في سجل تدقيق القضية.",
@@ -873,7 +908,6 @@ const I18N = {
     "source_ids_used": "معرّفات المصادر:",
     "source_page": "صفحة المصدر",
     "source_policy_kb_only": "سياسة المصدر: قاعدة المعرفة فقط",
-    "source_verification_alerts": "تنبيهات التحقق من المصدر",
     "start_by_preparing_review": "ابدأ بإعداد المراجعة. سيبقى الملخص الأساسي للقضية ظاهراً فقط، وتبقى التفاصيل المساندة في أقسام مغلقة.",
     "status_analysis": "التحليل القانوني",
     "status_default": "الاستلام",
@@ -978,7 +1012,8 @@ Object.assign(I18N.en, {
   status_running: "Processing",
   status_waiting_for_user: "Waiting for you",
   status_ready: "Ready to continue",
-  status_completed: "Completed",
+  status_completed: "Done",
+  status_not_yet: "Not yet",
   status_stale: "Needs refresh",
   status_error: "Error",
   phase_extracting_pages: "Extracting pages",
@@ -1142,6 +1177,11 @@ Object.assign(I18N.en, {
   fact_explaining: "Applying your explanation…",
   fact_saved: "Decision saved.",
   fact_ignore_confirm: "Leave this fact out of the ledger?",
+  review_prev: "‹ Previous",
+  review_next: "Next ›",
+  review_page_of: "Page {page} of {pages} · {total} fact(s) to review",
+  review_confirm_page: "Confirm all on this page ({count})",
+  review_confirm_page_prompt: "Confirm the {count} fact(s) on this page exactly as the AI interpreted them?",
   ledger_note: "Note: {note}",
   claim_parent: "From claim: {text}",
   claimed_amount_label: "Claimed",
@@ -1161,7 +1201,8 @@ Object.assign(I18N.ar, {
   status_running: "قيد المعالجة",
   status_waiting_for_user: "بانتظارك",
   status_ready: "جاهزة للمتابعة",
-  status_completed: "مكتملة",
+  status_completed: "تمت",
+  status_not_yet: "لم تتم بعد",
   status_stale: "تحتاج إلى تحديث",
   status_error: "خطأ",
   phase_extracting_pages: "استخراج الصفحات",
@@ -1325,6 +1366,11 @@ Object.assign(I18N.ar, {
   fact_explaining: "جارٍ تطبيق شرحك…",
   fact_saved: "تم حفظ القرار.",
   fact_ignore_confirm: "استبعاد هذه الواقعة من السجل المالي؟",
+  review_prev: "‹ السابق",
+  review_next: "التالي ›",
+  review_page_of: "صفحة {page} من {pages} · {total} واقعة للمراجعة",
+  review_confirm_page: "تأكيد كل ما في هذه الصفحة ({count})",
+  review_confirm_page_prompt: "تأكيد {count} واقعة في هذه الصفحة كما فسّرها الذكاء الاصطناعي؟",
   ledger_note: "ملاحظة: {note}",
   claim_parent: "من المطالبة: {text}",
   claimed_amount_label: "المطالب به",
@@ -1342,6 +1388,274 @@ const LANGUAGES = { en: "English", ar: "العربية" };
 /// Added by Youssif for Monitoring Purposes ///
 const SESSION_ID = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
 /// END ///
+
+/* Personal workspace: dashboard and case workspace. */
+Object.assign(I18N.en, {
+  nav_dashboard: "My dashboard",
+  back_to_dashboard: "Back to my dashboard",
+  signed_in_with_dataiku: "Signed in",
+  sign_in_required: "Please sign in to Dataiku to use the workbench.",
+  dash_title: "My workspace",
+  dash_welcome: "Welcome, {user}",
+  dash_caption: "Your litigation cases and contract reviews. Only you can see them.",
+  dash_metric_cases: "Active cases",
+  dash_metric_attention: "Waiting for your review",
+  dash_metric_completed: "Completed",
+  dash_metric_contracts: "Contract reviews",
+  my_litigation_cases: "My litigation cases",
+  my_contract_reviews: "My contract reviews",
+  new_litigation_case: "+ New litigation case",
+  new_contract_review: "+ New contract review",
+  filter_all_statuses: "All stages",
+  show_archived: "Show archived",
+  progress_new: "New",
+  progress_documents_uploaded: "Documents uploaded",
+  progress_processing: "Processing",
+  progress_accounting_review: "Accounting review",
+  progress_legal_analysis: "Legal analysis",
+  progress_attorney_review: "Attorney review",
+  progress_ready_for_pleading: "Ready for pleading",
+  progress_completed: "Completed",
+  col_case_name: "Case name",
+  col_case_number: "Case number",
+  col_parties: "Client / opposing party",
+  col_case_type: "Case type",
+  col_last_updated: "Last updated",
+  col_stage: "Stage",
+  col_status: "Status",
+  col_contract_name: "Contract name",
+  col_contract_type: "Contract type",
+  col_counterparty: "Counterparty",
+  continue_case: "Continue",
+  continue_review: "Continue",
+  archive_case: "Archive",
+  restore_case: "Restore",
+  archive_confirm: "Archive this case? It leaves your dashboard and can be restored from \"Show archived\".",
+  case_archived: "Case archived.",
+  case_restored: "Case restored.",
+  no_cases_yet: "No litigation cases yet. Create one to start.",
+  no_archived_cases: "No archived cases.",
+  no_contracts_yet: "No contract reviews yet.",
+  no_archived_contracts: "No archived contract reviews.",
+  field_case_number: "Case number",
+  field_client: "Client",
+  field_opposing_party: "Opposing party",
+  field_description_optional: "Description (optional)",
+  create_case_and_upload: "Create case and add documents",
+  create_contract_review: "Create contract review",
+  last_updated_at: "Last updated {at}",
+  case_progress: "Case progress",
+  go_there: "Go",
+  metric_financial_pages: "Financial documents (pages)",
+  metric_financial_claims: "Financial claims",
+  metric_atomic_facts: "Atomic financial facts",
+  metric_pending_reviews: "Pending reviews",
+  col_file: "File",
+  col_pages: "Pages",
+  col_document_type: "Document type",
+  col_reading: "Reading",
+  col_accounting: "Used in accounting",
+  doc_pages_failed: "{count} page(s) could not be read",
+  doc_pages_to_check: "{count} page(s) to check",
+  doc_read_ok: "Read",
+  doc_not_checked_yet: "Not checked yet",
+  doc_financial_pages: "{count} financial page(s), {facts} fact(s)",
+  doc_no_financial_records: "No financial records",
+  preview: "Preview",
+  tab_home: "Overview",
+  tab_documents: "Documents & facts",
+  tab_accounting: "Accounting analysis",
+  tab_attorney_review: "Attorney review",
+  tab_legal_analysis: "Legal analysis",
+  tab_written_pleading: "Written pleading",
+  tab_case_discussion: "Case assistant",
+});
+
+Object.assign(I18N.ar, {
+  nav_dashboard: "لوحتي",
+  back_to_dashboard: "العودة إلى لوحتي",
+  signed_in_with_dataiku: "مسجّل الدخول",
+  sign_in_required: "يرجى تسجيل الدخول إلى Dataiku لاستخدام المنصة.",
+  dash_title: "مساحة عملي",
+  dash_welcome: "مرحبًا، {user}",
+  dash_caption: "قضاياك ومراجعات عقودك. لا يراها أحد غيرك.",
+  dash_metric_cases: "القضايا النشطة",
+  dash_metric_attention: "بانتظار مراجعتك",
+  dash_metric_completed: "مكتملة",
+  dash_metric_contracts: "مراجعات العقود",
+  my_litigation_cases: "قضاياي",
+  my_contract_reviews: "مراجعات عقودي",
+  new_litigation_case: "+ قضية جديدة",
+  new_contract_review: "+ مراجعة عقد جديدة",
+  filter_all_statuses: "جميع المراحل",
+  show_archived: "عرض المؤرشفة",
+  progress_new: "جديدة",
+  progress_documents_uploaded: "تم رفع المستندات",
+  progress_processing: "قيد المعالجة",
+  progress_accounting_review: "المراجعة المحاسبية",
+  progress_legal_analysis: "التحليل القانوني",
+  progress_attorney_review: "مراجعة المحامي",
+  progress_ready_for_pleading: "جاهزة للمذكرة",
+  progress_completed: "مكتملة",
+  col_case_name: "اسم القضية",
+  col_case_number: "رقم القضية",
+  col_parties: "العميل / الخصم",
+  col_case_type: "نوع القضية",
+  col_last_updated: "آخر تحديث",
+  col_stage: "المرحلة",
+  col_status: "الحالة",
+  col_contract_name: "اسم العقد",
+  col_contract_type: "نوع العقد",
+  col_counterparty: "الطرف الآخر",
+  continue_case: "متابعة",
+  continue_review: "متابعة",
+  archive_case: "أرشفة",
+  restore_case: "استعادة",
+  archive_confirm: "أرشفة هذه القضية؟ ستختفي من لوحتك ويمكن استعادتها من «عرض المؤرشفة».",
+  case_archived: "تمت أرشفة القضية.",
+  case_restored: "تمت استعادة القضية.",
+  no_cases_yet: "لا توجد قضايا بعد. أنشئ قضية للبدء.",
+  no_archived_cases: "لا توجد قضايا مؤرشفة.",
+  no_contracts_yet: "لا توجد مراجعات عقود بعد.",
+  no_archived_contracts: "لا توجد مراجعات عقود مؤرشفة.",
+  field_case_number: "رقم القضية",
+  field_client: "العميل",
+  field_opposing_party: "الخصم",
+  field_description_optional: "الوصف (اختياري)",
+  create_case_and_upload: "إنشاء القضية وإضافة المستندات",
+  create_contract_review: "إنشاء مراجعة العقد",
+  last_updated_at: "آخر تحديث {at}",
+  case_progress: "سير القضية",
+  go_there: "انتقال",
+  metric_financial_pages: "المستندات المالية (صفحات)",
+  metric_financial_claims: "الادعاءات المالية",
+  metric_atomic_facts: "الوقائع المالية الذرية",
+  metric_pending_reviews: "مراجعات معلّقة",
+  col_file: "الملف",
+  col_pages: "الصفحات",
+  col_document_type: "نوع المستند",
+  col_reading: "القراءة",
+  col_accounting: "مستخدم في المحاسبة",
+  doc_pages_failed: "تعذّرت قراءة {count} صفحة",
+  doc_pages_to_check: "{count} صفحة للتحقق",
+  doc_read_ok: "تمت القراءة",
+  doc_not_checked_yet: "لم يُفحص بعد",
+  doc_financial_pages: "{count} صفحة مالية، {facts} واقعة",
+  doc_no_financial_records: "لا توجد سجلات مالية",
+  preview: "معاينة",
+  tab_home: "نظرة عامة",
+  tab_documents: "المستندات والوقائع",
+  tab_accounting: "التحليل المحاسبي",
+  tab_attorney_review: "مراجعة المحامي",
+  tab_legal_analysis: "التحليل القانوني",
+  tab_written_pleading: "المذكرة المكتوبة",
+  tab_case_discussion: "مساعد القضية",
+});
+
+/* Financial fact review (page beside the table). */
+Object.assign(I18N.en, {
+  review_claims_heading: "Financial claims found in these pages ({count}) — to verify, not evidence",
+  review_claims_caption: "What emails and narrative sections say about money. They are not accounting facts and are not in the ledger; the accounting analysis checks them against the records above.",
+  review_claim_statement: "Statement",
+  review_claim_by: "Made by",
+  review_claim_amounts: "Amounts mentioned",
+  review_source_type: "Record: {type}",
+  continue_to_written_pleading: "Continue to the written pleading",
+  review_heading: "Financial facts — review page by page",
+  review_caption: "The page is shown beside the table; its rows are highlighted. Click any cell to correct it (Enter saves, Esc cancels). Your edits are kept and the AI's reading stays visible.",
+  review_uncertain_count: "{count} value(s) are uncertain (marked in red): the readings of the page disagreed. Check them against the page.",
+  review_confirmed_by: "Facts confirmed by {by} on {at}. Edits made since then are kept; the analysis shows when it is out of date.",
+  review_page_position: "page {index} of {total}",
+  review_open_full_page: "Open the full page",
+  review_extraction_heading: "Page {page} — what was extracted",
+  review_no_facts_on_page: "No financial facts were extracted from this page. Add one below if the page holds one.",
+  review_previous_page: "Previous page",
+  review_next_page: "Next page",
+  review_confirm_all: "Confirm all pages",
+  review_confirm_again: "Confirm all pages again",
+  review_confirm_all_prompt: "Confirm all {count} facts as shown? {uncertain} uncertain value(s) will be accepted as they are now. The accounting analysis can then run.",
+  review_confirmed_toast: "All pages confirmed. You can run the accounting analysis.",
+  review_cell_edited: "AI read: {value} — edited by {by}",
+  review_cell_click_to_edit: "Click to edit",
+  review_you: "you",
+  review_added_by_you: "Added by you",
+  review_edited_by_you: "Edited by you",
+  review_confirmed: "Confirmed",
+  review_from_ai: "AI extraction",
+  review_as_printed: "As printed",
+  review_restore: "Restore",
+  review_delete_title: "Remove this fact from the ledger",
+  review_delete_confirm: "Remove this fact from the ledger? It stays on record and can be restored.",
+  review_add_fact: "+ Add a fact on page {page}",
+  review_add_save: "Add",
+  review_fact_added: "Fact added.",
+  review_route_native: "From the PDF's own text",
+  review_route_mixed: "PDF text + pictures read by the vision model",
+  review_route_vlm: "Read from the page image",
+  review_kind_photo: "Camera photo",
+  review_kind_scan: "Scan",
+  review_kind_screenshot: "Screenshot / digital",
+  review_flag_low_resolution: "low resolution",
+  review_flag_table_heavy: "table",
+  review_flag_mixed: "text and table",
+  review_candidates: "Readings merged: {names}",
+  review_extraction_uncertain: "Values the readings disagreed on",
+  review_extracted_text: "Extracted text",
+  review_extraction_errors: "{count} extraction note(s)",
+  detail_confirm_facts: "Review the financial facts and press \u201cConfirm all pages\u201d to continue.",
+});
+
+Object.assign(I18N.ar, {
+  review_claims_heading: "ادعاءات مالية وردت في هذه الصفحات ({count}) — للتحقق وليست أدلة",
+  review_claims_caption: "ما تذكره الرسائل والأجزاء السردية عن المبالغ. ليست وقائع محاسبية ولا تدخل في السجل؛ يتحقق منها التحليل المحاسبي مقابل السجلات أعلاه.",
+  review_claim_statement: "العبارة",
+  review_claim_by: "صادرة عن",
+  review_claim_amounts: "المبالغ المذكورة",
+  review_source_type: "السجل: {type}",
+  continue_to_written_pleading: "متابعة إلى المذكرة المكتوبة",
+  review_heading: "الوقائع المالية — المراجعة صفحةً صفحة",
+  review_caption: "تظهر الصفحة بجانب الجدول مع تمييز صفوفها. انقر على أي خلية لتصحيحها (Enter للحفظ وEsc للإلغاء). تُحفظ تعديلاتك وتبقى قراءة الذكاء الاصطناعي ظاهرة.",
+  review_uncertain_count: "{count} قيمة غير مؤكدة (باللون الأحمر): اختلفت قراءات الصفحة. تحقق منها مقابل الصفحة.",
+  review_confirmed_by: "أكّد {by} الوقائع بتاريخ {at}. التعديلات اللاحقة محفوظة، ويُشار إلى التحليل إذا أصبح غير محدّث.",
+  review_page_position: "الصفحة {index} من {total}",
+  review_open_full_page: "فتح الصفحة كاملة",
+  review_extraction_heading: "الصفحة {page} — ما تم استخراجه",
+  review_no_facts_on_page: "لم تُستخرج وقائع مالية من هذه الصفحة. أضف واقعة أدناه إن كانت الصفحة تتضمن واحدة.",
+  review_previous_page: "الصفحة السابقة",
+  review_next_page: "الصفحة التالية",
+  review_confirm_all: "تأكيد جميع الصفحات",
+  review_confirm_again: "تأكيد جميع الصفحات مجددًا",
+  review_confirm_all_prompt: "تأكيد جميع الوقائع ({count}) كما هي معروضة؟ ستُقبل {uncertain} قيمة غير مؤكدة بحالتها الحالية، ثم يمكن تشغيل التحليل المحاسبي.",
+  review_confirmed_toast: "تم تأكيد جميع الصفحات. يمكنك تشغيل التحليل المحاسبي.",
+  review_cell_edited: "قراءة الذكاء الاصطناعي: {value} — عدّلها {by}",
+  review_cell_click_to_edit: "انقر للتعديل",
+  review_you: "أنت",
+  review_added_by_you: "أضفتها أنت",
+  review_edited_by_you: "عدّلتها أنت",
+  review_confirmed: "مؤكدة",
+  review_from_ai: "استخراج آلي",
+  review_as_printed: "كما وردت في المستند",
+  review_restore: "استعادة",
+  review_delete_title: "استبعاد هذه الواقعة من السجل",
+  review_delete_confirm: "استبعاد هذه الواقعة من السجل؟ تبقى محفوظة ويمكن استعادتها.",
+  review_add_fact: "+ إضافة واقعة في الصفحة {page}",
+  review_add_save: "إضافة",
+  review_fact_added: "تمت إضافة الواقعة.",
+  review_route_native: "من نص ملف PDF نفسه",
+  review_route_mixed: "نص PDF مع صور قرأها نموذج الرؤية",
+  review_route_vlm: "مقروءة من صورة الصفحة",
+  review_kind_photo: "صورة بالكاميرا",
+  review_kind_scan: "مسح ضوئي",
+  review_kind_screenshot: "لقطة شاشة / رقمية",
+  review_flag_low_resolution: "دقة منخفضة",
+  review_flag_table_heavy: "جدول",
+  review_flag_mixed: "نص وجدول",
+  review_candidates: "القراءات المدمجة: {names}",
+  review_extraction_uncertain: "قيم اختلفت فيها القراءات",
+  review_extracted_text: "النص المستخرج",
+  review_extraction_errors: "{count} ملاحظة استخراج",
+  detail_confirm_facts: "راجع الوقائع المالية ثم اضغط «تأكيد جميع الصفحات» للمتابعة.",
+});
 
 /* ============================================================
    Application state. One object, mutated by handlers, read by
@@ -1368,6 +1682,10 @@ const S = {
   uploads: { documents: [], agreement: [] },
   jobs: {},                    // region -> { detail, current, total }
   accountingSelectedDocs: null, // Set of case_document_id, lazily defaulted to "all" per case
+  user: "",                    // the Dataiku user signed in
+  dash: { litigation: [], agreement_review: [], query: "", contractQuery: "", status: "", archived: false },
+  reviewPageId: "",            // financial page shown beside the fact table
+  pageExtractions: {},         // page_id -> stored extraction record (lazy)
 };
 
 /* ============================================================
@@ -1399,8 +1717,8 @@ function applyLanguage() {
   });
 
   // Placeholders that have no text node of their own.
-  setPlaceholder("#library-search", S.workspace === "agreement_review"
-    ? "search_agreement_files" : "search_litigation_cases");
+  setPlaceholder("#library-search", "search_litigation_cases");
+  setPlaceholder("#contract-search", "search_agreement_files");
   setPlaceholder("#case-search", "search_inside_case");
   setPlaceholder("#facts-filter", "filter_facts");
   setPlaceholder("#clause-filter", "filter_clauses");
@@ -1478,6 +1796,22 @@ function renderMarkdown(text) {
       return;
     }
     flush();
+    if (block === "---") { out.push('<hr class="bsf-divider">'); return; }
+    const lines = block.split("\n");
+    if (lines.every((line) => /^\s*\|/.test(line))) {
+      const cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
+      const rows = lines.filter((line) => !/^\s*\|?\s*-{3,}/.test(line)).map(cells);
+      const [head, ...rest] = rows;
+      out.push(`<div class="bsf-table-scroll"><table class="bsf-table">
+        <thead><tr>${head.map((cell) => `<th>${inline(cell)}</th>`).join("")}</tr></thead>
+        <tbody>${rest.map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table></div>`);
+      return;
+    }
+    if (lines.every((line) => /^\d+\.\s+/.test(line))) {
+      out.push(`<ol>${lines.map((line) => `<li>${inline(line.replace(/^\d+\.\s+/, ""))}</li>`).join("")}</ol>`);
+      return;
+    }
     out.push(`<p>${inline(block).replace(/\n/g, "<br>")}</p>`);
   });
   flush();
@@ -1521,6 +1855,7 @@ function memoPlainText(memo, lang) {
     if (Array.isArray(value)) { value.forEach(push); return; }
     if (typeof value === "object") { Object.values(value).forEach(push); }
   };
+  if (memo.format === "full_v2") { push(section); return chunks.filter(Boolean).join("\n\n"); }
   ["court_heading", "case_details", "party_heading", "subject", "opening", "facts",
    "procedural_defences", "substantive_defences", "response_to_opponent", "requests",
    "evidence_reservations", "reservations", "closing"].forEach((key) => push(section[key]));
@@ -1630,7 +1965,7 @@ function pollJob(jobId, onProgress) {
         const status = await apiGet("/job_status", { job_id: jobId });
         if (status.status === "running") {
           if (onProgress) onProgress(status);
-          setTimeout(poll, 1200);
+          setTimeout(poll, 2000);
           return;
         }
         if (status.status === "error") reject(new Error(status.error || "job failed"));
@@ -1733,45 +2068,32 @@ function showTab(tabset, name) {
    Sidebar
    ============================================================ */
 function renderSidebar() {
-  const agreements = S.workspace === "agreement_review";
-
-  $$("[data-workspace]").forEach((btn) => {
-    btn.classList.toggle("is-active", btn.dataset.workspace === S.workspace);
-  });
+  const user = S.user || "";
+  html(region("user-card"), user ? `
+    <div class="bsf-user-avatar" aria-hidden="true">${esc(user.slice(0, 1).toUpperCase())}</div>
+    <div>
+      <div class="bsf-user-name">${esc(user)}</div>
+      <div class="bsf-caption">${esc(t("signed_in_with_dataiku"))}</div>
+    </div>` : "");
 
   const open = region("open-matter");
   if (S.snapshot) {
     show(open, true);
     region("chip-title").textContent = S.snapshot.display_name || t("open_matter");
-    region("chip-ref").textContent = S.snapshot.reference;
+    region("chip-ref").textContent = (S.snapshot.details || {}).case_number || S.snapshot.reference;
   } else {
     show(open, false);
   }
-
-  region("create-summary").textContent = t(agreements ? "create_agreement_review" : "create_litigation_case");
-  region("create-name-label").textContent = t(agreements ? "agreement_file_name" : "case_file_name");
-  region("create-submit").textContent = t(agreements ? "create_agreement_file" : "create_case_file");
 }
 
-function caseCardMarkup(item, compact) {
-  const agreements = item.workflow_type === "agreement_review";
-  const openLabel = t(agreements ? "open_agreement" : "open_case");
-  const meta = compact ? "" : `
-    <div class="case-card-meta">
-      ${esc(t("card_attorney"))}: ${esc(item.attorney || t("unassigned"))}<br>
-      ${esc(t("card_last_activity"))}: ${esc(item.activity || "—")}
-    </div>
-    ${item.status ? `<span class="status-pill">${esc(friendlyStatus(item.status))}</span>` : ""}`;
-  return `
-    <article class="case-card">
-      <div class="case-card-title">${esc(item.title || t(agreements ? "unnamed_agreement" : "unnamed_case"))}</div>
-      <div class="case-card-ref">${esc(item.reference)}</div>
-      ${meta}
-      <button type="button" class="bsf-btn" data-action="open-case" data-case-id="${esc(item.case_id)}">
-        ${esc(openLabel)}
-      </button>
-    </article>`;
+function progressLabel(key) {
+  return key ? t(`progress_${key}`) : "";
 }
+
+const PROGRESS_KIND = {
+  new: "neutral", documents_uploaded: "neutral", processing: "ai", accounting_review: "review",
+  legal_analysis: "review", attorney_review: "provisional", ready_for_pleading: "verified", completed: "verified",
+};
 
 function friendlyStatus(status) {
   const key = String(status || "").trim().toLowerCase();
@@ -1783,32 +2105,131 @@ function friendlyStatus(status) {
 }
 
 /* ============================================================
-   Case library
+   Dashboard: the signed-in user's own cases and contract reviews
+   (the server only ever returns the user's own).
    ============================================================ */
-function renderLibrary() {
-  const agreements = S.workspace === "agreement_review";
-  region("library-title").textContent = t(agreements ? "agreement_review_library" : "litigation_case_library");
-  region("library-caption").textContent = t(agreements ? "agreement_library_caption" : "litigation_library_caption");
+function matchesQuery(item, query) {
+  if (!query) return true;
+  const haystack = [item.title, item.reference, item.matter, ...Object.values(item.details || {})]
+    .join(" ").toLowerCase();
+  return haystack.includes(query.toLowerCase());
+}
 
-  const grid = region("library-grid");
-  if (!S.cases.length) {
-    html(grid, `<p class="bsf-caption">${esc(t(agreements ? "no_matching_agreements" : "no_matching_cases"))}</p>`);
-    return;
-  }
-  html(grid, S.cases.map((item) => caseCardMarkup(item, false)).join(""));
+function renderLibrary() {
+  const dash = S.dash;
+  region("dash-title").textContent = S.user ? t("dash_welcome", { user: S.user }) : t("dash_title");
+
+  const litigation = dash.litigation.filter((item) => matchesQuery(item, dash.query)
+    && (!dash.status || item.progress === dash.status));
+  const contracts = dash.agreement_review.filter((item) => matchesQuery(item, dash.contractQuery));
+  const attention = dash.litigation.filter((item) => ["accounting_review", "attorney_review"].includes(item.progress)).length;
+  const metric = (value, key) => `<div class="bsf-metric"><span class="m-value">${esc(value)}</span>
+    <span class="m-label">${esc(t(key))}</span></div>`;
+  html(region("dash-metrics"), dash.archived ? "" : `
+    ${metric(dash.litigation.length, "dash_metric_cases")}
+    ${metric(attention, "dash_metric_attention")}
+    ${metric(dash.litigation.filter((item) => item.progress === "completed").length, "dash_metric_completed")}
+    ${metric(dash.agreement_review.length, "dash_metric_contracts")}`);
+
+  const archiveButton = (item) => `<button type="button" class="bsf-btn bsf-btn-sm" data-action="archive-case"
+      data-case-id="${esc(item.case_id)}" data-archived="${item.archived ? "0" : "1"}">
+      ${esc(t(item.archived ? "restore_case" : "archive_case"))}</button>`;
+
+  html(region("dash-litigation"), litigation.length ? `
+    <div class="bsf-table-scroll"><table class="bsf-table bsf-dash-table">
+      <thead><tr>
+        <th>${esc(t("col_case_name"))}</th><th>${esc(t("col_case_number"))}</th><th>${esc(t("col_parties"))}</th>
+        <th>${esc(t("col_case_type"))}</th><th>${esc(t("col_last_updated"))}</th><th>${esc(t("col_stage"))}</th><th></th>
+      </tr></thead>
+      <tbody>${litigation.map((item) => {
+        const d = item.details || {};
+        const parties = [d.client_name, d.opposing_party].filter(Boolean).join(" v ");
+        return `<tr>
+          <td dir="auto"><button type="button" class="bsf-link bsf-dash-open" data-action="open-case" data-case-id="${esc(item.case_id)}">
+            ${esc(item.title || t("unnamed_case"))}</button></td>
+          <td dir="auto">${esc(d.case_number || "—")}</td>
+          <td dir="auto">${esc(parties || "—")}</td>
+          <td dir="auto">${esc(d.case_type || item.matter || "—")}</td>
+          <td>${esc(item.activity || "—")}</td>
+          <td>${item.progress ? badge(progressLabel(item.progress), PROGRESS_KIND[item.progress] || "neutral") : "—"}</td>
+          <td class="bsf-dash-actions">
+            <button type="button" class="bsf-btn bsf-btn-sm bsf-btn-primary" data-action="open-case" data-case-id="${esc(item.case_id)}">
+              ${esc(t(item.progress === "new" ? "open_case" : "continue_case"))}</button>
+            ${archiveButton(item)}
+          </td></tr>`;
+      }).join("")}</tbody>
+    </table></div>` : `<div class="bsf-empty">${esc(t(dash.archived ? "no_archived_cases" : "no_cases_yet"))}</div>`);
+
+  html(region("dash-contracts"), contracts.length ? `
+    <div class="bsf-table-scroll"><table class="bsf-table bsf-dash-table">
+      <thead><tr>
+        <th>${esc(t("col_contract_name"))}</th><th>${esc(t("col_contract_type"))}</th><th>${esc(t("col_counterparty"))}</th>
+        <th>${esc(t("col_last_updated"))}</th><th>${esc(t("col_status"))}</th><th></th>
+      </tr></thead>
+      <tbody>${contracts.map((item) => {
+        const d = item.details || {};
+        return `<tr>
+          <td dir="auto"><button type="button" class="bsf-link bsf-dash-open" data-action="open-case" data-case-id="${esc(item.case_id)}">
+            ${esc(item.title || t("unnamed_agreement"))}</button></td>
+          <td dir="auto">${esc(d.contract_type || item.matter || "—")}</td>
+          <td dir="auto">${esc(d.counterparty || "—")}</td>
+          <td>${esc(item.activity || "—")}</td>
+          <td>${esc(friendlyStatus(item.status) || "—")}</td>
+          <td class="bsf-dash-actions">
+            <button type="button" class="bsf-btn bsf-btn-sm bsf-btn-primary" data-action="open-case" data-case-id="${esc(item.case_id)}">
+              ${esc(t("continue_review"))}</button>
+            ${archiveButton(item)}
+          </td></tr>`;
+      }).join("")}</tbody>
+    </table></div>` : `<div class="bsf-empty">${esc(t(dash.archived ? "no_archived_contracts" : "no_contracts_yet"))}</div>`);
 }
 
 async function loadCases() {
+  const archived = S.dash.archived ? "1" : "";
   try {
-    const query = S.libraryQuery;
-    const payload = await apiGet("/cases", { workflow: S.workspace, query });
-    S.cases = payload.cases || [];
+    const [litigation, contracts] = await Promise.all([
+      apiGet("/cases", { workflow: "litigation", archived }),
+      apiGet("/cases", { workflow: "agreement_review", archived }),
+    ]);
+    S.dash.litigation = litigation.cases || [];
+    S.dash.agreement_review = contracts.cases || [];
   } catch (error) {
-    S.cases = [];
+    S.dash.litigation = [];
+    S.dash.agreement_review = [];
     fail(error);
   }
+  S.cases = S.dash.litigation.concat(S.dash.agreement_review);
   renderSidebar();
   if (S.view === "library") renderLibrary();
+}
+
+/* New litigation case / contract review: the details are kept with the
+   case and shown on the dashboard and in the case header. */
+function openNewCaseForm(workflow) {
+  const litigation = workflow !== "agreement_review";
+  region("modal-title").textContent = t(litigation ? "new_litigation_case" : "new_contract_review");
+  const field = (name, label, attrs = "") => `
+    <label class="bsf-field"><span>${esc(t(label))}</span>
+      <input type="text" class="bsf-input" name="${name}" dir="auto" ${attrs}></label>`;
+  html(region("modal-body"), `
+    <form data-form="create-case" data-workflow="${esc(workflow)}" class="bsf-new-case">
+      ${field("case_name", litigation ? "col_case_name" : "col_contract_name", "required")}
+      ${litigation ? `
+        ${field("case_number", "field_case_number")}
+        ${field("client_name", "field_client")}
+        ${field("opposing_party", "field_opposing_party")}
+        ${field("case_type", "col_case_type")}
+        <label class="bsf-field"><span>${esc(t("field_description_optional"))}</span>
+          <textarea class="bsf-input" name="description" rows="3" dir="auto"></textarea></label>` : `
+        ${field("contract_type", "col_contract_type")}
+        ${field("counterparty", "col_counterparty")}`}
+      <label class="bsf-field"><span>${esc(t("preferred_language"))}</span>
+        <select class="bsf-input" name="language"><option value="ar">العربية</option><option value="en">English</option></select></label>
+      <button type="submit" class="bsf-btn bsf-btn-primary">${esc(t(litigation ? "create_case_and_upload" : "create_contract_review"))}</button>
+    </form>`);
+  setModalVisible(true);
+  const first = $('[data-form="create-case"] input[name="case_name"]');
+  if (first) first.focus();
 }
 
 /* ============================================================
@@ -1821,7 +2242,9 @@ async function openCase(caseId) {
     S.caseId = caseId;
     S.snapshot = snapshot;
     S.compareVersion = null;
+    S.pleadingLang = null;
     S.accountingSelectedDocs = null;
+    S.accountingKnownDocs = null;
     // Every matter opens on its first tab, whatever was selected last time.
     S.tab = "home";
     S.agreementTab = "package";
@@ -1880,11 +2303,19 @@ const NEXT_ACTION_KEYS = {
 };
 const STAGE_STATUS_KIND = {
   not_started: "neutral", blocked: "neutral", running: "ai", waiting_for_user: "review",
-  ready: "provisional", completed: "verified", stale: "review", error: "flagged",
+  ready: "provisional", completed: "verified", stale: "review", error: "flagged", not_yet: "neutral",
 };
+/* What the user sees for a step: Done (finished, even if something
+   changed after it) or Not yet; a running step keeps its progress bar. */
+function shownStatus(stage) {
+  const status = (stage && stage.status) || "";
+  if (status === "running") return "running";
+  return status === "completed" || status === "stale" ? "completed" : "not_yet";
+}
+
 const STAGE_ICONS = {
   completed: "\u2713", running: "\u21BB", waiting_for_user: "!", error: "\u2715",
-  stale: "\u21BA", ready: "\u25CF", not_started: "\u25CB", blocked: "\u25CB",
+  stale: "\u21BA", ready: "\u25CF", not_started: "\u25CB", blocked: "\u25CB", not_yet: "\u25CB",
 };
 
 function stageLabel(key) { return t(STAGE_LABEL_KEYS[key] || key); }
@@ -1899,9 +2330,7 @@ function stageDetailText(stage) {
     const acc = (S.snapshot && S.snapshot.accounting) || {};
     return t("detail_review_items", { count: acc.pending_field_count || acc.pending_count || 0 });
   }
-  if (stage.status === "stale" && stage.stale_because) {
-    return t("detail_stale_because", { stage: stageLabel(stage.stale_because) });
-  }
+  if (stage.status === "stale" || stage.status === "completed") return "";
   if (stage.status === "blocked" && (stage.blocked_by || []).length) {
     return t("detail_blocked_by", { stages: stage.blocked_by.map(stageLabel).join(", ") });
   }
@@ -1929,9 +2358,9 @@ function stageStripMarkup(stage) {
   }
   const detail = stageDetailText(stage);
   return `
-    <div class="bsf-stage-strip status-${esc(stage.status)}">
+    <div class="bsf-stage-strip status-${esc(shownStatus(stage))}">
       <div class="bsf-stage-strip-head">
-        ${badge(t(`status_${stage.status}`), STAGE_STATUS_KIND[stage.status])}
+        ${badge(t(`status_${shownStatus(stage)}`), STAGE_STATUS_KIND[shownStatus(stage)])}
         <strong>${esc(stageLabel(stage.key))}</strong>
       </div>
       ${detail ? `<div class="bsf-stage-strip-detail">${esc(detail)}</div>` : ""}
@@ -1951,7 +2380,7 @@ function renderAttention() {
   const stages = snap.stages || [];
   const line = (stage) => `
     <li>
-      <span><strong>${esc(stageLabel(stage.key))}</strong> — ${esc(stageDetailText(stage) || t(`status_${stage.status}`))}</span>
+      <span><strong>${esc(stageLabel(stage.key))}</strong> — ${esc(stageDetailText(stage) || t(`status_${shownStatus(stage)}`))}</span>
       <button type="button" class="bsf-btn" data-action="goto-stage" data-stage="${esc(stage.key)}">
         ${esc(t("attention_open", { tab: t(STAGE_TAB_KEYS[stage.key]) }))}
       </button>
@@ -1976,15 +2405,17 @@ function renderCase() {
   if (!snap) return;
   region("case-title").textContent = snap.display_name || t("default_case_name");
   region("case-ref").textContent = snap.reference;
+  const details = snap.details || {};
+  html(region("case-meta"), [
+    details.case_number ? `<span>${esc(t("field_case_number"))}: <strong dir="auto">${esc(details.case_number)}</strong></span>` : "",
+    [details.client_name, details.opposing_party].filter(Boolean).length
+      ? `<span dir="auto">${esc([details.client_name, details.opposing_party].filter(Boolean).join(" v "))}</span>` : "",
+    snap.progress ? badge(progressLabel(snap.progress), PROGRESS_KIND[snap.progress] || "neutral") : "",
+    snap.last_updated ? `<span class="bsf-caption">${esc(t("last_updated_at", { at: snap.last_updated }))}</span>` : "",
+  ].filter(Boolean).join('<span class="bsf-meta-sep">|</span>'));
 
-  const dirty = region("case-dirty");
-  const state = snap.workflow_state || {};
-  if (state.case_dirty) {
-    dirty.textContent = state.dirty_reason || t("next_review_new_material");
-    show(dirty, true);
-  } else {
-    show(dirty, false);
-  }
+  // Finished steps stay shown as done, even when something changed after them.
+  show(region("case-dirty"), false);
 
   renderAttention();
   renderStageStrips();
@@ -1992,6 +2423,7 @@ function renderCase() {
   renderUnresolved();
   renderCaseSearch();
   renderDocumentsTab();
+  renderDocumentsOverview();
   renderCaseRegister();
   renderAccountingTab();
   renderReviewTab();
@@ -2004,7 +2436,7 @@ function renderCase() {
 function renderCaseStatus() {
   const snap = S.snapshot;
   const stages = snap.stages || [];
-  const done = stages.filter((stage) => stage.status === "completed").length;
+  const done = stages.filter((stage) => shownStatus(stage) === "completed").length;
   const percent = stages.length ? Math.round((done / stages.length) * 100) : 0;
 
   const nextKey = snap.next_stage || "documents";
@@ -2016,11 +2448,11 @@ function renderCaseStatus() {
   const destination = t(STAGE_TAB_KEYS[nextKey] || "tab_documents");
 
   const stepCards = stages.map((stage) => `
-    <button type="button" class="step-card ${stage.state} status-${esc(stage.status)}"
+    <button type="button" class="step-card ${shownStatus(stage) === "completed" ? "complete" : stage.state} status-${esc(shownStatus(stage))}"
             data-action="goto-stage" data-stage="${esc(stage.key)}">
-      <div class="step-icon">${STAGE_ICONS[stage.status] || ""}</div>
+      <div class="step-icon">${STAGE_ICONS[shownStatus(stage)] || ""}</div>
       <div class="step-label">${esc(stageLabel(stage.key))}</div>
-      <div class="step-status">${esc(stage.status === "running" && stage.phase ? t(`phase_${stage.phase}`) : t(`status_${stage.status}`))}</div>
+      <div class="step-status">${esc(stage.status === "running" && stage.phase ? t(`phase_${stage.phase}`) : t(`status_${shownStatus(stage)}`))}</div>
     </button>`).join("");
 
   const counts = snap.counts || {};
@@ -2054,6 +2486,39 @@ function renderCaseStatus() {
         ${metric("metric_issues", counts.issues || 0)}
       </div>
     </div>`);
+}
+
+/* Documents: what was uploaded and how each one was read. */
+function renderDocumentsOverview() {
+  const target = region("documents-overview");
+  if (!target) return;
+  const docs = (S.snapshot && S.snapshot.documents_overview) || [];
+  if (!docs.length) { html(target, ""); return; }
+  html(target, `
+    <div class="bsf-table-scroll"><table class="bsf-table bsf-docs-table">
+      <thead><tr>
+        <th>${esc(t("col_file"))}</th><th>${esc(t("col_pages"))}</th><th>${esc(t("col_document_type"))}</th>
+        <th>${esc(t("col_reading"))}</th><th>${esc(t("col_accounting"))}</th><th></th>
+      </tr></thead>
+      <tbody>${docs.map((doc) => {
+        const reading = doc.pages_failed
+          ? badge(t("doc_pages_failed", { count: doc.pages_failed }), "flagged")
+          : doc.pages_to_check ? badge(t("doc_pages_to_check", { count: doc.pages_to_check }), "review")
+          : badge(t("doc_read_ok"), "verified");
+        const accounting = !doc.classified_pages ? `<span class="bsf-caption">${esc(t("doc_not_checked_yet"))}</span>`
+          : doc.financial_pages ? badge(t("doc_financial_pages", { count: doc.financial_pages, facts: doc.facts }), "ai")
+          : `<span class="bsf-caption">${esc(t("doc_no_financial_records"))}</span>`;
+        return `<tr>
+          <td dir="auto"><strong>${esc(doc.file)}</strong><div class="bsf-caption">${esc(doc.uploaded_at || "")}</div></td>
+          <td>${esc(doc.pages)}</td>
+          <td dir="auto">${esc((doc.document_types || []).join(", ") || doc.purpose || "—")}</td>
+          <td>${reading}</td>
+          <td>${accounting}</td>
+          <td>${doc.first_page_id ? `<button type="button" class="bsf-btn bsf-btn-sm" data-action="view-page"
+               data-page-id="${esc(doc.first_page_id)}">${esc(t("preview"))}</button>` : ""}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>`);
 }
 
 function renderUnresolved() {
@@ -2364,8 +2829,7 @@ function renderAccountingTab() {
 
   renderAccountingDocPicker(acc.documents || []);
   renderAccountingReport(acc.last_run_report || {});
-  renderAccountingConflicts(acc.review_items || acc.pending_conflicts || []);
-  renderAccountingLedger(acc.normalized_ledger || [], acc.has_line_items, acc.has_pending_review, acc.withheld_rows || 0);
+  renderFactReview();
   renderAccountingCrossCheck(acc.cross_check_summary || {});
   renderAccountingDiscrepancies(acc.discrepancies || []);
   renderAccountingFindings(acc.findings || {}, acc.run_metadata || {});
@@ -2398,6 +2862,15 @@ function renderAccountingDocPicker(documents) {
   if (!S.accountingSelectedDocs) {
     S.accountingSelectedDocs = new Set(documents.map((doc) => doc.case_document_id));
   }
+  // Documents uploaded since the list was first shown are selected too, so
+  // a new PDF is never silently left out of the accounting.
+  if (!S.accountingKnownDocs) S.accountingKnownDocs = new Set(S.accountingSelectedDocs);
+  documents.forEach((doc) => {
+    if (!S.accountingKnownDocs.has(doc.case_document_id)) {
+      S.accountingKnownDocs.add(doc.case_document_id);
+      S.accountingSelectedDocs.add(doc.case_document_id);
+    }
+  });
 
   if (!documents.length) {
     html(target, `<p class="bsf-caption">${esc(t("no_documents_stored"))}</p>`);
@@ -2415,10 +2888,6 @@ function renderAccountingDocPicker(documents) {
     </div>`);
 }
 
-const FACT_FIELD_ORDER = [
-  "fact_type", "date", "description", "amount", "currency", "debit", "credit", "balance",
-  "amount_due", "paid_amount", "remaining_amount", "account_number", "transaction_reference", "counterparty",
-];
 const FACT_AMOUNT_FIELDS = ["amount", "debit", "credit", "balance", "amount_due", "paid_amount", "remaining_amount"];
 const FACT_STATUS_KIND = {
   EXTRACTED: "verified", CALCULATED: "ai", INFERRED: "provisional", UNCERTAIN: "review",
@@ -2436,178 +2905,359 @@ function factStatusBadge(status) {
   return badge(t(`fact_status_${status}`), FACT_STATUS_KIND[status] || "neutral");
 }
 
-function factFieldsTable(fact, onlyFilled) {
-  const names = FACT_FIELD_ORDER.filter((name) =>
-    !onlyFilled || (fact[name] !== null && fact[name] !== undefined && fact[name] !== ""));
-  if (!names.length) return "";
-  return `
-    <table class="bsf-table bsf-review-transaction">
-      <tbody>${names.map((name) => `
-        <tr><th>${esc(t(`field_${name}`))}</th>
-            <td>${esc(name === "fact_type" ? factTypeLabel(fact[name]) : (fact[name] ?? "—"))}</td></tr>`).join("")}
-      </tbody>
-    </table>`;
+/* ============================================================
+   Financial fact review: the page beside the table of atomic facts.
+   The rows of the page on screen are highlighted; Previous / Next move
+   to the next financial page and the highlight follows. Cells are
+   edited in place (click, type, Enter); every edit is saved at once,
+   layered on the AI's reading, which stays visible. Uncertain values
+   are marked in the table. "Confirm all pages" unlocks the accounting
+   analysis.
+   ============================================================ */
+const FACT_TYPE_OPTIONS = [
+  "transaction", "payment", "installment", "deposit", "withdrawal", "transfer", "financing_amount",
+  "outstanding_balance", "remaining_balance", "amount_due", "opening_balance", "closing_balance", "balance",
+  "fee", "interest", "penalty", "credit_limit", "claimed_amount", "other",
+];
+const REVIEW_COLUMNS = ["date", "fact_type", "description", "amount", "debit", "credit", "balance", "currency"];
+const REVIEW_ALWAYS = ["date", "fact_type", "description", "amount"];
+
+/* Columns with a value somewhere in the table (date, type, description
+   and amount are always shown, so they can be filled in). */
+function reviewColumns(facts) {
+  return REVIEW_COLUMNS.filter((name) => REVIEW_ALWAYS.includes(name)
+    || facts.some((fact) => fact[name] !== null && fact[name] !== undefined && fact[name] !== ""));
 }
 
-/* Facts the AI marked UNCERTAIN. Each card shows the AI's interpretation,
-   why it is unsure, the text as printed and the page, and four ways to
-   decide: confirm it, correct it, ignore it, or explain how to read it
-   (the AI rewrites the fact and you accept the rewrite). */
-function renderAccountingConflicts(items) {
-  const target = region("accounting-conflicts");
+function reviewState() {
+  const acc = (S.snapshot && S.snapshot.accounting) || {};
+  const pages = acc.financial_pages || [];
+  const facts = acc.facts_table || [];
+  // Pages that only have facts (e.g. classified before) still appear.
+  const known = new Set(pages.map((page) => page.page_id));
+  facts.forEach((fact) => {
+    if (fact.page_id && !known.has(fact.page_id)) {
+      known.add(fact.page_id);
+      pages.push({ page_id: fact.page_id, page_number: fact.page_number, document_name: fact.document_name || "",
+                   label: "", image_url: `/page_image?case_id=${S.caseId}&page_id=${fact.page_id}` });
+    }
+  });
+  return { acc, pages, facts };
+}
+
+function rememberedReviewPage() {
+  try { return window.localStorage.getItem(`bsf-review-page-${S.caseId}`) || ""; } catch (error) { return ""; }
+}
+
+function rememberReviewPage(pageId) {
+  try { window.localStorage.setItem(`bsf-review-page-${S.caseId}`, pageId); } catch (error) { /* private mode */ }
+}
+
+function currentReviewPage(pages) {
+  if (!pages.length) return null;
+  const wanted = S.reviewPageId || rememberedReviewPage();
+  return pages.find((page) => page.page_id === wanted) || pages[0];
+}
+
+function reviewPageTitle(page) {
+  return page.label || `${page.document_name || ""} — ${t("page_label")} ${page.page_number || "—"}`;
+}
+
+function factCell(fact, name, editable) {
+  const raw = fact[name];
+  const shown = name === "fact_type" ? factTypeLabel(raw) : (raw === null || raw === undefined || raw === "" ? "—" : raw);
+  const original = (fact.original_values || {})[name];
+  const edited = Object.prototype.hasOwnProperty.call(fact.original_values || {}, name);
+  const title = edited
+    ? t("review_cell_edited", { value: original === null || original === undefined || original === "" ? "—" : original,
+                                 by: fact.edited_by || t("review_you") })
+    : (editable ? t("review_cell_click_to_edit") : "");
+  return `<td dir="auto" class="bsf-fr-cell${edited ? " is-edited" : ""}${FACT_AMOUNT_FIELDS.includes(name) ? " is-number" : ""}"
+             ${editable ? `data-action="edit-fact-cell" data-row-id="${esc(fact.row_id)}" data-field="${esc(name)}"` : ""}
+             title="${esc(title)}">${esc(shown)}${edited ? '<span class="bsf-fr-edited-mark" aria-hidden="true">✎</span>' : ""}</td>`;
+}
+
+function factRowMarkup(fact, currentPageId, columns) {
+  const current = fact.page_id === currentPageId;
+  const uncertain = fact.status === "UNCERTAIN";
+  const review = fact.review || {};
+  const reason = [review.question, review.reason].filter(Boolean).join(" — ");
+  const classes = ["bsf-fr-row", current ? "is-current" : "is-other", uncertain ? "is-uncertain" : "",
+                   fact.deleted ? "is-deleted" : ""].filter(Boolean).join(" ");
+  const source = fact.added_by_user ? badge(t("review_added_by_you"), "provisional")
+    : (fact.corrected_fields || []).length ? badge(t("review_edited_by_you"), "provisional")
+    : fact.status === "USER_CONFIRMED" ? badge(t("review_confirmed"), "verified")
+    : uncertain ? badge(t("fact_status_UNCERTAIN"), "review")
+    : badge(t("review_from_ai"), "ai");
+  const editable = !fact.deleted;
+  return `
+    <tr class="${classes}" data-page-id="${esc(fact.page_id)}" data-row-id="${esc(fact.row_id)}">
+      <td class="bsf-fr-page-cell"><button type="button" class="bsf-link" data-action="review-goto-page"
+          data-page-id="${esc(fact.page_id)}">${esc(fact.page_number || "—")}</button></td>
+      ${columns.map((name) => factCell(fact, name, editable)).join("")}
+      <td class="bsf-fr-status">${source}
+        ${fact.source_type ? `<div class="bsf-caption">${esc(t("review_source_type", { type: String(fact.source_type).replace(/_/g, " ") }))}</div>` : ""}
+        ${uncertain && reason ? `<div class="bsf-fr-reason">${esc(reason)}</div>` : ""}
+        ${(review.alternatives || []).length && uncertain
+          ? `<div class="bsf-fr-reason">${esc(t("fact_alternatives"))}: ${esc(review.alternatives.join(" / "))}</div>` : ""}
+        ${fact.supporting_table || fact.source_text ? `<details class="bsf-fr-source"><summary>${esc(t("review_as_printed"))}</summary>
+          <div dir="auto">${fact.supporting_table ? renderExtractionMarkdown(fact.supporting_table) : `<pre>${esc(fact.source_text)}</pre>`}</div>
+        </details>` : ""}
+      </td>
+      <td class="bsf-fr-actions">${fact.deleted
+        ? `<button type="button" class="bsf-btn bsf-btn-sm" data-action="restore-fact" data-row-id="${esc(fact.row_id)}">${esc(t("review_restore"))}</button>`
+        : `<button type="button" class="bsf-btn bsf-btn-sm" data-action="delete-fact" data-row-id="${esc(fact.row_id)}"
+             title="${esc(t("review_delete_title"))}">✕</button>`}</td>
+    </tr>`;
+}
+
+function renderExtractionMarkdown(text) {
+  // Wrapped cell text is joined with <br> by the extraction.
+  return renderMarkdown(String(text || "")).replace(/&lt;br\s*\/?&gt;/gi, "<br>");
+}
+
+function addFactFormMarkup(page) {
+  return `
+    <details class="bsf-fr-add" ${S.reviewAddOpen ? "open" : ""}>
+      <summary class="bsf-btn bsf-btn-sm">${esc(t("review_add_fact", { page: page.page_number || "—" }))}</summary>
+      <form class="bsf-fr-add-form" data-form="add-fact" data-page-id="${esc(page.page_id)}">
+        <label class="bsf-field"><span>${esc(t("field_date"))}</span><input class="bsf-input" name="date" dir="auto"></label>
+        <label class="bsf-field"><span>${esc(t("column_fact_type"))}</span>
+          <select class="bsf-input" name="fact_type">${FACT_TYPE_OPTIONS.map((type) =>
+            `<option value="${type}" ${type === "transaction" ? "selected" : ""}>${esc(factTypeLabel(type))}</option>`).join("")}</select></label>
+        <label class="bsf-field bsf-fr-wide"><span>${esc(t("field_description"))}</span><input class="bsf-input" name="description" dir="auto"></label>
+        <label class="bsf-field"><span>${esc(t("field_amount"))}</span><input class="bsf-input" name="amount" inputmode="decimal"></label>
+        <label class="bsf-field"><span>${esc(t("column_balance"))}</span><input class="bsf-input" name="balance" inputmode="decimal"></label>
+        <label class="bsf-field"><span>${esc(t("column_currency"))}</span><input class="bsf-input" name="currency"></label>
+        <button type="submit" class="bsf-btn bsf-btn-primary">${esc(t("review_add_save"))}</button>
+      </form>
+    </details>`;
+}
+
+function renderFactReview() {
+  const target = region("accounting-review");
   if (!target) return;
-  if (!items.length) {
-    const acc = (S.snapshot && S.snapshot.accounting) || {};
-    html(target, acc.has_line_items ? alertBox(t("all_reconciled"), "ok") : "");
+  const { acc, pages, facts } = reviewState();
+  if (!facts.length && !pages.length) {
+    html(target, `<p class="bsf-caption">${esc(t("no_line_items"))}</p>`);
     return;
   }
+  const page = currentReviewPage(pages);
+  const index = page ? pages.findIndex((item) => item.page_id === page.page_id) : -1;
+  const pageFacts = facts.filter((fact) => page && fact.page_id === page.page_id);
+  const uncertain = facts.filter((fact) => fact.status === "UNCERTAIN" && !fact.deleted).length;
+  const confirmed = Boolean(acc.facts_confirmed);
+  const columns = reviewColumns(facts);
 
-  const correctForm = (item) => `
-    <details class="bsf-fact-correct">
-      <summary class="bsf-btn">${esc(t("fact_correct"))}</summary>
-      <div class="bsf-fact-form">
-        ${FACT_FIELD_ORDER.map((name) => `
-          <label class="bsf-field">
-            <span>${esc(t(`field_${name}`))}</span>
-            <input type="text" class="bsf-input" data-fact-field="${esc(name)}"
-                   ${FACT_AMOUNT_FIELDS.includes(name) ? 'inputmode="decimal"' : ""}
-                   value="${esc(item.fact[name] ?? "")}">
-          </label>`).join("")}
-        <label class="bsf-field bsf-fact-note">
-          <span>${esc(t("fact_note_label"))}</span>
-          <input type="text" class="bsf-input" data-fact-note>
-        </label>
-        <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-correct" data-row-id="${esc(item.row_id)}">
-          ${esc(t("fact_save_correction"))}
-        </button>
+  html(target, `
+    <h4 class="bsf-subsection">${esc(t("review_heading"))}</h4>
+    <p class="bsf-caption">${esc(t("review_caption"))}</p>
+    ${confirmed
+      ? alertBox(t("review_confirmed_by", { by: acc.facts_confirmed_by || "—", at: String(acc.facts_confirmed_at || "").slice(0, 16).replace("T", " ") }), "ok")
+      : uncertain ? alertBox(t("review_uncertain_count", { count: uncertain }), "warn") : ""}
+    <div class="bsf-fr">
+      <div class="bsf-fr-pane">
+        ${page ? `
+          <div class="bsf-fr-pane-title" dir="auto">${esc(reviewPageTitle(page))}
+            <span class="bsf-caption">${esc(t("review_page_position", { index: index + 1, total: pages.length }))}</span></div>
+          <button type="button" class="bsf-fr-image" data-action="view-page" data-page-id="${esc(page.page_id)}"
+                  title="${esc(t("review_open_full_page"))}">
+            <img src="${esc(backendUrl(page.image_url))}" alt="${esc(reviewPageTitle(page))}">
+          </button>
+          <details class="bsf-expander bsf-fr-extraction" data-page-id="${esc(page.page_id)}">
+            <summary>${esc(t("review_extraction_heading", { page: page.page_number || "—" }))}</summary>
+            <div class="bsf-expander-body" data-region="review-extraction"></div>
+          </details>` : ""}
+      </div>
+      <div class="bsf-fr-table-wrap">
+        ${page && !pageFacts.length ? alertBox(t("review_no_facts_on_page"), "info") : ""}
+        <div class="bsf-fr-table-scroll" data-region="review-table-scroll">
+          <table class="bsf-table bsf-fr-table">
+            <thead><tr>
+              <th>${esc(t("column_page"))}</th>
+              ${columns.map((name) => `<th>${esc(t(name === "fact_type" ? "column_fact_type"
+                : name === "date" ? "column_fin_date" : name === "description" ? "column_description"
+                : name === "amount" ? "field_amount" : `column_${name}`))}</th>`).join("")}
+              <th>${esc(t("column_row_status"))}</th><th></th>
+            </tr></thead>
+            <tbody>${facts.map((fact) => factRowMarkup(fact, page ? page.page_id : "", columns)).join("")}</tbody>
+          </table>
+        </div>
+        ${page ? addFactFormMarkup(page) : ""}
+      </div>
+    </div>
+    <div class="bsf-fr-nav">
+      <button type="button" class="bsf-btn" data-action="review-step" data-step="-1" ${index <= 0 ? "disabled" : ""}>
+        ${esc(isRTL() ? "▶" : "◀")} ${esc(t("review_previous_page"))}</button>
+      <select class="bsf-input bsf-fr-page-select" data-action="review-select-page" aria-label="${esc(t("page_label"))}">
+        ${pages.map((item, i) => `<option value="${esc(item.page_id)}" ${page && item.page_id === page.page_id ? "selected" : ""}>
+          ${esc(`${i + 1}. ${reviewPageTitle(item)} (${facts.filter((f) => f.page_id === item.page_id && !f.deleted).length})`)}</option>`).join("")}
+      </select>
+      <button type="button" class="bsf-btn" data-action="review-step" data-step="1" ${index >= pages.length - 1 ? "disabled" : ""}>
+        ${esc(t("review_next_page"))} ${esc(isRTL() ? "◀" : "▶")}</button>
+      <span class="bsf-fr-spacer"></span>
+      <button type="button" class="bsf-btn bsf-btn-primary" data-action="confirm-all-facts" ${facts.length ? "" : "disabled"}>
+        ${esc(confirmed ? t("review_confirm_again") : t("review_confirm_all"))}</button>
+    </div>
+    ${documentClaimsMarkup(acc.document_claims || [], page ? page.page_id : "")}`);
+
+  scrollToCurrentRows();
+  const extraction = target.querySelector(".bsf-fr-extraction");
+  if (extraction) {
+    if (S.reviewExtractionOpen) extraction.open = true;
+    extraction.addEventListener("toggle", () => {
+      S.reviewExtractionOpen = extraction.open;
+      if (extraction.open) loadPageExtraction(extraction.dataset.pageId);
+    });
+    if (extraction.open) loadPageExtraction(extraction.dataset.pageId);
+  }
+  const addForm = target.querySelector(".bsf-fr-add");
+  if (addForm) addForm.addEventListener("toggle", () => { S.reviewAddOpen = addForm.open; });
+  const synthesize = document.querySelector('[data-action="accounting-synthesize"]');
+  if (synthesize) synthesize.disabled = !confirmed;
+}
+
+/* Layer 1: what the documents SAY about money (emails, narrative sections).
+   Shown apart from the facts: the accountant verifies them against the
+   records; they are never part of the ledger. */
+function documentClaimsMarkup(claims, currentPageId) {
+  if (!claims.length) return "";
+  return `
+    <details class="bsf-expander bsf-fr-claims">
+      <summary>${esc(t("review_claims_heading", { count: claims.length }))}</summary>
+      <div class="bsf-expander-body">
+        <p class="bsf-caption">${esc(t("review_claims_caption"))}</p>
+        <table class="bsf-table">
+          <thead><tr><th>${esc(t("column_page"))}</th><th>${esc(t("review_claim_statement"))}</th>
+            <th>${esc(t("review_claim_by"))}</th><th>${esc(t("review_claim_amounts"))}</th></tr></thead>
+          <tbody>${claims.map((claim) => `
+            <tr class="${claim.page_id === currentPageId ? "is-current-claim" : ""}">
+              <td><button type="button" class="bsf-link" data-action="review-goto-page" data-page-id="${esc(claim.page_id)}">
+                ${esc(claim.page_label || claim.page_number || "—")}</button></td>
+              <td dir="auto">${esc(claim.statement)}</td>
+              <td dir="auto">${esc(claim.made_by || "—")}</td>
+              <td dir="auto">${esc((claim.amounts || []).join(", ") || "—")}</td>
+            </tr>`).join("")}</tbody>
+        </table>
       </div>
     </details>`;
-
-  const proposalBox = (item) => item.proposal ? `
-    <div class="bsf-fact-proposal">
-      <div class="bsf-review-label">${esc(t("fact_proposal_heading"))}</div>
-      <div class="bsf-caption">“${esc(item.proposal.explanation || "")}”</div>
-      ${item.proposal.summary ? `<div><strong>${esc(item.proposal.summary)}</strong></div>` : ""}
-      ${factFieldsTable(item.proposal.fields || {}, true)}
-      <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-accept-proposal" data-row-id="${esc(item.row_id)}">
-        ${esc(t("fact_accept_proposal"))}
-      </button>
-    </div>` : "";
-
-  const card = (item) => {
-    const review = item.review || {};
-    const check = (item.calculation && item.calculation.check) || null;
-    return `
-      <details class="bsf-expander bsf-review-item" open>
-        <summary>${esc(t("fact_item_title", {
-          page: item.page_label || `${t("page_label")} ${item.page_number || "—"}`,
-          type: factTypeLabel(item.fact.fact_type),
-        }))}</summary>
-        <div class="bsf-expander-body">
-          <div class="bsf-review-grid">
-            <div>
-              <div class="bsf-review-label">${esc(t("fact_ai_interpretation"))}</div>
-              ${factFieldsTable(item.fact, true)}
-              ${review.question ? `<div class="bsf-kv"><strong>${esc(t("fact_question"))}:</strong> ${esc(review.question)}</div>` : ""}
-              ${review.suggestion ? `<div class="bsf-kv"><strong>${esc(t("review_suggestion"))}:</strong> ${esc(review.suggestion)}</div>` : ""}
-              ${review.reason ? `<div class="bsf-kv"><strong>${esc(t("review_reasoning"))}:</strong> ${esc(review.reason)}</div>` : ""}
-              ${(review.alternatives || []).length ? `<div class="bsf-kv"><strong>${esc(t("fact_alternatives"))}:</strong>
-                ${review.alternatives.map((alt) => badge(factTypeLabel(alt), "neutral")).join(" ")}</div>` : ""}
-              ${check && !check.ok ? alertBox(`${t("fact_calc_failed")}: ${check.message || ""}`, "warn") : ""}
-              ${item.source_text ? `
-                <div class="bsf-review-label">${esc(t("review_row_as_printed"))}</div>
-                <pre class="bsf-source-text">${esc(item.source_text)}</pre>` : ""}
-              ${item.page_excerpt ? `
-                <div class="bsf-review-label">${esc(t("review_page_excerpt"))}</div>
-                <pre class="bsf-source-text">${esc(item.page_excerpt)}</pre>` : ""}
-            </div>
-            <div>
-              ${item.page_image_url ? `
-                <button type="button" class="bsf-review-image" data-action="view-page" data-page-id="${esc(item.page_id)}">
-                  <img src="${esc(backendUrl(item.page_image_url))}" alt="${esc(item.page_label || "")}" loading="lazy">
-                </button>` : ""}
-            </div>
-          </div>
-          ${proposalBox(item)}
-          <div class="bsf-fact-actions">
-            <button type="button" class="bsf-btn bsf-btn-primary" data-action="fact-confirm" data-row-id="${esc(item.row_id)}">
-              ${esc(t("fact_confirm"))}
-            </button>
-            ${correctForm(item)}
-            <button type="button" class="bsf-btn" data-action="fact-ignore" data-row-id="${esc(item.row_id)}">
-              ${esc(t("fact_ignore"))}
-            </button>
-          </div>
-          <div class="bsf-fact-explain">
-            <label class="bsf-field">
-              <span>${esc(t("fact_explain_label"))}</span>
-              <textarea class="bsf-input" rows="2" data-fact-explanation
-                        placeholder="${esc(t("fact_explain_placeholder"))}"></textarea>
-            </label>
-            <button type="button" class="bsf-btn" data-action="fact-explain" data-row-id="${esc(item.row_id)}">
-              ${esc(t("fact_apply_explanation"))}
-            </button>
-          </div>
-        </div>
-      </details>`;
-  };
-
-  html(target, `
-    <h4 class="bsf-subsection">${esc(t("fact_review_heading"))}</h4>
-    ${alertBox(t("fact_review_count", { count: items.length }), "warn")}
-    ${items.map(card).join("")}`);
 }
 
-function renderAccountingLedger(ledger, hasLineItems, hasPendingReview, withheld) {
-  const target = region("accounting-ledger");
-  if (!target) return;
+function scrollToCurrentRows() {
+  const box = region("review-table-scroll");
+  if (!box) return;
+  const first = box.querySelector("tr.is-current");
+  if (!first) return;
+  const head = box.querySelector("thead");
+  box.scrollTop = Math.max(0, first.offsetTop - (head ? head.offsetHeight : 0) - 4);
+}
 
-  // The ledger only holds facts with a final status; uncertain ones wait
-  // for the user and are counted here instead of shown.
-  const withheldNote = withheld ? alertBox(t("ledger_withheld", { count: withheld }), "info") : "";
-  if (!hasLineItems || !ledger.length) {
-    html(target, withheldNote || `<p class="bsf-caption">${esc(t("no_line_items"))}</p>`);
-    return;
+async function loadPageExtraction(pageId) {
+  const target = region("review-extraction");
+  if (!target || !pageId) return;
+  S.pageExtractions = S.pageExtractions || {};
+  let record = S.pageExtractions[pageId];
+  if (!record) {
+    html(target, `<p class="bsf-caption">${esc(t("loading"))}</p>`);
+    try {
+      record = await apiGet("/accounting/page_extraction", { case_id: S.caseId, page_id: pageId });
+      S.pageExtractions[pageId] = record;
+    } catch (error) {
+      html(target, alertBox(t("request_failed", { error: error.message }), "flag"));
+      return;
+    }
   }
-
-  const cell = (value) => esc(value === null || value === undefined || value === "" ? "—" : value);
+  if (region("review-extraction") !== target) return;
+  const routeKey = { native: "review_route_native", "native+vlm": "review_route_mixed", vlm: "review_route_vlm" }[record.route];
   html(target, `
-    ${withheldNote}
-    <div class="bsf-table-scroll">
-    <table class="bsf-table bsf-fact-ledger">
-      <thead>
-        <tr>
-          <th>${esc(t("column_page"))}</th>
-          <th>${esc(t("column_fin_date"))}</th>
-          <th>${esc(t("column_fact_type"))}</th>
-          <th>${esc(t("column_description"))}</th>
-          <th>${esc(t("column_value"))}</th>
-          <th>${esc(t("column_debit"))}</th>
-          <th>${esc(t("column_credit"))}</th>
-          <th>${esc(t("column_balance"))}</th>
-          <th>${esc(t("column_currency"))}</th>
-          <th>${esc(t("column_reference"))}</th>
-          <th>${esc(t("column_row_status"))}</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${ledger.map((item) => `
-          <tr>
-            <td>${cell(item.page_number)}</td>
-            <td>${cell(item.date)}</td>
-            <td>${esc(factTypeLabel(item.fact_type))}</td>
-            <td>${cell(item.description)}${item.user_note ? `<div class="bsf-caption">${esc(t("ledger_note", { note: item.user_note }))}</div>` : ""}</td>
-            <td>${cell(item.value)}${item.value_field && item.value_field !== "amount" ? `<div class="bsf-caption">${esc(t(`field_${item.value_field}`))}</div>` : ""}</td>
-            <td>${cell(item.debit)}</td>
-            <td>${cell(item.credit)}</td>
-            <td>${cell(item.balance)}</td>
-            <td>${cell(item.currency)}</td>
-            <td>${cell(item.transaction_reference || item.counterparty)}</td>
-            <td>${factStatusBadge(item.status)}</td>
-          </tr>`).join("")}
-      </tbody>
-    </table>
-    </div>`);
+    <div class="bsf-fr-meta">
+      ${routeKey ? badge(t(routeKey), "neutral") : ""}
+      ${(record.regions || []).map((r) => badge(`${t(`review_kind_${r.kind}`)}${(r.flags || []).length
+        ? " · " + r.flags.map((flag) => t(`review_flag_${flag}`)).join(", ") : ""}`, "neutral")).join(" ")}
+      ${(record.candidates || []).length ? `<span class="bsf-caption">${esc(t("review_candidates", { names: record.candidates.join(", ") }))}</span>` : ""}
+    </div>
+    ${record.note ? `<p class="bsf-caption">${esc(record.note)}</p>` : ""}
+    ${(record.uncertain || []).length ? `
+      <div class="bsf-review-label">${esc(t("review_extraction_uncertain"))}</div>
+      <ul class="bsf-fr-uncertain">${record.uncertain.map((u) => `<li dir="auto"><strong>${esc(u.value || "")}</strong>
+        ${(u.readings || []).length ? ` — ${esc(u.readings.join(" | "))}` : ""}${u.reason ? ` <span class="bsf-caption">(${esc(u.reason)})</span>` : ""}</li>`).join("")}</ul>` : ""}
+    <div class="bsf-review-label">${esc(t("review_extracted_text"))}</div>
+    <div class="bsf-fr-text" dir="auto">${renderExtractionMarkdown(record.final_text || "")}</div>
+    ${(record.errors || []).length ? `<details><summary class="bsf-caption">${esc(t("review_extraction_errors", { count: record.errors.length }))}</summary>
+      <pre>${esc(record.errors.join("\n"))}</pre></details>` : ""}`);
+}
+
+function goToReviewPage(pageId) {
+  if (!pageId) return;
+  S.reviewPageId = pageId;
+  rememberReviewPage(pageId);
+  renderFactReview();
+}
+
+/* Edits are saved one at a time, in order; the table is updated from the
+   server's answer, the stage strip after the user pauses. */
+let factSaveQueue = Promise.resolve();
+let reviewRefreshTimer = null;
+
+function scheduleReviewRefresh() {
+  clearTimeout(reviewRefreshTimer);
+  reviewRefreshTimer = setTimeout(() => refreshCase(), 1500);
+}
+
+function saveFactChange(path, body) {
+  factSaveQueue = factSaveQueue.then(async () => {
+    try {
+      const saved = await apiPost(path, Object.assign({ case_id: S.caseId }, body));
+      if (saved.facts_table && S.snapshot && S.snapshot.accounting) {
+        S.snapshot.accounting.facts_table = saved.facts_table;
+        if (typeof saved.facts_confirmed === "boolean") S.snapshot.accounting.facts_confirmed = saved.facts_confirmed;
+      }
+      renderFactReview();
+      scheduleReviewRefresh();
+      return saved;
+    } catch (error) {
+      fail(error);
+      renderFactReview();
+      return null;
+    }
+  });
+  return factSaveQueue;
+}
+
+function startCellEdit(cell) {
+  if (cell.querySelector("input, select")) return;
+  const rowId = cell.dataset.rowId;
+  const field = cell.dataset.field;
+  const fact = (reviewState().facts || []).find((item) => item.row_id === rowId);
+  if (!fact) return;
+  const value = fact[field] === null || fact[field] === undefined ? "" : String(fact[field]);
+  const control = field === "fact_type"
+    ? Object.assign(document.createElement("select"), {
+        innerHTML: FACT_TYPE_OPTIONS.map((type) => `<option value="${type}" ${type === value ? "selected" : ""}>${esc(factTypeLabel(type))}</option>`).join(""),
+      })
+    : Object.assign(document.createElement("input"), { value, dir: "auto" });
+  control.className = "bsf-input bsf-fr-input";
+  if (FACT_AMOUNT_FIELDS.includes(field)) control.inputMode = "decimal";
+  cell.textContent = "";
+  cell.appendChild(control);
+  control.focus();
+  if (control.select) control.select();
+
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    const next = control.value.trim();
+    if (!save || next === value) { renderFactReview(); return; }
+    cell.classList.add("is-saving");
+    saveFactChange("/accounting/fact/update", { row_id: rowId, fields: { [field]: next } });
+  };
+  control.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); finish(true); }
+    else if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }
+  });
+  control.addEventListener("blur", () => finish(true));
+  if (field === "fact_type") control.addEventListener("change", () => finish(true));
 }
 
 function renderAccountingCrossCheck(summary) {
@@ -2800,9 +3450,6 @@ function renderReviewTab() {
     ${exposureMarkup(summary)}
     ${partiesMarkup(support)}
     ${chronologyMarkup(support)}
-    ${evidenceMarkup(support)}
-    ${contradictionsMarkup(summary)}
-    ${alertsMarkup(summary)}
 
     <hr class="bsf-divider">
     <form data-form="approve-summary">
@@ -2952,70 +3599,6 @@ function chronologyBasis(item) {
   return t("basis_dated_source");
 }
 
-function evidenceMarkup(support) {
-  const rows = support.ordered_evidence || [];
-  return `
-    <details class="bsf-expander">
-      <summary>${esc(t("available_evidence"))}</summary>
-      <div class="bsf-expander-body">
-        ${rows.length ? `
-          <table class="bsf-table">
-            <thead><tr>
-              <th>${esc(t("column_evidence"))}</th><th>${esc(t("column_relevance"))}</th>
-              <th>${esc(t("column_limitations"))}</th><th>${esc(t("column_original_pages"))}</th>
-            </tr></thead>
-            <tbody>${rows.map(({ item, page_ids, page_labels }) => `
-              <tr>
-                <td>${esc(item.evidence || item.title || "")}</td>
-                <td>${esc(item.relevance || "")}</td>
-                <td>${esc(item.limitations || item.limitation || "")}</td>
-                <td>${sourceLinks(page_ids, page_labels)}</td>
-              </tr>`).join("")}</tbody>
-          </table>` : `<p class="bsf-caption">${esc(t("no_evidence_recorded"))}</p>`}
-      </div>
-    </details>`;
-}
-
-function contradictionsMarkup(summary) {
-  const ar = isRTL();
-  const rows = summary.legal_contradictions || [];
-  return `
-    <details class="bsf-expander">
-      <summary>${esc(t("material_contradictions"))}</summary>
-      <div class="bsf-expander-body">
-        ${rows.length ? rows.slice(0, 10).map((item, index) => {
-          const issue = ar ? item.issue_ar : item.issue_en;
-          const relevance = ar ? item.legal_relevance_ar : item.legal_relevance_en;
-          if (!issue) return "";
-          return `<div class="bsf-issue">
-            <h4>${index + 1}. ${esc(issue)}</h4>
-            ${relevance ? `<div class="bsf-kv">${esc(relevance)}</div>` : ""}
-            <p class="bsf-caption">${esc(t("impact_level"))}${esc(severityLabel(item.impact))}</p>
-          </div>`;
-        }).join("") : `<p class="bsf-caption">${esc(t("no_material_contradiction"))}</p>`}
-        <p class="bsf-caption">${esc(t("contradiction_caption"))}</p>
-      </div>
-    </details>`;
-}
-
-function alertsMarkup(summary) {
-  const ar = isRTL();
-  const rows = summary.source_verification_alerts || [];
-  return `
-    <details class="bsf-expander">
-      <summary>${esc(t("source_verification_alerts"))}</summary>
-      <div class="bsf-expander-body">
-        ${rows.length ? rows.slice(0, 12).map((item, index) => {
-          const alert = ar ? item.alert_ar : item.alert_en;
-          const reason = ar ? item.reason_ar : item.reason_en;
-          if (!alert) return "";
-          return `<div class="bsf-item"><strong>${index + 1}. ${esc(alert)}</strong>
-            ${reason ? `<div class="bsf-kv">${esc(reason)}</div>` : ""}</div>`;
-        }).join("") : `<p class="bsf-caption">${esc(t("no_verification_alerts"))}</p>`}
-      </div>
-    </details>`;
-}
-
 /* ============================================================
    Legal analysis tab
    ============================================================ */
@@ -3040,37 +3623,54 @@ function renderAnalysisTab() {
       </div>
       <p class="bsf-caption">${esc(t("source_policy_kb_only"))}</p>
       <div>${renderMarkdown(analysis.executive_summary || "")}</div>
-      ${(analysis.issues || []).map((item) => `
-        <div class="bsf-issue">
-          <h4>${esc(item.issue_title || "")}</h4>
-          ${(item.applicable_rules || []).length
-            ? `<div class="bsf-kv"><strong>${esc(t("kb_rules"))}</strong></div>
-               <ul>${item.applicable_rules.map((rule) => `
-                 <li>${esc(rule.proposition || "")} <code>[${esc((rule.node_ids || []).join(", "))}]</code></li>`).join("")}</ul>`
-            : alertBox(t("no_citable_rule"), "warn")}
-          <div class="bsf-kv"><strong>${esc(t("our_position"))}</strong> ${esc(item.our_position || "")}</div>
-          <div class="bsf-kv"><strong>${esc(t("opponent_position"))}</strong> ${esc(item.opponent_position || "")}</div>
-          <div class="bsf-kv"><strong>${esc(t("response_label"))}</strong> ${esc(item.response || "")}</div>
-          <div class="bsf-kv"><strong>${esc(t("conclusion_label"))}</strong> ${conclusionBadge(item.conclusion)}</div>
-          <div class="bsf-kv"><strong>${esc(t("residual_risk_label"))}</strong> ${esc(item.residual_risk || "")}</div>
-        </div>`).join("")}
+      ${analysisIssuesMarkup(analysis.issues || [])}
 
       <div class="bsf-btn-row">
-        <button type="button" class="bsf-btn" data-action="defence-plan"
-                ${state.summary_approved ? "" : "disabled"}>${esc(t("develop_defence_plan"))}</button>
-      </div>
-      ${state.summary_approved ? "" : `<p class="bsf-caption">${esc(t("defence_plan_locked"))}</p>`}`);
+        <button type="button" class="bsf-btn bsf-btn-primary" data-action="goto-stage" data-stage="pleading">
+          ${esc(t("continue_to_written_pleading"))}</button>
+      </div>`);
   }
+}
 
-  const strategy = state.strategy;
-  const strategyBody = region("strategy-body");
-  if (!strategy) { html(strategyBody, ""); return; }
-  html(strategyBody, `
-    <h3 class="bsf-section-title">${esc(t("defence_structure"))}</h3>
-    <div>${renderMarkdown((strategy.primary_theory || {}).description || "")}</div>
-    <ul>${(strategy.actions || []).map((action) => `
-      <li><strong>${esc(action.action_type || t("action_fallback"))}</strong> — ${esc(action.description || "")}
-        (${esc(t("priority_label", { value: action.priority || "medium" }))})</li>`).join("")}</ul>`);
+/* Issues backed by at least one retrieved authority node are shown in
+   full; the others are listed together, stating that no knowledge-base
+   text supports them. */
+function issueHasAuthority(item) {
+  if (item && Object.prototype.hasOwnProperty.call(item, "has_authority")) return Boolean(item.has_authority);
+  return (item.applicable_rules || []).some((rule) => (rule.node_ids || []).length);
+}
+
+function analysisIssuesMarkup(issues) {
+  const failed = issues.filter((item) => item && item.analysis_failed);
+  const analysed = issues.filter((item) => !(item && item.analysis_failed));
+  const supported = analysed.filter(issueHasAuthority);
+  const unsupported = analysed.filter((item) => !issueHasAuthority(item));
+  return `
+    ${supported.map((item) => `
+      <div class="bsf-issue">
+        <h4>${esc(item.issue_title || "")}</h4>
+        <div class="bsf-kv"><strong>${esc(t("kb_rules"))}</strong></div>
+        <ul>${item.applicable_rules.filter((rule) => (rule.node_ids || []).length).map((rule) => `
+          <li>${esc(rule.proposition || "")} <code>[${esc((rule.node_ids || []).join(", "))}]</code></li>`).join("")}</ul>
+        <div class="bsf-kv"><strong>${esc(t("our_position"))}</strong> ${esc(item.our_position || "")}</div>
+        <div class="bsf-kv"><strong>${esc(t("opponent_position"))}</strong> ${esc(item.opponent_position || "")}</div>
+        <div class="bsf-kv"><strong>${esc(t("response_label"))}</strong> ${esc(item.response || "")}</div>
+        <div class="bsf-kv"><strong>${esc(t("conclusion_label"))}</strong> ${conclusionBadge(item.conclusion)}</div>
+        <div class="bsf-kv"><strong>${esc(t("residual_risk_label"))}</strong> ${esc(item.residual_risk || "")}</div>
+      </div>`).join("")}
+    ${!supported.length ? alertBox(t("no_issue_with_authority"), "info") : ""}
+    ${unsupported.length ? `
+      <div class="bsf-issue bsf-issue-unsupported">
+        <h4>${esc(t("issues_without_authority", { count: unsupported.length }))}</h4>
+        <p class="bsf-caption">${esc(t("issues_without_authority_note"))}</p>
+        <ul>${unsupported.map((item) => `<li>${esc(item.issue_title || "")}</li>`).join("")}</ul>
+      </div>` : ""}
+    ${failed.length ? `
+      <div class="bsf-issue bsf-issue-unsupported">
+        <h4>${esc(t("issues_not_analysed", { count: failed.length }))}</h4>
+        <p class="bsf-caption">${esc(t("issues_not_analysed_note"))}</p>
+        <ul>${failed.map((item) => `<li>${esc(item.issue_title || "")}</li>`).join("")}</ul>
+      </div>` : ""}`;
 }
 
 function conclusionBadge(value) {
@@ -3104,12 +3704,9 @@ const accountingReady = [
   "complete_no_transactions",
 ].includes(accountingStatus);
 
-const canDraft =
-  state.summary_approved &&
-  state.attorney_summary &&
-  legalAnalysisReady &&
-  accountingReady &&
-  !state.case_dirty;
+// The pleading is drafted from the legal analysis and the accounting
+// analysis (the backend checks the attorney-review gate as configured).
+const canDraft = legalAnalysisReady && accountingReady;
 
 const generate = document.querySelector(
   '[data-action="generate-pleading"]'
@@ -3127,23 +3724,7 @@ if (canDraft) {
 
 } else {
 
-  let reason = t("block_not_approved");
-
-  if (state.case_dirty) {
-    reason = t("block_case_dirty");
-
-  } else if (!state.attorney_summary) {
-    reason = t("block_no_summary");
-
-  } else if (!state.summary_approved) {
-    reason = t("block_not_approved");
-
-  } else if (!legalAnalysisReady) {
-    reason = t("block_no_legal_analysis");
-
-  } else if (!accountingReady) {
-    reason = t("block_accounting_incomplete");
-  }
+  const reason = !legalAnalysisReady ? t("block_no_legal_analysis") : t("block_accounting_incomplete");
 
   html(
     locked,
@@ -3153,22 +3734,29 @@ if (canDraft) {
   );
 }
 
+  const languageSelect = $("#pleading-language");
+  if (languageSelect) languageSelect.value = preferredPleadingLanguage();
+
   const body = region("pleading-body");
   if (!memo) { html(body, ""); return; }
 
-  const lang = S.lang;
-  const downloadKey = lang === "ar" ? "download_arabic_pleading" : "download_english_pleading";
+  // The pleading is drafted in one language, chosen before generating.
+  const lang = pleadingLanguage(memo);
+  const langs = [lang];
 
   html(body, `
-    <div class="bsf-pleading-body ${lang === "ar" ? "arabic-block" : "english-block"}"
-         data-region="pleading-markdown">${esc(t("loading"))}</div>
-
     <div class="bsf-btn-row">
-      <button type="button" class="bsf-btn" data-action="download" data-fmt="md" data-lang="${lang}">
-        ${esc(t(downloadKey))}</button>
+      ${langs.map((l) => `<button type="button" class="bsf-btn" data-action="download" data-fmt="md" data-lang="${l}">
+        ${esc(t(l === "ar" ? "download_arabic_pleading" : "download_english_pleading"))}</button>`).join("")}
       <button type="button" class="bsf-btn" data-action="download" data-fmt="docx" data-lang="${lang}">
-        ${esc(t("download_combined_pleading"))}</button>
+        ${esc(t("download_pleading_docx"))}</button>
     </div>
+
+    ${langs.map((l) => `
+    ${langs.length > 1 ? `<h3 class="bsf-section-title">${esc(l === "ar" ? "النسخة العربية" : "English version")}</h3>` : ""}
+    <div class="bsf-pleading-body ${l === "ar" ? "arabic-block" : "english-block"}"
+         dir="${l === "ar" ? "rtl" : "ltr"}" lang="${l}"
+         data-region="pleading-markdown-${l}">${esc(t("loading"))}</div>`).join("")}
 
     <details class="bsf-expander">
       <summary>${esc(t("attorney_checks"))}</summary>
@@ -3213,11 +3801,11 @@ if (canDraft) {
               ${state.pleading_status === "final" ? "disabled" : ""}>${esc(t("mark_final"))}</button>
     </form>`);
 
-  loadPleadingMarkdown(lang);
+  langs.forEach((l) => loadPleadingMarkdown(l));
 }
 
 async function loadPleadingMarkdown(lang) {
-  const target = region("pleading-markdown");
+  const target = region(`pleading-markdown-${lang}`);
   if (!target) return;
   try {
     // Rendered from the backend's own memo_to_markdown so the document on
@@ -3227,6 +3815,25 @@ async function loadPleadingMarkdown(lang) {
   } catch (error) {
     html(target, alertBox(t("request_failed", { error: error.message }), "flag"));
   }
+}
+
+/* Language a stored pleading was drafted in (older pleadings held both
+   languages and follow the interface language). */
+function pleadingLanguage(memo) {
+  if (memo && (memo.language === "ar" || memo.language === "en")) return memo.language;
+  if (memo && memo.pleading_en && memo.pleading_ar) return S.lang;
+  return memo && memo.pleading_ar && !memo.pleading_en ? "ar" : "en";
+}
+
+/* Language the next pleading is drafted in: the one picked on the tab
+   (saved with the case), else the case's preferred language. */
+function preferredPleadingLanguage() {
+  const state = (S.snapshot && S.snapshot.workflow_state) || {};
+  const preferred = String(((S.snapshot && S.snapshot.case) || {}).preferred_language || "").toLowerCase();
+  if (S.pleadingLang) return S.pleadingLang;
+  if (state.pleading_language === "ar" || state.pleading_language === "en") return state.pleading_language;
+  if (preferred === "ar" || preferred === "en") return preferred;
+  return state.memo ? pleadingLanguage(state.memo) : S.lang;
 }
 
 function versionHistoryMarkup(versions) {
@@ -3253,8 +3860,8 @@ function versionHistoryMarkup(versions) {
           <summary>${esc(t("compare_with_current"))}</summary>
           <div class="bsf-expander-body">
             <p class="bsf-caption">${esc(t("redline_caption", { old: selected, new: current.version }))}</p>
-            <div class="bsf-diff ${isRTL() ? "arabic-block" : "english-block"}">
-              ${renderDiff(memoPlainText(chosen.draft, S.lang), memoPlainText(current.draft, S.lang))}
+            <div class="bsf-diff ${pleadingLanguage(current.draft) === "ar" ? "arabic-block" : "english-block"}">
+              ${renderDiff(memoPlainText(chosen.draft, pleadingLanguage(current.draft)), memoPlainText(current.draft, pleadingLanguage(current.draft)))}
             </div>
           </div>
         </details>` : ""}
@@ -3517,6 +4124,10 @@ function renderAgreementReviewTab(state) {
   const negotiation = review.negotiation_position || {};
 
   html(body, `
+    ${contractDocumentMarkup(state)}
+
+    <details class="bsf-review-details">
+    <summary>${esc(t("review_details"))}</summary>
     <div class="bilingual-panel ${ar ? "arabic-block" : "english-block"}">
       ${renderMarkdown((ar ? review.executive_summary_ar : review.executive_summary_en) || "")}
     </div>
@@ -3537,7 +4148,8 @@ function renderAgreementReviewTab(state) {
     ${(review.clause_reviews || []).map(clauseReviewMarkup).join("")}
 
     <h4 class="bsf-subsection">${esc(t("negotiation_prep"))}</h4>
-    ${negotiationMarkup(negotiation)}`);
+    ${negotiationMarkup(negotiation)}
+    </details>`);
 }
 
 function clauseReviewMarkup(item) {
@@ -3564,8 +4176,11 @@ function clauseReviewMarkup(item) {
         ? alertBox(t("missing_dependencies_provisional") + " " + item.missing_dependencies.join("; "), "warn") : ""}
       ${(item.affected_related_clause_ids || []).length
         ? `<p class="bsf-caption">${esc(t("also_affects_clauses"))} ${esc(item.affected_related_clause_ids.join(", "))}</p>` : ""}
+      ${(item.edits || []).length ? `
+        <div class="bsf-kv"><strong>${esc(t("proposed_changes"))}</strong></div>
+        <ul class="bsf-mk-list">${item.edits.map((edit) => `<li>${editMarkup(edit)}</li>`).join("")}</ul>` : `
       ${change ? `<div class="bsf-kv"><strong>${esc(t("recommended_action"))}</strong> ${esc(change)}</div>` : ""}
-      ${wording ? `<div class="bilingual-panel ${ar ? "arabic-block" : "english-block"}">${esc(wording)}</div>` : ""}
+      ${wording ? `<div class="bilingual-panel ${ar ? "arabic-block" : "english-block"}">${esc(wording)}</div>` : ""}`}
       ${question ? alertBox(t("question_for_client", { question }), "info") : ""}
       <p class="bsf-caption">${esc(t("kb_authority_ids"))}
         ${esc((item.authority_node_ids || []).join(", ") || t("none_retrieved"))}</p>
@@ -3580,6 +4195,114 @@ function clauseReviewMarkup(item) {
         ${flagControls("agreement_clause", item.clause_id)}
       </div>
     </div>`;
+}
+
+/* One wording change: the words to change in red, an arrow, and how they
+   should read in green (delete: struck out; add: the new words only). */
+const ARABIC_RE = /[\u0600-\u06FF]/;
+
+function editArrow(text) { return ARABIC_RE.test(text || "") ? "\u2190" : "\u2192"; }
+
+function editReason(edit) {
+  return (isRTL() ? (edit.reason_ar || edit.reason_en) : (edit.reason_en || edit.reason_ar)) || "";
+}
+
+function editNew(edit) {
+  const arrow = editArrow(edit.original || edit.replacement);
+  if (edit.type === "delete") {
+    return `<span class="bsf-mk-arrow">${arrow}</span><span class="bsf-mk-del">${esc(t("marked_delete"))}</span>`;
+  }
+  return `<span class="bsf-mk-arrow">${arrow}</span><span class="bsf-mk-new">${edit.type === "add" ? "+ " : ""}${esc(edit.replacement || "")}</span>`;
+}
+
+function editMarkup(edit) {
+  if (edit.type === "advice") {
+    return `<span class="bsf-mk-advice" dir="auto">${esc(edit.replacement || "")}</span>
+      ${editReason(edit) ? `<div class="bsf-caption">${esc(editReason(edit))}</div>` : ""}`;
+  }
+  const old = edit.type === "add" ? "" : `<span class="bsf-mk-old${edit.type === "delete" ? " is-deleted" : ""}">${esc(edit.original || "")}</span>`;
+  const reason = editReason(edit);
+  return `<span class="bsf-mk" dir="auto" title="${esc(reason)}">${old}${editNew(edit)}</span>
+    ${reason ? `<div class="bsf-caption">${esc(reason)}</div>` : ""}`;
+}
+
+/* The contract as one document (agreement_markup.contract_document):
+   headings, paragraphs, lists and tables from the extracted text, each
+   proposed change in place - the wording to change in red, struck
+   through, the proposed wording in green right after it. */
+function contractDocumentMarkup(state) {
+  const contract = state.contract;
+  if (!contract || !(contract.blocks || []).length) return "";
+  const edits = contract.edits || {};
+  const change = (edit, inner) => `<span class="bsf-ct-change" title="${esc(editReason(edit))}">${inner}</span>`;
+  const proposed = (edit) => edit.type === "delete" ? ""
+    : `<ins class="bsf-ct-new">${esc(edit.replacement || "")}</ins>`;
+  const run = (item) => {
+    const edit = edits[item.edit_id];
+    if (item.kind === "text" || !edit) return esc(item.text || "");
+    if (item.kind === "insert") return " " + change(edit, proposed(edit));
+    const old = `<del class="bsf-ct-old">${esc(item.text || "")}</del>`;
+    return change(edit, item.last && edit.type !== "delete" ? `${old} ${proposed(edit)}` : old);
+  };
+  const runs = (list) => (list || []).map(run).join("");
+  const table = (block) => `
+    <div class="bsf-table-scroll"><table class="bsf-table bsf-ct-table">${(block.rows || []).map((row) => `
+      <tr>${(row.cells || []).map((cell) => row.header
+        ? `<th dir="auto">${runs(cell)}</th>` : `<td dir="auto">${runs(cell)}</td>`).join("")}</tr>`).join("")}
+    </table></div>`;
+
+  const parts = [];
+  let items = [];
+  const flush = () => { if (items.length) { parts.push(`<ul class="bsf-ct-list">${items.join("")}</ul>`); items = []; } };
+  (contract.blocks || []).forEach((block) => {
+    if (block.type === "item") { items.push(`<li dir="auto">${runs(block.runs)}</li>`); return; }
+    flush();
+    if (block.type === "document") parts.push(`<h2 class="bsf-ct-file">${esc(block.text || "")}</h2>`);
+    else if (block.type === "page") parts.push(`<div class="bsf-ct-page"><span>${esc(t("contract_page", { page: block.page_number }))}</span></div>`);
+    else if (block.type === "heading") {
+      const tag = block.level === 1 ? "h2" : (block.level === 2 ? "h3" : "h4");
+      parts.push(`<${tag} class="bsf-ct-h${block.level || 2}" dir="auto">${runs(block.runs)}</${tag}>`);
+    } else if (block.type === "table") parts.push(table(block));
+    else parts.push(`<p dir="auto">${runs(block.runs)}</p>`);
+  });
+  flush();
+
+  const sample = (contract.blocks || []).slice(0, 40).map((b) => (b.runs || []).map((r) => r.text || "").join("")).join(" ");
+  const direction = ARABIC_RE.test(sample) && (sample.match(/[؀-ۿ]/g) || []).length * 2
+    >= (sample.match(/[A-Za-z؀-ۿ]/g) || []).length ? "rtl" : "ltr";
+  const unplacedAll = (contract.unplaced || []).map((id) => edits[id]).filter(Boolean);
+  const unplaced = unplacedAll.filter((edit) => edit.type !== "advice");
+  const advice = unplacedAll.filter((edit) => edit.type === "advice");
+  const clauseLabel = (edit) => [t("clause"), edit.clause_number || edit.clause_id || ""].join(" ").trim();
+  return `
+    <div class="bsf-ct-bar">
+      <div>
+        <h4 class="bsf-subsection">${esc(t("contract_with_changes"))}</h4>
+        <p class="bsf-caption">${esc(t("contract_changes_caption", { count: contract.changes || 0 }))}
+          <span class="bsf-ct-legend"><del class="bsf-ct-old">${esc(t("contract_legend_old"))}</del>
+          <ins class="bsf-ct-new">${esc(t("contract_legend_new"))}</ins></span></p>
+      </div>
+      <div class="bsf-ct-actions">
+        <button type="button" class="bsf-btn bsf-btn-primary" data-action="download-contract-docx">${esc(t("download_contract_docx"))}</button>
+        <div class="bsf-caption">${esc(t("contract_docx_note"))}</div>
+      </div>
+    </div>
+    ${state.has_edits ? "" : alertBox(t("contract_no_edits"), "info")}
+    <article class="bsf-ct-paper" dir="${direction}">${parts.join("")}</article>
+    ${unplaced.length ? `
+      <div class="bsf-ct-other">
+        <h4 class="bsf-subsection">${esc(t("contract_other_changes"))}</h4>
+        <p class="bsf-caption">${esc(t("contract_other_caption"))}</p>
+        <ul class="bsf-mk-list">${unplaced.map((edit) => `
+          <li><strong>${esc(clauseLabel(edit))}</strong> ${editMarkup(edit)}</li>`).join("")}</ul>
+      </div>` : ""}
+    ${advice.length ? `
+      <div class="bsf-ct-other">
+        <h4 class="bsf-subsection">${esc(t("contract_advice"))}</h4>
+        <p class="bsf-caption">${esc(t("contract_advice_caption"))}</p>
+        <ul class="bsf-mk-list">${advice.map((edit) => `
+          <li><strong>${esc(clauseLabel(edit))}</strong> ${editMarkup(edit)}</li>`).join("")}</ul>
+      </div>` : ""}`;
 }
 
 function negotiationMarkup(negotiation) {
@@ -3662,35 +4385,22 @@ function closeModal() {
 /* ============================================================
    Action handlers, wired through one delegated click listener.
    ============================================================ */
-/* Save the user's decision on one uncertain fact. When it was the last one,
-   continue the accounting analysis from where it stopped, with the
-   instructions on screen (or the ones last used). */
-async function resolveFact(el, body) {
-  let saved;
-  el.disabled = true;
-  try {
-    saved = await apiPost("/accounting/fact/resolve", Object.assign({ case_id: S.caseId, row_id: el.dataset.rowId }, body));
-    toast(t("fact_saved"), "ok");
-  } catch (error) {
-    el.disabled = false;
-    fail(error);
-    return;
-  }
-  if (saved.ready_for_analysis) {
-    const box = $("#accounting-instructions");
-    const instructions = (box && box.value.trim()) || saved.instructions || "";
-    toast(t("accounting_continue_auto"), "ok");
-    await refreshCase();
-    await ACTIONS["accounting-synthesize"](null, instructions);
-    return;
-  }
-  await refreshCase();
-}
-
 const ACTIONS = {
   "open-case": (el) => openCase(el.dataset.caseId),
 
   "back-to-library": () => backToLibrary(),
+
+  "new-case": (el) => openNewCaseForm(el.dataset.workflow || "litigation"),
+
+  "archive-case": async (el) => {
+    const archive = el.dataset.archived === "1";
+    if (archive && !window.confirm(t("archive_confirm"))) return;
+    try {
+      await apiPost("/case/archive", { case_id: el.dataset.caseId, archived: archive });
+      toast(t(archive ? "case_archived" : "case_restored"), "ok");
+      await loadCases();
+    } catch (error) { fail(error); }
+  },
 
   "close-modal": () => closeModal(),
 
@@ -3738,20 +4448,12 @@ const ACTIONS = {
     }
   },
 
-  "defence-plan": async () => {
-    try {
-      await runJob(apiPost("/analysis/defence_plan", { case_id: S.caseId }), "analysis-job");
-      await refreshCase();
-    } catch (error) {
-      await refreshCase();
-      html(region("strategy-body"), alertBox(t("defence_planning_failed", { error: error.message }), "flag"));
-    }
-  },
 
   "generate-pleading": async () => {
     const instructions = ($("#pleading-instructions") || {}).value || "";
     try {
-      await runJob(apiPost("/pleading/generate", { case_id: S.caseId, instructions }), "pleading-job");
+      const language = ($("#pleading-language") || {}).value || preferredPleadingLanguage();
+      await runJob(apiPost("/pleading/generate", { case_id: S.caseId, instructions, language }), "pleading-job");
       await refreshCase();
     } catch (error) {
       await refreshCase();
@@ -3774,6 +4476,13 @@ const ACTIONS = {
       S.compareVersion = null;
       await refreshCase();
     } catch (error) { fail(error); }
+  },
+
+  "download-contract-docx": () => {
+    const url = backendUrl("/agreement/review_docx") + "?" + new URLSearchParams({
+      case_id: S.caseId, lang: isRTL() ? "ar" : "en",
+    }).toString();
+    window.open(url, "_blank");
   },
 
   "download": (el) => {
@@ -3836,38 +4545,46 @@ const ACTIONS = {
     } catch (error) { fail(error); }
   },
 
-  "fact-confirm": (el) => resolveFact(el, { action: "confirm" }),
-
-  "fact-ignore": (el) => {
-    if (!window.confirm(t("fact_ignore_confirm"))) return;
-    return resolveFact(el, { action: "ignore" });
+  "edit-fact-cell": (el) => {
+    const row = el.closest("tr");
+    if (row && !row.classList.contains("is-current")) {
+      const rowId = el.dataset.rowId, field = el.dataset.field;
+      goToReviewPage(row.dataset.pageId);
+      const cell = document.querySelector(`[data-action="edit-fact-cell"][data-row-id="${CSS.escape(rowId)}"][data-field="${CSS.escape(field)}"]`);
+      if (cell) startCellEdit(cell);
+      return;
+    }
+    startCellEdit(el);
   },
 
-  "fact-correct": (el) => {
-    const form = el.closest(".bsf-fact-form");
-    const fields = {};
-    form.querySelectorAll("[data-fact-field]").forEach((input) => {
-      fields[input.dataset.factField] = input.value.trim();
-    });
-    const note = (form.querySelector("[data-fact-note]") || {}).value || "";
-    return resolveFact(el, { action: "correct", fields, explanation: note.trim() });
+  "review-goto-page": (el) => goToReviewPage(el.dataset.pageId),
+
+  "review-step": (el) => {
+    const { pages } = reviewState();
+    const page = currentReviewPage(pages);
+    const index = page ? pages.findIndex((item) => item.page_id === page.page_id) : 0;
+    const next = pages[Math.min(pages.length - 1, Math.max(0, index + Number(el.dataset.step || 0)))];
+    if (next) goToReviewPage(next.page_id);
   },
 
-  "fact-accept-proposal": (el) => resolveFact(el, { action: "accept_proposal" }),
+  "delete-fact": (el) => {
+    if (!window.confirm(t("review_delete_confirm"))) return;
+    return saveFactChange("/accounting/fact/delete", { row_id: el.dataset.rowId });
+  },
 
-  "fact-explain": async (el) => {
-    const box = el.closest(".bsf-fact-explain").querySelector("[data-fact-explanation]");
-    const explanation = (box.value || "").trim();
-    if (!explanation) { toast(t("no_value_selected"), "warn"); return; }
+  "restore-fact": (el) => saveFactChange("/accounting/fact/restore", { row_id: el.dataset.rowId }),
+
+  "confirm-all-facts": async (el) => {
+    const { facts } = reviewState();
+    const uncertain = facts.filter((fact) => fact.status === "UNCERTAIN" && !fact.deleted).length;
+    if (!window.confirm(t("review_confirm_all_prompt", { count: facts.filter((f) => !f.deleted).length, uncertain }))) return;
     el.disabled = true;
-    toast(t("fact_explaining"));
-    try {
-      await apiPost("/accounting/fact/explain", { case_id: S.caseId, row_id: el.dataset.rowId, explanation });
+    const saved = await saveFactChange("/accounting/facts/confirm_all", {});
+    if (saved) {
+      toast(t("review_confirmed_toast"), "ok");
       await refreshCase();
-    } catch (error) {
-      fail(error);
-    } finally {
-      el.disabled = false;
+      const box = document.querySelector('[data-action="accounting-synthesize"]');
+      if (box) box.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   },
 
@@ -3896,17 +4613,31 @@ const ACTIONS = {
    Form handlers
    ============================================================ */
 const FORMS = {
+  "add-fact": async (form) => {
+    const data = new FormData(form);
+    const fields = {};
+    ["date", "fact_type", "description", "amount", "balance", "currency"].forEach((name) => {
+      const value = String(data.get(name) || "").trim();
+      if (value) fields[name] = value;
+    });
+    S.reviewAddOpen = false;
+    const saved = await saveFactChange("/accounting/fact/add", { page_id: form.dataset.pageId, fields });
+    if (saved) toast(t("review_fact_added"), "ok");
+  },
+
   "create-case": async (form) => {
     const data = new FormData(form);
+    const workflow = form.dataset.workflow || "litigation";
+    const body = { workflow_type: workflow };
+    ["case_name", "language", "case_number", "client_name", "opposing_party", "case_type", "description",
+     "contract_type", "counterparty"].forEach((name) => { if (data.has(name)) body[name] = String(data.get(name) || "").trim(); });
     try {
-      const result = await apiPost("/create_case", {
-        case_name: data.get("case_name"),
-        language: data.get("language"),
-        workflow_type: S.workspace,
-      });
-      form.reset();
+      const result = await apiPost("/create_case", body);
+      closeModal();
       await loadCases();
       await openCase(result.case_id);
+      // A new litigation case starts with its documents.
+      if (workflow === "litigation") { S.tab = "documents"; showTab("case", S.tab); }
     } catch (error) { fail(error); }
   },
 
@@ -4090,7 +4821,7 @@ function wireEvents() {
     }
 
     const actionEl = event.target.closest("[data-action]");
-    if (actionEl && ACTIONS[actionEl.dataset.action]) {
+    if (actionEl && ACTIONS[actionEl.dataset.action] && !actionEl.matches("input, select")) {
       event.preventDefault();
       ACTIONS[actionEl.dataset.action](actionEl);
     }
@@ -4115,6 +4846,26 @@ function wireEvents() {
       return;
     }
 
+    const statusFilter = event.target.closest('[data-action="dash-status-filter"]');
+    if (statusFilter) { S.dash.status = statusFilter.value; renderLibrary(); return; }
+    const archivedToggle = event.target.closest('[data-action="dash-archived"]');
+    if (archivedToggle) { S.dash.archived = archivedToggle.checked; loadCases(); return; }
+
+    const reviewSelect = event.target.closest('[data-action="review-select-page"]');
+    if (reviewSelect) {
+      goToReviewPage(reviewSelect.value);
+      return;
+    }
+
+    const pleadingLang = event.target.closest('[data-action="select-pleading-lang"]');
+    if (pleadingLang) {
+      S.pleadingLang = pleadingLang.value;
+      // Saved with the case, so the choice survives a refresh.
+      apiPost("/state/persist", { case_id: S.caseId, state: { pleading_language: pleadingLang.value } }).catch(fail);
+      if (S.snapshot && S.snapshot.workflow_state) S.snapshot.workflow_state.pleading_language = pleadingLang.value;
+      return;
+    }
+
     const versionSelect = event.target.closest('[data-action="select-version"]');
     if (versionSelect) {
       S.compareVersion = Number(versionSelect.value);
@@ -4131,7 +4882,8 @@ function wireEvents() {
   });
 
   // Debounced search inputs.
-  bindSearch("#library-search", (value) => { S.libraryQuery = value; loadCases(); });
+  bindSearch("#library-search", (value) => { S.dash.query = value; renderLibrary(); });
+  bindSearch("#contract-search", (value) => { S.dash.contractQuery = value; renderLibrary(); });
   bindSearch("#case-search", (value) => { S.caseQuery = value; renderCaseSearch(); });
   bindSearch("#facts-filter", (value) => { S.factsFilter = value; renderFactsRegister(); });
   bindSearch("#clause-filter", (value) => {
@@ -4163,6 +4915,14 @@ async function init() {
   showView("library");
   showTab("case", S.tab);
   showTab("agreement", S.agreementTab);
+
+  try {
+    S.user = (await apiGet("/me")).user || "";
+  } catch (error) {
+    html(region("dash-litigation"), alertBox(t("sign_in_required"), "flag"));
+    return;
+  }
+  renderSidebar();
 
   try {
     S.bootstrap = await apiGet("/bootstrap");

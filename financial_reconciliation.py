@@ -179,43 +179,73 @@ def build_rows_from_reconstruction(
 # ATOMIC FINANCIAL FACTS (current extraction)
 # =============================================================================
 ATOMIC_FACTS_SYSTEM_PROMPT = r"""
-You are a forensic accountant turning ONE page of a legal case file into atomic financial facts.
+You are a forensic accountant reviewing ONE page of a legal case file.
 
-You receive two independent readings of the same page:
-- structural_evidence: text and tables read directly from the PDF (may be empty for scanned pages);
-- transcription_text: a verbatim transcription of the page image by a vision model.
-Use both. Where they disagree, say so.
+ATOMIC FINANCIAL FACTS are the smallest independently verifiable financial facts that YOU find in an actual
+financial / accounting record: bank or account statements, transaction histories, ledgers, balance reports,
+debit / credit records, payment and transfer records or confirmations, financing and loan statements, repayment /
+amortization schedules, instalment histories, outstanding-balance records, settlement and reconciliation
+statements, financial statements, balance sheets, income and cash-flow statements, trial balances, journal
+entries, invoices and receipts.
+
+What emails, letters, correspondence, fraud-investigation messages, statements of claim, complaints, pleadings,
+memoranda, case summaries, witness statements, narratives or legal arguments SAY about money is NOT a fact, even
+with amounts, dates, account numbers, IBANs, balances, payments, transfers, deductions or frozen amounts. It is a
+FINANCIAL CLAIM: something to verify against the records. Example: an email "The customer transferred SAR 250 to
+BSF" gives NO fact; it gives the claim "The customer transferred SAR 250 to BSF".
+Decision rule for every value: did I find it in an accounting record on this page? Yes -> fact. No -> claim.
+
+STEP 1 - SECTIONS. Split the page into its logical sections (an email header, its body, a pasted transaction
+record, a signature, a statement table...). Label each:
+- "accounting_evidence": an accounting record (give its source_type);
+- "claim": what a party, lawyer, employee or document asserts about money;
+- "context": anything else (headers, signatures, disclaimers, legal text).
+STEP 2 - FACTS only from "accounting_evidence" sections. Each fact names its section.
+STEP 3 - CLAIMS: every financial statement made in "claim" sections, word for word, for the accountant to verify.
+Never turn a claim into a fact.
+
+You receive:
+- transcription_text: the page's consolidated text. It comes from the PDF's own text when that was reliable
+  (page_route "native" / "native+vlm") or from vision-model readings of the page image (page_route "vlm").
+  Tables are markdown, one row per entry. A value written [?: A | B] was read differently by the readers: such
+  a fact is UNCERTAIN, with A and B as alternatives.
+- structural_evidence: text and tables read directly from the PDF (may be empty for scanned pages).
+- page_classification: what the page was classified as (financial = an accounting record; mixed = narrative
+  with an accounting record section inside).
 Arabic text in structural_evidence can be garbled (letters reversed or wrong glyphs, a known PDF issue).
 For Arabic wording, prefer transcription_text; use structural_evidence mainly for numbers and table layout.
 Write every description in normal Arabic/English reading order.
+Never correct, round or recalculate a printed number because it looks unusual: copy it, and use UNCERTAIN
+when you doubt it.
 
 WHAT AN ATOMIC FACT IS
 One independent piece of financial information. Never combine several amounts in one fact.
-"The customer obtained financing of SAR 1M, paid SAR 300K, and SAR 700K remains" becomes THREE facts:
+A loan statement showing "financed SAR 1M, paid SAR 300K, SAR 700K outstanding" becomes THREE facts:
   financing_amount = 1,000,000 SAR; payment (paid_amount) = 300,000 SAR; remaining_balance (remaining_amount) = 700,000 SAR.
 Each row of a statement or ledger table is one fact (fact_type "transaction", with debit/credit/balance as printed).
 Ignore institutional boilerplate: paid-up capital, CR/VAT numbers, P.O. boxes, phone numbers, barcodes, page footers.
 
-FIELDS (fill ONLY what the page supports; use null for everything else)
+FIELDS (fill ONLY what the record supports; use null for everything else)
 fact_type: one of transaction, payment, installment, deposit, withdrawal, transfer, financing_amount,
   outstanding_balance, remaining_balance, amount_due, opening_balance, closing_balance, balance, fee,
   interest, penalty, credit_limit, claimed_amount, other
 date, description, amount, currency, debit, credit, balance, amount_due, paid_amount, remaining_amount,
 account_number, transaction_reference, counterparty
+source_type: the kind of record the fact comes from (bank_statement, account_statement, transaction_record,
+  ledger, loan_statement, repayment_schedule, invoice, receipt, transfer_confirmation, balance_sheet, ...)
 - Copy numbers exactly as printed (keep separators); do not convert or round.
 - currency: only if printed on the row or stated for the account/statement on this page. Never assume SAR.
 - Do NOT fill a field just because the column exists. A value not on the page is null, and that is fine.
 
 STATUS (exactly one per fact)
-- EXTRACTED: the page states the value explicitly.
+- EXTRACTED: the record states the value explicitly.
 - CALCULATED: you derived it arithmetically from other facts on this page. Give "calculation":
   {"operation": "add|subtract|multiply|divide", "inputs": ["<fact_key>", ...], "result_field": "<field>"}.
   Inputs are the fact_keys of facts in your output. The system recomputes it.
-- INFERRED: the value is printed but its meaning (fact_type, direction) comes from context, and you are confident.
-- UNCERTAIN: something is on the page but you cannot confidently tell its value or meaning
-  (e.g. 250,000 that could be a balance, an installment or a debit; a smudged digit; an unreadable header).
+- INFERRED: the value is printed in the record but its meaning (fact_type, direction) comes from context, and you are confident.
+- UNCERTAIN: something is in the record but you cannot confidently tell its value or meaning.
   Give your best interpretation in the fields AND a "review" block.
-- MISSING: information the page clearly should contain but does not (e.g. a payment with no date).
+- MISSING: information the record clearly should contain but does not (e.g. a payment with no date).
   Put what is missing in "description"; leave values null.
 
 NEVER GUESS. If you are not confident, use UNCERTAIN rather than EXTRACTED or INFERRED.
@@ -224,37 +254,98 @@ REVIEW BLOCK (only for UNCERTAIN)
 "review": {"question": "what the reviewer must decide", "suggestion": "your best interpretation in words",
            "reason": "why you are unsure", "alternatives": ["other plausible meanings"]}
 
-For every fact, copy the exact text it came from into "source_text".
+For every fact, copy the exact text it came from into "source_text". For a fact read from a table, also copy
+its table row exactly as in transcription_text into "supporting_table" (the header row, the separator row and
+the fact's row, as markdown); otherwise null.
 
 RETURN JSON ONLY:
 {
+  "sections": [
+    {"section": 1, "label": "context", "source_type": null, "starts_with": "From: ... Subject: ..."},
+    {"section": 2, "label": "claim", "source_type": null, "starts_with": "Please continue freezing ..."},
+    {"section": 3, "label": "accounting_evidence", "source_type": "transaction_record", "starts_with": "Date: 29/08/2025 ..."}
+  ],
   "facts": [
     {
       "fact_key": "F1",
-      "fact_type": "financing_amount",
-      "date": null, "description": "Original financing amount",
-      "amount": "1,000,000", "currency": "SAR",
-      "debit": null, "credit": null, "balance": null,
+      "section": 3,
+      "source_type": "transaction_record",
+      "fact_type": "deposit",
+      "date": "29/08/2025", "description": "Credit",
+      "amount": "250", "currency": "SAR",
+      "debit": null, "credit": "250", "balance": "250",
       "amount_due": null, "paid_amount": null, "remaining_amount": null,
-      "account_number": null, "transaction_reference": null, "counterparty": null,
+      "account_number": null, "transaction_reference": "TX82921", "counterparty": null,
       "status": "EXTRACTED",
       "source_text": "...",
+      "supporting_table": null,
       "calculation": null,
       "review": null
     }
+  ],
+  "financial_claims": [
+    {"statement": "Please continue freezing the amount of SAR 250.", "made_by": "Al Rajhi Bank fraud team (email)",
+     "amounts": ["SAR 250"], "requires_accounting_verification": true}
   ]
 }
 """.strip()
+
+
+EVIDENCE_LABEL = "accounting_evidence"
+
+
+def split_page_output(output: dict, page_type: str = "financial") -> tuple[dict, list[dict], list[str]]:
+    """Keep only the facts found in accounting evidence (the model's own
+    section labels); on a mixed page a fact must name an accounting-evidence
+    section. Returns (output with the kept facts, financial claims, notes on
+    what was dropped)."""
+    output = dict(output or {})
+    sections = {}
+    for item in output.get("sections") or []:
+        if isinstance(item, dict):
+            sections[str(item.get("section", ""))] = item
+    kept, dropped = [], []
+    for fact in output.get("facts") or []:
+        if not isinstance(fact, dict):
+            continue
+        section = sections.get(str(fact.get("section", "")))
+        label = str((section or {}).get("label") or "").strip().lower()
+        if section is not None and label != EVIDENCE_LABEL:
+            dropped.append(f"{fact.get('fact_key', '?')}: from a {label or 'non-evidence'} section")
+            continue
+        if section is None and page_type == "mixed":
+            dropped.append(f"{fact.get('fact_key', '?')}: not tied to an accounting record section on a mixed page")
+            continue
+        if not fact.get("source_type") and section is not None:
+            fact = dict(fact, source_type=section.get("source_type"))
+        kept.append(fact)
+    claims = []
+    for claim in output.get("financial_claims") or []:
+        if isinstance(claim, dict) and str(claim.get("statement") or "").strip():
+            claims.append({
+                "type": "financial_claim",
+                "statement": str(claim["statement"]).strip(),
+                "made_by": str(claim.get("made_by") or "").strip(),
+                "amounts": [str(a) for a in claim.get("amounts") or [] if str(a).strip()],
+                "requires_accounting_verification": True,
+            })
+    output["facts"] = kept
+    return output, claims, dropped
 
 
 def extract_page_facts(
     structural_evidence: dict,
     transcription_text: str,
     page_number: int,
+    page_route: str = "",
+    page_type: str = "financial",
 ) -> dict:
-    """One LLM call: all evidence for a page -> atomic financial facts."""
+    """One LLM call: a page -> its sections, the atomic financial facts of
+    its accounting evidence, and the financial claims it makes."""
     payload = {
         "page_number": page_number,
+        "page_route": page_route,
+        "page_classification": page_type,
         "structural_evidence": structural_evidence,
         "transcription_text": transcription_text,
     }
