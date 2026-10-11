@@ -53,6 +53,26 @@ check("a page with damaged Arabic is read from its image", pp.route(page) == "vl
 check("a clean Arabic page keeps its own text",
       pp.route({"text_layer": CLEAN + " " + CLEAN, "native_text": CLEAN, "picture_share": 0.0, "pictures": []}) == "native")
 
+# --- The regulator's current name in what the review writes -------------------
+from legal_platform.arabic_text import use_central_bank_name, use_central_bank_names    # noqa: E402
+
+check("سلطة النقد becomes البنك المركزي السعودي",
+      use_central_bank_name("أمام لجان المنازعات والمخالفات المصرفية والتمويلية سلطة النقد (SAMA) أو أي جهة")
+      == "أمام لجان المنازعات والمخالفات المصرفية والتمويلية البنك المركزي السعودي (SAMA) أو أي جهة")
+for old_name, new_name in (("مؤسسة النقد العربي السعودي", "البنك المركزي السعودي"),
+                           ("سلطة النقد العربي السعودي", "البنك المركزي السعودي"),
+                           ("الشكوى لسلطة النقد", "الشكوى للبنك المركزي السعودي"),
+                           ("وسلطة النقد السعودية", "والبنك المركزي السعودي"),
+                           ("بمؤسسة النقد", "بالبنك المركزي السعودي"),
+                           ("the Saudi Arabian Monetary Authority (SAMA)", "the Saudi Central Bank (SAMA)")):
+    check(f"{old_name} -> {new_name}", use_central_bank_name(old_name) == new_name)
+check("other words with نقد are untouched", use_central_bank_name("نقد الأتعاب نقداً") == "نقد الأتعاب نقداً")
+nested = use_central_bank_names({"clause_reviews": [{"legal_finding_ar": "وفق تعليمات مؤسسة النقد", "risk_level": "high",
+                                                     "authority_node_ids": ["N1"]}], "count": 3})
+check("every text of a saved review is updated, other values kept",
+      nested == {"clause_reviews": [{"legal_finding_ar": "وفق تعليمات البنك المركزي السعودي", "risk_level": "high",
+                                     "authority_node_ids": ["N1"]}], "count": 3})
+
 print()
 if failures:
     print(f"{len(failures)} check(s) failed: {failures}")

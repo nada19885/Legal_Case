@@ -11,6 +11,7 @@ from .agreement_analysis import review_large_agreement
 from .agreement_consolidation import consolidate_page_structures
 from .agreement_page_extraction import normalize_pages, structure_agreement_pages
 from .agreement_llm import agreement_complete_json
+from .arabic_text import use_central_bank_names
 from .storage import append_rows, case_rows
 
 AGREEMENT_TYPES = [
@@ -220,7 +221,10 @@ You are a grounded agreement-review assistant. Answer only from:
 Do not use general legal knowledge, model memory, or outside law. Every legal
 statement must cite supplied authority node_ids. Every contract statement must cite
 supplied clause_ids and, when available, source_page_ids. If support is insufficient,
-say so clearly. Return JSON only:
+say so clearly.
+Name the regulator only as "البنك المركزي السعودي" (Saudi Central Bank); never write
+"سلطة النقد", "مؤسسة النقد" or "Saudi Arabian Monetary Authority".
+Return JSON only:
 {
   "answer_ar":"", "answer_en":"",
   "clause_ids":[], "source_page_ids":[], "authority_node_ids":[],
@@ -332,6 +336,7 @@ def discuss_agreement(
         },
         operation="agreement discussion",
     )
+    result = use_central_bank_names(result)
 
     allowed_clauses = {
         str(item.get("clause_id", "") or "")

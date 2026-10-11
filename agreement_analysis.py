@@ -7,6 +7,7 @@ from typing import Callable
 from .agreement_retrieval import build_review_units, retrieve_authorities_for_unit
 from .context_budget import make_char_chunks, select_with_char_budget
 from .agreement_llm import agreement_complete_json
+from .arabic_text import use_central_bank_names
 from .config import (
     AGREEMENT_CLAUSE_REVIEW_MAX_WORKERS,
     AGREEMENT_SYNTHESIS_MAX_WORKERS,
@@ -54,12 +55,17 @@ marks on the agreement pages:
 - Only changes that protect the represented party; [] when the clause is fine.
 If no supplied authority supports a legal conclusion, say insufficient applicable
 authority was retrieved and do not fill the gap from model memory.
+Name the regulator only as "البنك المركزي السعودي" (Saudi Central Bank); never write
+"سلطة النقد", "مؤسسة النقد" or "Saudi Arabian Monetary Authority".
 """
 
 SYNTHESIS_PROMPT = """
 Synthesize clause reviews into a concise package-level contract review. Use only the
 supplied clause reviews and package map. Do not add new legal propositions. Deduplicate
-repeated risks and recommendations. Return JSON only:
+repeated risks and recommendations.
+Name the regulator only as "البنك المركزي السعودي" (Saudi Central Bank); never write
+"سلطة النقد", "مؤسسة النقد" or "Saudi Arabian Monetary Authority".
+Return JSON only:
 {
  "executive_summary_ar":"", "executive_summary_en":"",
  "critical_points":[], "missing_protections":[], "cross_clause_conflicts":[],
@@ -139,6 +145,7 @@ def review_large_agreement(
             context,
             operation=f"agreement clause review {clause_id or index}",
         )
+        review = use_central_bank_names(review)
         allowed = {str(x.get("node_id", "") or "") for x in authorities}
         _clean_authority_ids(review, allowed)
         clause = unit.get("target_clause", {}) or {}
@@ -206,6 +213,7 @@ def review_large_agreement(
         },
         operation="final agreement review synthesis",
     )
+    final = use_central_bank_names(final)
     final["clause_reviews"] = reviews
     return final, list(all_authorities.values())
 

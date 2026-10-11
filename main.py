@@ -71,6 +71,7 @@ from legal_platform.case_register import build_case_register, prioritise_pages_f
 from legal_platform.facts import add_fact_candidate
 from legal_platform.chat_orchestrator import assess_next_step, run_legal_analysis
 from legal_platform.agreement_markup import contract_document
+from legal_platform.arabic_text import use_central_bank_names
 from legal_platform.agreement_docx import contract_docx
 from legal_platform.interview_state import persist_interview_state
 from legal_platform.case_summary import generate_case_summary, approve_case_summary
@@ -1226,9 +1227,10 @@ def case_endpoint():
             "profile": stored.get("confirmed_profile"),
             "clause_map": stored.get("clause_map"),
             "authorities": stored.get("authorities"),
-            "review": stored.get("review"),
+            # Reviews saved earlier: the regulator is shown by its current name.
+            "review": use_central_bank_names(stored.get("review")),
         }
-        review = stored.get("review") or {}
+        review = response["agreement_state"]["review"] or {}
         if review.get("clause_reviews"):
             # The contract's extracted text as one document, the proposed
             # wording changes in place (agreement_markup.contract_document).
@@ -2750,7 +2752,7 @@ def agreement_review_docx():
     case_id = request.args.get("case_id", "")
     language = "ar" if str(request.args.get("lang", "ar")).lower().startswith("ar") else "en"
     stored = load_agreement_states(case_id)
-    review = stored.get("review") or {}
+    review = use_central_bank_names(stored.get("review") or {})
     if not review.get("clause_reviews"):
         return jsonify({"error": "Run the legal and commercial review first."}), 404
     data = load_case_data(case_id)
