@@ -831,7 +831,7 @@ button.step-card:hover { border-color: var(--bsf-green); }
 .bsf-ct-sheet { width: 100%; max-width: 60rem; box-sizing: border-box; container-type: inline-size;
   background-color: #fff; background-repeat: no-repeat; background-size: 100% auto; background-position: top center;
   border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0, 0, 0, .10); color: #1d1d1d; }
-.bsf-ct-sheet-text { box-sizing: border-box; font-size: calc(var(--page-font) * 100cqw); line-height: 1.75; }
+.bsf-ct-sheet-text { box-sizing: border-box; font-size: calc(var(--page-font) * var(--fit, 1) * 100cqw); line-height: 1.75; }
 .bsf-ct-sheet-text p { margin: 0 0 .55em; }
 .bsf-ct-sheet-text h2, .bsf-ct-sheet-text h3, .bsf-ct-sheet-text h4 { font-size: 1.08em; margin: .7em 0 .3em; color: inherit; }
 .bsf-ct-sheet-text .bsf-ct-h1 { font-size: 1.3em; text-align: center; margin: .2em 0 .8em; }

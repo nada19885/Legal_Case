@@ -4150,6 +4150,7 @@ function renderAgreementReviewTab(state) {
     <h4 class="bsf-subsection">${esc(t("negotiation_prep"))}</h4>
     ${negotiationMarkup(negotiation)}
     </details>`);
+  watchContractSheets(body);
 }
 
 function clauseReviewMarkup(item) {
@@ -4342,11 +4343,49 @@ function sheetMarkup(pageId, inner, background) {
   const ratio = background.height / background.width;
   const url = backendUrl("/agreement/page_background") + "?" + new URLSearchParams({ case_id: S.caseId, page_id: pageId }).toString();
   // Padding in % is a share of the sheet's width, so the top is scaled by the page's height / width.
+  // The text may use the page down to its original text's bottom, or 88% of the page (the footer stays clear).
+  const bottom = Math.max((background.text_box || [])[3] || 0, 0.88);
   return `
-    <article class="bsf-ct-sheet" style="aspect-ratio: ${background.width} / ${background.height}; background-image: url('${url}');">
+    <article class="bsf-ct-sheet" data-ratio="${ratio}" data-bottom="${bottom}"
+             style="aspect-ratio: ${background.width} / ${background.height}; background-image: url('${url}');">
       <div class="bsf-ct-sheet-text" style="padding: ${(top * ratio * 100).toFixed(2)}% ${((1 - right) * 100).toFixed(2)}% 3% ${(left * 100).toFixed(2)}%;
            --page-font: ${background.font || 0.0185};">${inner}</div>
     </article>`;
+}
+
+/* Each page's text is made to fit its page: the text size is lowered, only
+   as much as needed and not below MIN_SHEET_FIT of the page's own size.
+   A sheet is fitted when it becomes visible and when its width changes. */
+const MIN_SHEET_FIT = 0.55;
+let sheetObserver = null;
+
+function fitContractSheet(sheet) {
+  const text = sheet.querySelector(".bsf-ct-sheet-text");
+  const width = sheet.clientWidth;
+  if (!text || !width || String(width) === sheet.dataset.fittedWidth) return;
+  sheet.dataset.fittedWidth = String(width);
+  const room = width * Number(sheet.dataset.ratio || 1.414) * Number(sheet.dataset.bottom || 0.9);
+  const fits = (scale) => { text.style.setProperty("--fit", scale); return text.offsetHeight <= room; };
+  if (fits(1)) return;
+  let low = MIN_SHEET_FIT, high = 1;
+  if (!fits(low)) return;                               // even the smallest size does not fit: the sheet grows
+  for (let step = 0; step < 7; step += 1) {
+    const middle = (low + high) / 2;
+    if (fits(middle)) low = middle; else high = middle;
+  }
+  fits(low);
+}
+
+function watchContractSheets(container) {
+  const sheets = container ? container.querySelectorAll(".bsf-ct-sheet") : [];
+  if (!sheets.length) return;
+  if (!sheetObserver && typeof ResizeObserver === "function") {
+    sheetObserver = new ResizeObserver((entries) => entries.forEach((entry) => fitContractSheet(entry.target)));
+  }
+  sheets.forEach((sheet) => {
+    if (sheetObserver) sheetObserver.observe(sheet);
+    else requestAnimationFrame(() => fitContractSheet(sheet));
+  });
 }
 
 function negotiationMarkup(negotiation) {
