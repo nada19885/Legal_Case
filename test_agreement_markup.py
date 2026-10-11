@@ -122,7 +122,10 @@ check("bullet lines become list items without their dash", kinds.count("item") =
 table = next(b for b in blocks if b["type"] == "table")
 check("a markdown table becomes a table with its header row",
       table["rows"][0]["header"] and ["".join(r["text"] for r in c) for c in table["rows"][1]["cells"]] == ["الدفعة الأولى", "1000"])
-check("a page break of the original is marked", {"type": "page", "page_number": 2} in blocks)
+check("a page break of the original is marked", {"type": "page", "page_number": 2, "page_id": "Q2"} in blocks)
+check("each block knows its page (one sheet per page in the contract view)",
+      {b["page_id"] for b in blocks if b["type"] not in {"page", "document"}} == {"Q1", "Q2"}
+      and [p["page_id"] for p in contract["pages"]] == ["Q1", "Q2"])
 wrapped = next(b for b in blocks if b["type"] == "paragraph" and text_of(b).startswith("3.1"))
 check("a change running over a wrapped line stays one change in one paragraph",
       [r["kind"] for r in wrapped["runs"]].count("mark") == 1 and "\n" in text_of(wrapped))

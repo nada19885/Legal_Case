@@ -73,6 +73,7 @@ from legal_platform.chat_orchestrator import assess_next_step, run_legal_analysi
 from legal_platform.agreement_markup import contract_document
 from legal_platform.arabic_text import use_central_bank_names
 from legal_platform.agreement_docx import contract_docx
+from legal_platform.agreement_pages import page_backgrounds, page_background_png
 from legal_platform.interview_state import persist_interview_state
 from legal_platform.case_summary import generate_case_summary, approve_case_summary
 from legal_platform.attorney_workbench import answer_case_question, revise_bilingual_pleading
@@ -2743,6 +2744,30 @@ def pleading_export():
         mimetype="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="pleading_{language}.md"'},
     )
+
+
+@app.route("/agreement/page_backgrounds")
+def agreement_page_backgrounds():
+    """For each page of the agreement: whether its text could be removed
+    (digital PDF) and where its text sits; the cleared images are made once."""
+    case_id = request.args.get("case_id", "")
+    data = load_case_data(case_id)
+    return jsonify({"pages": page_backgrounds(case_id, data["documents"], data["pages"])})
+
+
+@app.route("/agreement/page_background")
+def agreement_page_background():
+    """One page of the agreement without its text (letterhead, logos, stamps kept)."""
+    case_id = request.args.get("case_id", "")
+    page_id = request.args.get("page_id", "")
+    if not access.valid_id(page_id):
+        return Response(status=404)
+    png = page_background_png(case_id, page_id)
+    if not png:
+        return Response(status=404)
+    response = send_file(io.BytesIO(png), mimetype="image/png")
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    return response
 
 
 @app.route("/agreement/review_docx")

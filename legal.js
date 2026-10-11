@@ -4255,21 +4255,36 @@ function contractDocumentMarkup(state) {
         ? `<th dir="auto">${runs(cell)}</th>` : `<td dir="auto">${runs(cell)}</td>`).join("")}</tr>`).join("")}
     </table></div>`;
 
-  const parts = [];
+  // One sheet per page of the original. A page whose text could be removed
+  // (a digital PDF) shows its own letterhead, logos and stamps behind the
+  // text; other pages keep a plain white sheet.
+  const backgrounds = pageBackgrounds(contract);
+  const sheets = [];
+  let parts = [];
   let items = [];
+  let sheetPage = null;
   const flush = () => { if (items.length) { parts.push(`<ul class="bsf-ct-list">${items.join("")}</ul>`); items = []; } };
+  const closeSheet = () => {
+    flush();
+    if (parts.length) sheets.push(sheetMarkup(sheetPage, parts.join(""), backgrounds[sheetPage]));
+    parts = [];
+  };
   (contract.blocks || []).forEach((block) => {
+    if (block.type === "document") { closeSheet(); sheets.push(`<h2 class="bsf-ct-file">${esc(block.text || "")}</h2>`); return; }
+    if (block.type === "page" || (block.page_id && block.page_id !== sheetPage)) {
+      closeSheet();
+      sheetPage = block.page_id || sheetPage;
+      if (block.type === "page") return;
+    }
     if (block.type === "item") { items.push(`<li dir="auto">${runs(block.runs)}</li>`); return; }
     flush();
-    if (block.type === "document") parts.push(`<h2 class="bsf-ct-file">${esc(block.text || "")}</h2>`);
-    else if (block.type === "page") parts.push(`<div class="bsf-ct-page"><span>${esc(t("contract_page", { page: block.page_number }))}</span></div>`);
-    else if (block.type === "heading") {
+    if (block.type === "heading") {
       const tag = block.level === 1 ? "h2" : (block.level === 2 ? "h3" : "h4");
       parts.push(`<${tag} class="bsf-ct-h${block.level || 2}" dir="auto">${runs(block.runs)}</${tag}>`);
     } else if (block.type === "table") parts.push(table(block));
     else parts.push(`<p dir="auto">${runs(block.runs)}</p>`);
   });
-  flush();
+  closeSheet();
 
   const sample = (contract.blocks || []).slice(0, 40).map((b) => (b.runs || []).map((r) => r.text || "").join("")).join(" ");
   const direction = ARABIC_RE.test(sample) && (sample.match(/[؀-ۿ]/g) || []).length * 2
@@ -4291,7 +4306,7 @@ function contractDocumentMarkup(state) {
       </div>
     </div>
     ${state.has_edits ? "" : alertBox(t("contract_no_edits"), "info")}
-    <article class="bsf-ct-paper" dir="${direction}">${parts.join("")}</article>
+    <div class="bsf-ct-pages" dir="${direction}">${sheets.join("")}</div>
     ${advice.length ? `
       <div class="bsf-ct-other">
         <h4 class="bsf-subsection">${esc(t("contract_advice"))}</h4>
@@ -4299,6 +4314,39 @@ function contractDocumentMarkup(state) {
         <ul class="bsf-mk-list">${advice.map((edit) => `
           <li><strong>${esc(clauseLabel(edit))}</strong> ${editMarkup(edit)}</li>`).join("")}</ul>
       </div>` : ""}`;
+}
+
+/* The cleared pages (agreement_pages.py): page_id -> {available, width,
+   height, text_box: [left, top, right, bottom] shares, font: share of width}.
+   Loaded once per case; the review tab is drawn again when they arrive. */
+function pageBackgrounds(contract) {
+  const pages = (contract.pages || []).map((page) => page.page_id);
+  const cached = S.pageBackgrounds;
+  if (cached && cached.caseId === S.caseId && pages.every((id) => id in cached.pages)) return cached.pages;
+  if (!S.pageBackgroundsLoading) {
+    S.pageBackgroundsLoading = true;
+    apiGet("/agreement/page_backgrounds", { case_id: S.caseId })
+      .then((result) => { S.pageBackgrounds = { caseId: S.caseId, pages: result.pages || {} }; })
+      .catch(() => { S.pageBackgrounds = { caseId: S.caseId, pages: Object.fromEntries(pages.map((id) => [id, {}])) }; })
+      .finally(() => {
+        S.pageBackgroundsLoading = false;
+        if (S.snapshot && S.snapshot.workflow_type === "agreement_review") renderAgreement();
+      });
+  }
+  return (cached && cached.caseId === S.caseId) ? cached.pages : {};
+}
+
+function sheetMarkup(pageId, inner, background) {
+  if (!background || !background.available) return `<article class="bsf-ct-paper">${inner}</article>`;
+  const [left, top, right] = background.text_box || [0.1, 0.1, 0.9];
+  const ratio = background.height / background.width;
+  const url = backendUrl("/agreement/page_background") + "?" + new URLSearchParams({ case_id: S.caseId, page_id: pageId }).toString();
+  // Padding in % is a share of the sheet's width, so the top is scaled by the page's height / width.
+  return `
+    <article class="bsf-ct-sheet" style="aspect-ratio: ${background.width} / ${background.height}; background-image: url('${url}');">
+      <div class="bsf-ct-sheet-text" style="padding: ${(top * ratio * 100).toFixed(2)}% ${((1 - right) * 100).toFixed(2)}% 3% ${(left * 100).toFixed(2)}%;
+           --page-font: ${background.font || 0.0185};">${inner}</div>
+    </article>`;
 }
 
 function negotiationMarkup(negotiation) {

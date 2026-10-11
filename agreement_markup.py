@@ -601,9 +601,11 @@ def contract_document(pages: Any, documents: Any, clause_reviews: list, clause_m
             if several:
                 blocks.append({"type": "document", "text": names.get(current) or "Document"})
         else:                                       # where the next page of the original starts
-            blocks.append({"type": "page", "page_number": row["page_number"]})
-        blocks.extend(b for b in _page_blocks(row["text"], sorted(placements[row["page_id"]]), headings, heading_words)
-                      if not _is_noise(b))
+            blocks.append({"type": "page", "page_number": row["page_number"], "page_id": row["page_id"]})
+        for block in _page_blocks(row["text"], sorted(placements[row["page_id"]]), headings, heading_words):
+            if not _is_noise(block):
+                block["page_id"] = row["page_id"]   # the contract view draws each page on its own sheet
+                blocks.append(block)
 
     # The contract's own title: its first short line, when it reads as one.
     first = next((b for b in blocks if b["type"] not in {"document", "page"}), None)
@@ -621,4 +623,6 @@ def contract_document(pages: Any, documents: Any, clause_reviews: list, clause_m
         run["last"] = True
     placed = {r["edit_id"] for b in blocks for r in _all_runs(b) if r["kind"] in {"mark", "insert"}}
     unplaced += [edit_id for edit_id in edits if edit_id not in placed and edit_id not in unplaced]
-    return {"blocks": blocks, "edits": edits, "unplaced": unplaced, "changes": len(placed)}
+    return {"blocks": blocks, "edits": edits, "unplaced": unplaced, "changes": len(placed),
+            "pages": [{"page_id": r["page_id"], "page_number": r["page_number"], "document_id": r["document_id"]}
+                      for r in rows]}
