@@ -78,11 +78,12 @@ check("an addition is placed after its sentence on another page of the clause",
 page3 = markup["pages"][2]
 check("Arabic words are found despite tatweel and diacritics",
       any(s["kind"] == "mark" and s["edit_id"] == "C9-E1" for s in page3["segments"]))
-check("a change whose words are on no page is listed apart, not placed", markup["unplaced"] == ["C9-E3"])
+check("a change whose words are on no page is still shown, marked detached",
+      markup["unplaced"] == [] and markup["edits"]["C9-E3"]["detached"])
 check("a word ending in a diacritic is matched before the next word",
       any(s["kind"] == "mark" and s["edit_id"] == "C9-E2" for s in page3["segments"]))
 check("each change knows its clause risk", markup["edits"]["C7-E1"]["risk_level"] == "high")
-check("pages count their changes", [p["changes"] for p in markup["pages"]] == [2, 1, 2])
+check("pages count their changes", [p["changes"] for p in markup["pages"]] == [3, 1, 2])
 check("no review edits: plain pages", mark_pages(pages, documents, [{"clause_id": "X"}])["pages"][0]["segments"]
       == [{"text": PAGE1, "edit_id": "", "kind": "text"}])
 
@@ -128,7 +129,8 @@ check("a change running over a wrapped line stays one change in one paragraph",
 check("an addition goes after its sentence", any(r["kind"] == "insert" for b in blocks for r in b.get("runs") or []))
 check("a change inside a table cell is placed in the cell",
       any(r["kind"] == "mark" for row in table["rows"] for cell in row["cells"] for r in cell))
-check("changes whose words are not in the text are listed apart", contract["unplaced"] == ["C1-E5"] and contract["changes"] == 4)
+check("a change whose words are not in the text is shown in its clause, not listed apart",
+      contract["unplaced"] == [] and contract["changes"] == 5 and contract["edits"]["C1-E5"]["detached"])
 
 docx_bytes = contract_docx(contract, "عقد تقديم خدمات محاماة", "ar")
 package = zipfile.ZipFile(io.BytesIO(docx_bytes))
@@ -157,7 +159,7 @@ rejected, accepted = version(False), version(True)
 check("the Word file holds every part of a .docx", {"[Content_Types].xml", "word/document.xml", "word/styles.xml",
                                                     "word/comments.xml"} <= set(package.namelist()))
 check("every change is a tracked change (insertions and deletions)",
-      len(body.findall(f".//{NS}ins")) == 3 and len(body.findall(f".//{NS}del")) == 3)
+      len(body.findall(f".//{NS}ins")) == 4 and len(body.findall(f".//{NS}del")) == 3)
 check("rejecting all changes gives back the contract's own words",
       "1000 ريال عند كسب الدعوى" in rejected and "بإخطار مدته عشرة أيام" in rejected and "ثلاثون" not in rejected)
 check("accepting all changes gives the proposed wording",
@@ -165,7 +167,8 @@ check("accepting all changes gives the proposed wording",
       and "بعد محاولة التسوية الودية" in accepted)
 check("each reason is a Word comment", package.read("word/comments.xml").decode("utf-8").count("<w:comment ") == 3)
 check("Arabic paragraphs are right-to-left", body.find(f".//{NS}bidi") is not None)
-check("the changes not found are listed at the end", "تعديلات مقترحة أخرى" in accepted and "not in this contract" in accepted)
+check("no separate list of changes at the end", "تعديلات مقترحة أخرى" not in accepted
+      and "not in this contract" in accepted)
 
 # --- Changes worked out from a clause's proposed wording ---------------------
 from legal_platform.agreement_markup import derive_edits                # noqa: E402
@@ -249,6 +252,25 @@ check("advice is listed apart, not placed", notice["unplaced"] == ["CL_0003-D1"]
 check("the page text is shown with its ligatures repaired",
       text_of(notice["blocks"][0]).startswith("المادة التاسعة") and "الإشعارات" in "".join(
           r["text"] for b in notice["blocks"] for r in b.get("runs") or []))
+
+# --- Every change is in the contract: additions without an anchor, misquoted words ---
+FEES = ("المادة الخامسة: التزامات الطرف الثاني\nتزويد المحامي بكافة المستندات والوكالات اللازمة وتقديم الشكوى لدى البنك "
+        "والبنك المركزي وسداد اتعاب المحامية حسب الاتفاق في المادة الرابعة\n\nالمادة السادسة: طريقة تحويل الأتعاب\n"
+        "يتم دفع جميع الدفعات والاتعاب من خلال تطبيق بينة")
+FEE_CLAUSES = {"clauses": [
+    {"clause_id": "CL_0005", "heading": "التزامات الطرف الثاني", "full_text": "تزويد المحامي بكافة المستندات والوكالات "
+     "اللازمة وتقديم الشكوى لدى البنك والبنك المركزي وسداد اتعاب المحامية حسب الاتفاق في المادة الرابعة"},
+    {"clause_id": "CL_0006", "heading": "طريقة تحويل الأتعاب", "full_text": "يتم دفع جميع الدفعات والاتعاب من خلال تطبيق بينة"}]}
+fees = contract_document(
+    [{"page_id": "F1", "case_document_id": "D5", "page_number": 1, "page_text": FEES}], [],
+    [{"clause_id": "CL_0005", "edits": clean_edits([{"type": "delete", "original": "وإسدال اتعاب المحامية حسب الاتفاق في المادة الرابعة"}], "CL_0005")},
+     {"clause_id": "CL_0006", "edits": clean_edits([{"type": "add", "original": "", "replacement":
+      "، ويُلزَم الطرفان بتنفيذ هذه الدفعات وفقًا للأنظمة"}], "CL_0006")}], FEE_CLAUSES)
+fee_runs = [r for b in fees["blocks"] for r in b.get("runs") or []]
+check("a misquoted deletion is marked on the closest words of the clause",
+      any(r["kind"] == "mark" and r["edit_id"] == "CL_0005-E1" and r["text"].startswith("وسداد") for r in fee_runs))
+check("an addition without an anchor goes at the end of its clause",
+      fee_runs[-1]["kind"] == "insert" and fee_runs[-1]["edit_id"] == "CL_0006-E1" and fees["unplaced"] == [])
 
 print()
 if failures:

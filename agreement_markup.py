@@ -236,12 +236,19 @@ def _page_rows(pages: Any, documents: Any) -> tuple[list[dict], dict]:
     return rows, names
 
 
-def _placements(rows: list[dict], clause_reviews: list) -> tuple[dict, dict, list]:
+def _placements(rows: list[dict], clause_reviews: list, clauses: Optional[dict] = None) -> tuple[dict, dict, list]:
     """Where each edit's words are on the pages: (edits by id, page_id ->
-    [(start, end, edit_id, kind)], ids of edits not found). The pages of
+    [(start, end, edit_id, kind)], ids of edits not placed). The pages of
     the edit's own clause are searched first. An addition is placed after
-    its anchor sentence, which may also carry a change."""
+    its anchor sentence, which may also carry a change.
+    Every edit is placed (only advice is left apart):
+      1. its words, exactly (ignoring punctuation and PDF letter damage);
+      2. its words, closely (a misquoted word: "وإسدال" for "وسداد");
+      3. at the end of its clause (an addition without an anchor; a change
+         whose words are not in the text is shown there, marked detached);
+      4. at the end of the clause's last page."""
     by_id = {r["page_id"]: r for r in rows}
+    clauses = clauses or {}
     edits, placements, unplaced = {}, {r["page_id"]: [] for r in rows}, []
     for review in clause_reviews or []:
         if not isinstance(review, dict):
@@ -269,9 +276,64 @@ def _placements(rows: list[dict], clause_reviews: list) -> tuple[dict, dict, lis
                         edits[edit_id]["page_id"] = page_id
                         placed = True
                         break
+            if not placed and edit.get("type") != "advice" and kind == "mark" and words:
+                for page_id in search:
+                    taken = [(a, b) for a, b, _, k in placements[page_id] if k == "mark"]
+                    span = _find_close(by_id[page_id]["text"], words, taken)
+                    if span:
+                        placements[page_id].append((span[0], span[1], edit_id, "mark"))
+                        edits[edit_id]["page_id"] = page_id
+                        placed = True
+                        break
+            if not placed and edit.get("type") != "advice" and search:
+                clause = clauses.get(str(review.get("clause_id") or "")) or {}
+                clause_words = str(clause.get("full_text") or "").split()
+                anchors = [" ".join(clause_words), " ".join(clause_words[-6:]), " ".join(clause_words[-3:]),
+                           str(clause.get("heading") or review.get("heading") or "")]
+                for anchor, page_id in [(a, p) for a in anchors if a.strip() for p in search]:
+                    span = _find(by_id[page_id]["text"], anchor, [])
+                    if span:
+                        placements[page_id].append((span[0], span[1], edit_id, "insert"))
+                        break
+                else:
+                    page_id = search[0]
+                    end = len(by_id[page_id]["text"].rstrip())
+                    placements[page_id].append((end, end, edit_id, "insert"))
+                edits[edit_id]["page_id"] = page_id
+                edits[edit_id]["detached"] = edit.get("type") != "add"
+                placed = True
             if not placed:
                 unplaced.append(edit_id)
     return edits, placements, unplaced
+
+
+CLOSE_ENOUGH = 0.75             # a misquoted change is placed where its words are at least this alike
+
+
+def _find_close(text: str, words: str, taken: list) -> Optional[tuple]:
+    """The span of the run of words most like `words` (compared on their
+    skeletons), when at least CLOSE_ENOUGH alike."""
+    needle = [_skeleton(w) for w in words.split()]
+    if len(needle) < 3:
+        return None
+    tokens = [(m.start(), m.end(), _skeleton(m.group())) for m in re.finditer(r"\S+", text)]
+    best, best_span = (0.0, 0), None
+    for size in (len(needle), len(needle) + 1, len(needle) - 1):
+        for i in range(0, max(0, len(tokens) - size + 1)):
+            window = tokens[i:i + size]
+            matcher = difflib.SequenceMatcher(None, needle, [t[2] for t in window], autojunk=False)
+            # share of the quoted words found, then the quote's own length preferred
+            score = (sum(block.size for block in matcher.get_matching_blocks()) / len(needle), -abs(size - len(needle)))
+            if score > best:
+                span = (window[0][0], window[-1][1])
+                if all(span[1] <= a or span[0] >= b for a, b in taken):
+                    best, best_span = score, span
+    if best[0] < CLOSE_ENOUGH or best_span is None:
+        return None
+    a, b = best_span
+    while b > a and text[b - 1] in _TRIM:
+        b -= 1
+    return a, b
 
 
 def _find_in_context(text: str, edit: dict, taken: list) -> Optional[tuple]:
@@ -525,7 +587,8 @@ def contract_document(pages: Any, documents: Any, clause_reviews: list, clause_m
     """The agreement's extracted text as one document, with each wording
     change in place (see the block format above)."""
     rows, names = _page_rows(pages, documents)
-    edits, placements, unplaced = _placements(rows, _with_derived_edits(clause_reviews, clause_map))
+    clauses = {str(c.get("clause_id") or ""): c for c in (clause_map or {}).get("clauses") or [] if isinstance(c, dict)}
+    edits, placements, unplaced = _placements(rows, _with_derived_edits(clause_reviews, clause_map), clauses)
     headings = {_norm(c.get("heading")) for c in (clause_map or {}).get("clauses") or []
                 if isinstance(c, dict) and len(_norm(c.get("heading"))) >= 3}
     heading_words = [tuple(_skeleton(w) for w in str(c.get("heading") or "").split())

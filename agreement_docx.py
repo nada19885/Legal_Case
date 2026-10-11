@@ -108,7 +108,11 @@ class _Writer:
                     piece = self.commented(piece, edit)
                 out.append(piece)
             elif item.get("kind") == "insert":
-                out.append(self.commented(self.inserted(" " + str(edit.get("replacement") or ""), extra), edit))
+                # a change whose words were not found in the text: its old wording shown struck through
+                detached = self.run(" " + str(edit.get("original") or ""), f'<w:strike/><w:color w:val="{RED}"/>') \
+                    if edit.get("detached") and edit.get("original") else ""
+                new = self.inserted(" " + str(edit.get("replacement") or ""), extra) if edit.get("type") != "delete" else ""
+                out.append(self.commented(detached + new, edit))
             else:
                 out.append(self.run(item.get("text", ""), extra))
         return "".join(out)
@@ -163,10 +167,7 @@ class _Writer:
         advice = [e for e in listed if e.get("type") == "advice"]
         words = self.words
         out = []
-        if unplaced:
-            out += [self.paragraph(self.run(words["other"]), words["other"], "Heading1"),
-                    self.paragraph(self.run(words["other_note"], f'<w:i/><w:color w:val="{GREY}"/>'), words["other_note"])]
-        for edit in unplaced:
+        for edit in unplaced:                       # every change is placed now; kept for older data
             label = "{} {}: ".format(words["clause"], edit.get("clause_number") or edit.get("clause_id") or "").strip()
             old = edit.get("original") or ""
             new = edit.get("replacement") or ""

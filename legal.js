@@ -4240,7 +4240,11 @@ function contractDocumentMarkup(state) {
   const run = (item) => {
     const edit = edits[item.edit_id];
     if (item.kind === "text" || !edit) return esc(item.text || "");
-    if (item.kind === "insert") return " " + change(edit, proposed(edit));
+    if (item.kind === "insert") {
+      // A change whose words were not found in the text is shown at the end of its clause.
+      const old = edit.detached && edit.original ? `<del class="bsf-ct-old">${esc(edit.original)}</del> ` : "";
+      return " " + change(edit, old + proposed(edit));
+    }
     const old = `<del class="bsf-ct-old">${esc(item.text || "")}</del>`;
     return change(edit, item.last && edit.type !== "delete" ? `${old} ${proposed(edit)}` : old);
   };
@@ -4271,7 +4275,6 @@ function contractDocumentMarkup(state) {
   const direction = ARABIC_RE.test(sample) && (sample.match(/[؀-ۿ]/g) || []).length * 2
     >= (sample.match(/[A-Za-z؀-ۿ]/g) || []).length ? "rtl" : "ltr";
   const unplacedAll = (contract.unplaced || []).map((id) => edits[id]).filter(Boolean);
-  const unplaced = unplacedAll.filter((edit) => edit.type !== "advice");
   const advice = unplacedAll.filter((edit) => edit.type === "advice");
   const clauseLabel = (edit) => [t("clause"), edit.clause_number || edit.clause_id || ""].join(" ").trim();
   return `
@@ -4289,13 +4292,6 @@ function contractDocumentMarkup(state) {
     </div>
     ${state.has_edits ? "" : alertBox(t("contract_no_edits"), "info")}
     <article class="bsf-ct-paper" dir="${direction}">${parts.join("")}</article>
-    ${unplaced.length ? `
-      <div class="bsf-ct-other">
-        <h4 class="bsf-subsection">${esc(t("contract_other_changes"))}</h4>
-        <p class="bsf-caption">${esc(t("contract_other_caption"))}</p>
-        <ul class="bsf-mk-list">${unplaced.map((edit) => `
-          <li><strong>${esc(clauseLabel(edit))}</strong> ${editMarkup(edit)}</li>`).join("")}</ul>
-      </div>` : ""}
     ${advice.length ? `
       <div class="bsf-ct-other">
         <h4 class="bsf-subsection">${esc(t("contract_advice"))}</h4>
