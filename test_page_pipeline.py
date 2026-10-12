@@ -201,6 +201,11 @@ check("a repair that changes any number is rejected and the PDF text kept",
 english = pp.process_page({**arabic_page, "native_text": "Plain English letter, amount 250.", "text_layer": "Plain English letter, amount 250."},
                           vision, broken_llm)
 check("an English PDF page needs no model call at all", english["llm_calls"] == 0 and not english["errors"])
+clean_ar = "صحيفة دعوى المدعي هدى ضد البنك، رقم الهوية 1027476025 والمبلغ المطالب به 250 ريال"
+clean = pp.process_page({**arabic_page, "native_text": clean_ar, "text_layer": clean_ar}, vision, broken_llm)
+check("clean Arabic PDF text needs no word repair call", clean["llm_calls"] == 0 and clean["final_text"] == clean_ar)
+check("damaged Arabic PDF text still gets the word repair", pp.needs_word_repair(arabic_page)
+      and not pp.needs_word_repair({"text_layer": clean_ar, "native_text": clean_ar}))
 
 # --- markdown tables: wrapped rows joined back ----------------------------------------------
 split_table = """التاريخ | البيان / التفاصيل | المبلغ | الرصيد

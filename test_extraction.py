@@ -56,8 +56,11 @@ def check(label, condition):
 
 ROWS = []
 extraction.append_rows = lambda dataset, rows: ROWS.extend(rows) or len(rows)
-extraction.summarise_pages = lambda pages: {p["page_id"]: {"page_summary": f"summary of page {p['page_number']}",
-                                                            "document_type": "", "parties": ["Huda"]} for p in pages}
+WRITES = []
+_append = extraction.append_rows
+extraction.append_rows = lambda dataset, rows: WRITES.append(len(list(rows))) or _append(dataset, rows)
+extraction.summary_or_fallback = lambda p: {"page_summary": f"summary of page {p['page_number']}",
+                                            "document_type": "", "parties": ["Huda"]}
 
 document = fitz.open()
 typed = document.new_page(width=595, height=842)
@@ -84,12 +87,19 @@ def text_llm(prompt, payload):
 
 
 progress = []
+timings = {}
 rows = extraction.extract_pdf_page_by_page(
     "CASE1", "CDOC1", data, progress_callback=lambda c, t, n, s: progress.append((c, t, n, s)),
     document_name="claim.pdf", case_context={"case": {"case_name": "Huda v BSF"}, "parties": ["Huda (claimant)"]},
-    vision=vision, text_llm=text_llm,
+    vision=vision, text_llm=text_llm, timings=timings,
 )
 check("one row per page, stored once", len(rows) == 2 and len(ROWS) == 2)
+check("all page rows go to the dataset in one write", WRITES == [2])
+check("each page image is rendered and stored",
+      all(FOLDER.get(r["page_image_path"], b"").startswith(b"\x89PNG") for r in rows))
+check("the timing record says where the time went",
+      timings.get("pages") == 2 and timings.get("routes") == {"native": 1, "vlm": 1}
+      and timings.get("llm_calls", 0) >= 3 and "summary_wait_seconds" in timings and "render_seconds" in timings)
 check("the typed page's text comes from the PDF itself (no vision call for it)",
       "account freeze" in rows[0]["page_text"] and rows[0]["extraction_method"] == "page_pipeline:native")
 check("the scanned page is read by the vision model and merged",

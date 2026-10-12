@@ -13,12 +13,15 @@ Per page:
   - the full extraction record (route, image kinds, every candidate reading,
     uncertain values, corrections, errors) is saved as JSON in the case
     documents folder: /cases/<case>/extraction/<page_id>.json.
-Pages are read in parallel; a failed page is retried once after the pass.
+Pages are rendered, read and summarised in parallel; a failed page is
+retried once after the pass. Each document logs a [document timing] line.
 """
 
 from __future__ import annotations
 
 import json
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Callable, Optional
@@ -28,16 +31,18 @@ from .config import (
     CASE_DOCUMENT_FOLDER_ID,
     CASE_DOCUMENT_PAGES_DATASET,
     PAGE_READ_PARALLEL_CALLS,
+    PAGE_SUMMARY_MAX_WORKERS,
     PDF_PAGE_MAX_CONCURRENT_REQUESTS,
     PDF_RENDER_DPI,
 )
-from .pdf_to_images import render_pdf_to_images
-from .page_summary import summarise_pages
+from .pdf_to_images import render_pdf_page
+from .page_summary import summary_or_fallback
 from .storage import append_rows
 
 ProgressCallback = Callable[[int, int, int, str], None]
 EXTRACTION_DIR = "extraction"
 RECORD_SCHEMA = "page_extraction_v1"
+RECORD_SAVE_WORKERS = 4
 
 
 # -----------------------------------------------------------------------------
@@ -190,71 +195,137 @@ def extract_pdf_page_by_page(
     case_context: Optional[dict] = None,
     vision=None,
     text_llm=None,
+    timings: Optional[dict] = None,
     **_,
 ) -> list[dict]:
     """Read every page of one PDF with the page pipeline and store the page
     rows (case_document_pages) and extraction records. `case_context` holds
-    the case record and known parties, passed to the reader as a hint."""
+    the case record and known parties, passed to the reader as a hint.
+
+    Each page is rendered and read by the same worker, so reading starts
+    with the first page, and its summary starts as soon as its text is
+    ready. `timings`, when given, is filled with where the time went."""
     if max_concurrent_requests < 1:
         raise ValueError("max_concurrent_requests must be at least 1.")
+    started = time.time()
     vision = vision or pp.dataiku_vision()
     text_llm = text_llm or pp.dataiku_text_llm()
 
-    rendered_pages = render_pdf_to_images(
-        case_id=case_id, case_document_id=case_document_id, pdf_bytes=pdf_bytes, dpi=dpi, store_images=True,
-    )
-    total_pages = len(rendered_pages)
+    if not pdf_bytes:
+        raise ValueError("The uploaded PDF is empty.")
+    total_pages = pp.page_count(pdf_bytes)
     if total_pages == 0:
         return []
-    rendered_by_number = {page.page_number: page for page in rendered_pages}
     layers = pp.text_layers(pdf_bytes)
     base_context = dict(case_context or {}, document_name=document_name or case_document_id)
+    workers = min(int(max_concurrent_requests), total_pages)
     print(f"[document extraction] document={document_name} pages={total_pages} "
-          f"page_workers={min(int(max_concurrent_requests), total_pages)} pipeline=page_pipeline")
+          f"page_workers={workers} summary_workers={PAGE_SUMMARY_MAX_WORKERS} pipeline=page_pipeline")
 
+    spent = {"render_seconds": 0.0, "read_seconds": 0.0, "summary_seconds": 0.0}
+    lock = threading.Lock()
+
+    def add(key, seconds):
+        with lock:
+            spent[key] += seconds
+
+    def render_and_read(number):
+        began = time.time()
+        rendered_page = render_pdf_page(case_id, case_document_id, pdf_bytes, number, dpi=dpi)
+        rendered_at = time.time()
+        result = _read_page(pdf_bytes, number, total_pages, layers, base_context, vision, text_llm)
+        add("render_seconds", rendered_at - began)
+        add("read_seconds", time.time() - rendered_at)
+        return rendered_page, result
+
+    def summarise(number):
+        began = time.time()
+        summary = summary_or_fallback({"page_id": rendered_by_number[number].page_id, "page_number": number,
+                                       "page_text": results[number].get("final_text", "")})
+        add("summary_seconds", time.time() - began)
+        return summary
+
+    rendered_by_number: dict = {}
     results: dict[int, dict] = {}
-    completed = 0
-    with ThreadPoolExecutor(max_workers=min(int(max_concurrent_requests), total_pages)) as executor:
-        futures = {
-            executor.submit(_read_page, pdf_bytes, number, total_pages, layers, base_context, vision, text_llm): number
-            for number in rendered_by_number
-        }
+    summary_futures: dict = {}
+    with ThreadPoolExecutor(max_workers=workers) as readers, \
+            ThreadPoolExecutor(max_workers=max(1, int(PAGE_SUMMARY_MAX_WORKERS))) as summarisers:
+        futures = {readers.submit(render_and_read, number): number for number in range(1, total_pages + 1)}
+        completed = 0
         for future in as_completed(futures):
             number = futures[future]
-            results[number] = future.result()
+            rendered_by_number[number], results[number] = future.result()
             completed += 1
             route = results[number].get("route") or "failed"
             print(f"[page read] page={number} route={route} status={_status(results[number])} "
                   f"vision_calls={results[number].get('vision_calls', 0)} seconds={results[number].get('seconds', 0)}")
             if progress_callback:
                 progress_callback(completed, total_pages, number, route)
+            if _has_text(results[number]):
+                summary_futures[number] = summarisers.submit(summarise, number)
+        reads_done = time.time()
 
-    # One more try for pages that produced no text (a transient model failure).
-    for number in sorted(n for n, r in results.items() if not str(r.get("final_text", "") or "").strip()):
-        retry = _read_page(pdf_bytes, number, total_pages, layers, base_context, vision, text_llm)
-        if str(retry.get("final_text", "") or "").strip():
-            retry["errors"] = list(retry.get("errors") or []) + ["recovered on a second attempt"]
-            results[number] = retry
-        print(f"[page recovery] page={number} status={_status(results[number])}")
+        # One more try for pages that produced no text (a transient model failure).
+        for number in sorted(n for n, r in results.items() if not _has_text(r)):
+            retry = _read_page(pdf_bytes, number, total_pages, layers, base_context, vision, text_llm)
+            if _has_text(retry):
+                retry["errors"] = list(retry.get("errors") or []) + ["recovered on a second attempt"]
+                results[number] = retry
+                summary_futures[number] = summarisers.submit(summarise, number)
+            print(f"[page recovery] page={number} status={_status(results[number])}")
+        retries_done = time.time()
+        summaries = {number: future.result() for number, future in summary_futures.items()}
+    summaries_done = time.time()
 
-    summaries = summarise_pages([
-        {"page_id": rendered_by_number[n].page_id, "page_number": n, "page_text": results[n].get("final_text", "")}
-        for n in sorted(results) if str(results[n].get("final_text", "") or "").strip()
-    ])
     rows = []
     for number in sorted(results):
-        rendered_page = rendered_by_number[number]
         result = results[number]
-        summary = summaries.get(rendered_page.page_id) or {}
+        summary = summaries.get(number) or {}
         merged = {**result, **{k: v for k, v in summary.items() if k != "document_type" or v}}
+        rows.append(_build_page_row(case_id, case_document_id, rendered_by_number[number], merged))
+
+    def save_record(number):
         try:
-            save_page_extraction(case_id, rendered_page.page_id,
-                                 _record(case_id, case_document_id, document_name, rendered_page, result))
+            save_page_extraction(case_id, rendered_by_number[number].page_id,
+                                 _record(case_id, case_document_id, document_name, rendered_by_number[number],
+                                         results[number]))
         except Exception as error:
             print(f"[page extraction record] page={number} could not be saved: {error!r}")
-        rows.append(_build_page_row(case_id, case_document_id, rendered_page, merged))
 
-    # Sequential dataset writes avoid concurrent Dataiku writer conflicts.
-    for row in rows:
-        append_rows(CASE_DOCUMENT_PAGES_DATASET, [row])
+    with ThreadPoolExecutor(max_workers=min(RECORD_SAVE_WORKERS, len(results))) as savers:
+        list(savers.map(save_record, sorted(results)))
+    records_done = time.time()
+
+    # One dataset write for the whole document (each write is a full Dataiku write).
+    append_rows(CASE_DOCUMENT_PAGES_DATASET, rows)
+    finished = time.time()
+
+    clock = {
+        "pages": total_pages,
+        "seconds": round(finished - started, 1),
+        "reading_seconds": round(reads_done - started, 1),
+        "retry_seconds": round(retries_done - reads_done, 1),
+        "summary_wait_seconds": round(summaries_done - retries_done, 1),
+        "records_seconds": round(records_done - summaries_done, 1),
+        "rows_seconds": round(finished - records_done, 1),
+        **{key: round(value, 1) for key, value in spent.items()},
+        "vision_calls": sum(int(r.get("vision_calls", 0) or 0) for r in results.values()),
+        "llm_calls": sum(int(r.get("llm_calls", 0) or 0) for r in results.values()) + len(summary_futures),
+        "routes": _count(r.get("route") or "failed" for r in results.values()),
+    }
+    print("[document timing] document={} {}".format(
+        document_name, " ".join(f"{k}={v}" for k, v in clock.items())))
+    if timings is not None:
+        timings.update(clock)
     return rows
+
+
+def _has_text(result: dict) -> bool:
+    return bool(str(result.get("final_text", "") or "").strip())
+
+
+def _count(values) -> dict:
+    out: dict = {}
+    for value in values:
+        out[value] = out.get(value, 0) + 1
+    return out

@@ -51,7 +51,7 @@ import cv2
 import numpy as np
 
 from . import image_tables as it
-from .arabic_text import fix_visual_arabic, ligature_damage, repair_ligatures
+from .arabic_text import fix_visual_arabic, is_visual_order, ligature_damage, repair_ligatures
 
 VisionCall = Callable[[str, bytes], str]
 TextLLM = Callable[[str, dict], dict]
@@ -719,7 +719,7 @@ def _native(page: dict, text_llm: TextLLM) -> dict:
     model, kept only when every number survives unchanged."""
     text = page["native_text"]
     out = {"text": text, "uncertain": [], "corrections": [], "document_type": "", "headings": [], "llm_calls": 0}
-    if not _ARABIC.search(text):
+    if not _ARABIC.search(text) or not needs_word_repair(page):
         return out
     out["llm_calls"] = 1
     try:
@@ -738,6 +738,16 @@ def _native(page: dict, text_llm: TextLLM) -> dict:
                 "document_type": str(answer.get("document_type") or ""),
                 "headings": [str(h) for h in answer.get("headings") or []][:10]})
     return out
+
+
+def needs_word_repair(page: dict) -> bool:
+    """Whether the PDF's Arabic may still hold damaged words after the
+    code's own fixes (reading order, ligatures). A layer with no ligature
+    damage and every line in reading order is used as it is, without the
+    model's word repair; damage inside words comes with ligature damage."""
+    if ligature_damage(page.get("text_layer", "")):
+        return True
+    return any(is_visual_order(line) for line in str(page.get("native_text", "")).split("\n"))
 
 
 def _with_picture_marks(page: dict) -> str:

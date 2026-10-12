@@ -12,6 +12,7 @@ from .llm import complete_json
 
 
 CASE_MAP_PROMPT = r"""
+/no_think
 You are a legal case-document structuring service.
 
 Build a neutral, traceable case map from compact page summaries.

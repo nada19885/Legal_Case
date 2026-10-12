@@ -1600,6 +1600,7 @@ def documents_process():
         totals = {"facts": 0, "issues": 0, "parties": 0, "events": 0, "evidence_requests": 0}
         status_counts, failure_notes = {}, []
         llm_call_count = 0
+        timing = {"started": time.time(), "documents": [], "case_map_seconds": 0.0, "case_map_save_seconds": 0.0}
 
         for file_index, (name, raw, content_type) in enumerate(payloads, start=1):
             _set_phase(job_id, "extracting_pages", f"{name} ({file_index}/{len(payloads)}): rendering pages…")
@@ -1609,6 +1610,7 @@ def documents_process():
             def update_progress(current, total, page_number, state, _name=name):
                 _set_phase(job_id, "extracting_pages",
                            f"{_name}: page {page_number}/{total} — {state}", current=current, total=total)
+            document_timing = {}
             pages = extract_pdf_page_by_page(
                 case_id=case_id,
                 case_document_id=document_row["case_document_id"],
@@ -1617,7 +1619,9 @@ def documents_process():
                 progress_callback=update_progress,
                 document_name=name,
                 case_context=_intake_context(case_id),
+                timings=document_timing,
             )
+            timing["documents"].append({"file": name, **document_timing})
             llm_call_count += len(pages)
             completed_pages = [p for p in pages if p.get("processing_status") in {"completed", "completed_review_required"}]
             for page in pages:
@@ -1636,9 +1640,13 @@ def documents_process():
             usable_pages += len(completed_pages)
             if completed_pages:
                 _set_phase(job_id, "building_case_register", f"{name}: extracting parties, events, facts and issues…")
+                began = time.time()
                 case_map = build_case_map(completed_pages)
                 llm_call_count += 1
+                mapped = time.time()
                 counts = persist_case_map(case_id, case_map)
+                timing["case_map_seconds"] += mapped - began
+                timing["case_map_save_seconds"] += time.time() - mapped
                 for key in totals:
                     totals[key] += int(counts.get(key, 0) or 0)
 
@@ -1646,7 +1654,19 @@ def documents_process():
             increment_usage(session_id, "llm_request_count", llm_call_count)
         increment_usage(session_id, "attachment_count", len(payloads))
 
+        timing = {
+            "seconds": round(time.time() - timing.pop("started"), 1),
+            "case_map_seconds": round(timing["case_map_seconds"], 1),
+            "case_map_save_seconds": round(timing["case_map_save_seconds"], 1),
+            "documents": timing["documents"],
+        }
+        print("[documents timing] case={} total_seconds={} case_map_seconds={} case_map_save_seconds={} {}".format(
+            case_id, timing["seconds"], timing["case_map_seconds"], timing["case_map_save_seconds"],
+            " | ".join("{}: {}s reading={}s summary_wait={}s rows={}s".format(
+                d["file"], d.get("seconds"), d.get("reading_seconds"), d.get("summary_wait_seconds"),
+                d.get("rows_seconds")) for d in timing["documents"])))
         report = {
+            "timing": timing,
             "files": len(payloads),
             "usable": usable_pages,
             "total": total_pages,
