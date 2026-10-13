@@ -74,8 +74,8 @@ print("largest_image near 1.0 with 'background image(s) ignored' in the reason: 
 
 # %% Part 2: is the vision model thinking? -------------------------------------
 PAGE_PNG = pp._png(pp.load_page(PDF, TEST_PAGE)["image"])
-PROMPT = pp.READ_PROMPT.format(part="", context="", table_rules=pp.TABLE_RULES)   # starts with /no_think
-THINKING_PROMPT = PROMPT.replace("/no_think\n", "", 1)
+THINKING_PROMPT = pp.READ_PROMPT.format(part="", context="", table_rules=pp.TABLE_RULES)
+PROMPT = "/no_think\n" + THINKING_PROMPT      # what the webapp's vision_call sends
 
 
 def one_call(prompt):

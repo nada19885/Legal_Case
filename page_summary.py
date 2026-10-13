@@ -15,7 +15,6 @@ from .config import (
 from .llm import complete_json
 
 PAGE_SUMMARY_SYSTEM_PROMPT = r"""
-/no_think
 You extract a compact, factual JSON record from one page of a Saudi legal,
 banking, regulatory, evidentiary, or procedural document.
 Return one valid JSON object only. Do not return markdown or commentary.

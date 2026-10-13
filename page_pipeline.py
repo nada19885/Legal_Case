@@ -444,7 +444,6 @@ TABLE_RULES = """
 """.strip()
 
 READ_PROMPT = """
-/no_think
 Transcribe ALL text in this image exactly as printed, in reading order
 (Arabic right to left, English left to right). {part}
 
@@ -534,7 +533,6 @@ def read_variant(picture: np.ndarray, vision: VisionCall, context: str) -> Tuple
 
 
 NUMBERS_PROMPT = """
-/no_think
 This image is one band of a financial document page ({band}). Read ONLY the
 lines that contain a date, an amount or a balance, top to bottom, including
 small numbers standing alone at the edge of the page (an opening balance, a

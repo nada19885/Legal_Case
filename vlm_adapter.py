@@ -106,7 +106,7 @@ def vlm_transcribe(
         )
 
         multipart = completion.new_multipart_message(role="user")
-        multipart.with_text("Transcribe/describe this image.")
+        multipart.with_text(_without_thinking("Transcribe/describe this image."))
         multipart.with_inline_image(image_b64, mime)
         multipart.add()
 
@@ -115,6 +115,18 @@ def vlm_transcribe(
 
     except Exception as error:
         return "", str(error)
+
+
+NO_THINK = "/no_think"
+
+
+def _without_thinking(prompt: str) -> str:
+    """Every vision call asks the model not to reason before it answers:
+    a transcription needs no reasoning, and the reasoning made calls run
+    past the connection's 60 s timeout. Only the vision model is affected;
+    the text model keeps its reasoning where its prompts allow it."""
+    text = str(prompt or "")
+    return text if text.lstrip().startswith(NO_THINK) else f"{NO_THINK}\n{text}"
 
 
 # One limit for every vision call of the backend, whatever page or job
@@ -130,12 +142,14 @@ def vision_call(
     mime: str = "image/png",
 ) -> str:
     """One image and one instruction to the vision model (the page
-    pipeline's reader). At most VISION_MAX_IN_FLIGHT calls run at once.
+    pipeline's reader), without reasoning (/no_think). At most
+    VISION_MAX_IN_FLIGHT calls run at once.
     Retries a failure once (Dataiku's connection retries as well); raises
     with the last error when every attempt failed."""
     import base64
 
     image_b64 = base64.b64encode(png_bytes).decode("utf-8")
+    prompt = _without_thinking(prompt)
     last_error = ""
     for attempt in range(1, int(attempts) + 1):
         started = time.time()
