@@ -88,6 +88,7 @@ def _record(case_id, case_document_id, document_name, rendered_page, result) -> 
         "page_number": rendered_page.page_number,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "route": result.get("route", ""),
+        "route_reason": result.get("route_reason", ""),
         "text_layer_quality": result.get("text_layer_quality", ""),
         "picture_share": result.get("picture_share", 0.0),
         "regions": result.get("regions") or [],
@@ -258,7 +259,8 @@ def extract_pdf_page_by_page(
             completed += 1
             route = results[number].get("route") or "failed"
             print(f"[page read] page={number} route={route} status={_status(results[number])} "
-                  f"vision_calls={results[number].get('vision_calls', 0)} seconds={results[number].get('seconds', 0)}")
+                  f"vision_calls={results[number].get('vision_calls', 0)} seconds={results[number].get('seconds', 0)} "
+                  f"reason={results[number].get('route_reason', '')}")
             if progress_callback:
                 progress_callback(completed, total_pages, number, route)
             if _has_text(results[number]):

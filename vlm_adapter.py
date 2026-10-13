@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 from typing import Any
 
@@ -11,6 +12,7 @@ from .config import (
     FAILED_PAGE_RECOVERY_DELAY_SECONDS,
     FALLBACK_OCR_VLM_ID,
     FAST_OCR_VLM_ID,
+    VISION_MAX_IN_FLIGHT,
     FALLBACK_VLM_MAX_ATTEMPTS,
     FAST_VLM_MAX_ATTEMPTS,
     VLM_TEMPERATURE,
@@ -114,21 +116,28 @@ def vlm_transcribe(
         return "", str(error)
 
 
+# One limit for every vision call of the backend, whatever page or job
+# makes it (see config.VISION_MAX_IN_FLIGHT).
+_IN_FLIGHT = threading.BoundedSemaphore(max(1, int(VISION_MAX_IN_FLIGHT)))
+
+
 def vision_call(
     prompt: str,
     png_bytes: bytes,
     model_id: str | None = None,
-    attempts: int = 3,
+    attempts: int = 2,
     mime: str = "image/png",
 ) -> str:
     """One image and one instruction to the vision model (the page
-    pipeline's reader). Retries transient failures; raises with the last
-    error when every attempt failed."""
+    pipeline's reader). At most VISION_MAX_IN_FLIGHT calls run at once.
+    Retries a failure once (Dataiku's connection retries as well); raises
+    with the last error when every attempt failed."""
     import base64
 
     image_b64 = base64.b64encode(png_bytes).decode("utf-8")
     last_error = ""
     for attempt in range(1, int(attempts) + 1):
+        started = time.time()
         try:
             project = dataiku.api_client().get_default_project()
             completion = project.get_llm(model_id or FAST_OCR_VLM_ID).new_completion()
@@ -140,10 +149,17 @@ def vision_call(
             multipart.with_text(prompt)
             multipart.with_inline_image(image_b64, mime)
             multipart.add()
-            return _response_text(completion.execute())
+            waited = time.time()
+            with _IN_FLIGHT:
+                began = time.time()
+                response = completion.execute()
+            text = _response_text(response)
+            print(f"[vision call] seconds={time.time() - began:.1f} queued={began - waited:.1f} "
+                  f"answer_chars={len(text)} image_kb={len(png_bytes) // 1024}")
+            return text
         except Exception as error:
             last_error = repr(error)
-            print(f"[vision call failure] attempt={attempt} error={last_error}")
+            print(f"[vision call failure] attempt={attempt} seconds={time.time() - started:.1f} error={last_error}")
             if attempt < int(attempts):
                 time.sleep(2.0 * attempt)
     raise RuntimeError(f"The vision request failed after {attempts} attempts: {last_error}")

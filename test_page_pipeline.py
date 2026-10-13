@@ -105,14 +105,40 @@ check("a typed letter is not flagged table-heavy", "table_heavy" not in pp.class
 tiny = cv2.resize(pages[0]["image"], None, fx=0.25, fy=0.25, interpolation=cv2.INTER_AREA)
 check("a small, blurred page is flagged low-resolution", "low_resolution" in pp.classify(tiny)[1]["flags"])
 
+# --- background images: a letterhead behind the PDF's own text ----------------------------
+def _page_over_image(render_mode):
+    document = fitz.open()
+    page = document.new_page(width=595, height=842)
+    background = np.full((842, 595, 3), 250, np.uint8)
+    cv2.rectangle(background, (20, 20), (575, 90), (30, 90, 160), -1)
+    page.insert_image(page.rect, stream=cv2.imencode(".png", background)[1].tobytes())
+    for line in range(25):
+        page.insert_text((60, 120 + line * 25), f"Line {line}: the claimant asks for 250 SAR on 18-10-2024.",
+                         fontsize=10, render_mode=render_mode)
+    return pp.load_page(document.tobytes(), 1)
+
+
+letterhead = _page_over_image(0)
+check("a full-page image under visible PDF text is a background: the page keeps its own text",
+      letterhead["backgrounds"] == 1 and letterhead["picture_share"] == 0.0 and pp.route(letterhead) == "native"
+      and "background" in pp.route_reason(letterhead))
+ocr_scan = _page_over_image(3)
+check("a scan with an invisible OCR layer is still read from its image",
+      ocr_scan["backgrounds"] == 0 and pp.route(ocr_scan) == "vlm"
+      and pp.route_reason(ocr_scan).startswith("pictures cover"))
+
 # --- views --------------------------------------------------------------------------------
 photo_views = pp.variants(pages[1]["regions"][0][1], "photo")
 check("a camera shot is read in two views (corrected, local contrast)", list(photo_views) == ["corrected", "contrast"])
 check("the corrected photo is straightened (page fills the picture, no desk)",
       float(np.percentile(photo_views["corrected"], 10)) > 120)
 check("both photo views keep the same geometry", photo_views["corrected"].shape == photo_views["contrast"].shape)
-check("a screenshot gets the original and a light variant",
-      list(pp.variants(pages[0]["regions"][0][1], "screenshot")) == ["original", "sharpened"])
+shot = pages[0]["regions"][0][1]
+check("a screenshot is read in one view", len(pp.variants(shot, "screenshot")) == 1)
+small = cv2.resize(shot, None, fx=0.4, fy=0.4, interpolation=cv2.INTER_AREA)
+check("a screenshot with small letters is read enlarged and sharpened",
+      list(pp.variants(small, "screenshot")) == ["sharpened"]
+      and pp.variants(small, "screenshot")["sharpened"].shape[0] > small.shape[0])
 
 tall = np.full((9000, 1200, 3), 255, np.uint8)
 for i in range(180):

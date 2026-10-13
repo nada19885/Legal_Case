@@ -55,19 +55,9 @@ def page_facts(number):
         biggest = max((r.width * r.height / area for info in p.get_images(full=True)
                        for r in p.get_image_rects(info[0])), default=0.0)
     way = pp.route(page)
-    quality = pp.text_layer_quality(layer)
     share = page["picture_share"]
     damage = ligature_damage(layer)
-    if quality != "clean" or not page["native_text"]:
-        reason = f"text layer {quality}"
-    elif share >= pp.PICTURE_SHARE_IS_IMAGE:
-        reason = f"pictures cover {share:.0%} of the page"
-    elif damage >= pp.ARABIC_DAMAGE_WORDS:
-        reason = f"{damage} damaged Arabic words"
-    elif way == "native+vlm":
-        reason = f"pictures cover {share:.0%}"
-    else:
-        reason = "clean text layer"
+    reason = pp.route_reason(page)
     return {"page": number, "route": way, "reason": reason, "words": len(layer.split()),
             "picture_share": share, "largest_image": round(biggest, 2), "pictures": len(page["pictures"]),
             "damaged_words": damage}
@@ -77,18 +67,15 @@ facts = [page_facts(n) for n in range(1, pp.page_count(PDF) + 1)]
 for row in facts:
     print("page {page:>3}  {route:<10}  words={words:<5} pictures={pictures} share={picture_share:<5} "
           "largest_image={largest_image:<5} damaged={damaged_words:<3} -> {reason}".format(**row))
-reasons = {}
-for row in facts:
-    key = row["reason"].split(" cover ")[0] if "cover" in row["reason"] else row["reason"].split(" ", 1)[-1]
-    reasons[key] = reasons.get(key, 0) + 1
 print("\nRoutes:", {r: sum(1 for f in facts if f["route"] == r) for r in ("native", "native+vlm", "vlm")})
-print("A page with many words AND largest_image near 1.0 has a full-page image behind its text "
-      "(letterhead or background): it could be read from its own text instead of the vision model.")
+print("largest_image near 1.0 with 'background image(s) ignored' in the reason: a letterhead or page\n"
+      "background under the PDF's own text; the page is read from its text, not by the vision model.")
 
 
 # %% Part 2: is the vision model thinking? -------------------------------------
 PAGE_PNG = pp._png(pp.load_page(PDF, TEST_PAGE)["image"])
-PROMPT = pp.READ_PROMPT.format(part="", context="", table_rules=pp.TABLE_RULES)
+PROMPT = pp.READ_PROMPT.format(part="", context="", table_rules=pp.TABLE_RULES)   # starts with /no_think
+THINKING_PROMPT = PROMPT.replace("/no_think\n", "", 1)
 
 
 def one_call(prompt):
@@ -115,7 +102,7 @@ def one_call(prompt):
             "think_tag": "<think>" in text, "usage": usage, "error": error}
 
 
-for label, prompt in (("as today", PROMPT), ("with /no_think", "/no_think\n" + PROMPT)):
+for label, prompt in (("without /no_think", THINKING_PROMPT), ("with /no_think", PROMPT)):
     for attempt in (1, 2):
         result = one_call(prompt)
         print(f"{label:<15} try {attempt}: {result}")
@@ -124,7 +111,7 @@ print("\nIf 'with /no_think' is much faster for the same answer length, or compl
 
 
 # %% Part 3: capacity -------------------------------------------------------------
-USE_PROMPT = PROMPT          # set to "/no_think\n" + PROMPT if Part 2 showed it is faster
+USE_PROMPT = PROMPT          # the prompt the webapp sends (with /no_think)
 
 summary = []
 for level in LEVELS:

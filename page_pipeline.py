@@ -22,7 +22,8 @@ Location: lib/python/legal_platform/page_pipeline.py
   4. views       photo:      A perspective-corrected, evened, sharpened
                              B the same geometry, local contrast, denoised
                  scan:       original + cleaned (deskewed, evened, scaled)
-                 screenshot: original + lightly sharpened
+                 screenshot: one view: original, or enlarged + sharpened
+                             when its letters are small
                  A picture too large for the model is read in parts.
   5. reading     The VLM transcribes every view with the case context as a
                  hint, tables as markdown, "?" for what it cannot read. Money
@@ -63,8 +64,10 @@ CONTEXT_CHARS = 4000
 MIN_PICTURE_SHARE = 0.04           # an embedded picture smaller than this share of the page is decoration
 PICTURE_SHARE_FOR_VLM = 0.15       # reliable text + pictures covering this much -> the pictures are read too
 PICTURE_SHARE_IS_IMAGE = 0.6       # pictures covering this much: the page is an image (scan with OCR layer)
+BACKGROUND_TEXT_LETTERS = 200     # visible PDF letters on top of a picture: it is the page background, not content
 ARABIC_DAMAGE_WORDS = 3            # Arabic words with ligatures stored out of order: the words are read from the image
 PHOTO_VIEWS = 2
+SMALL_LETTER_PX = 22               # a screenshot with smaller letters is read enlarged
 
 _ARABIC = re.compile(r"[ء-ي]")
 
@@ -153,6 +156,35 @@ def text_layers(data: bytes) -> Dict[int, str]:
         return {index + 1: document.load_page(index).get_text("text").strip() for index in range(document.page_count)}
 
 
+def _visible_text_boxes(page: Any) -> List[Tuple[Any, int]]:
+    """(box, letters) of every span of text drawn visibly on the page. An
+    OCR layer laid over a scan is invisible (render mode 3), so it is not
+    counted."""
+    boxes = []
+    try:
+        for span in page.get_texttrace():
+            if span.get("type") == 3 or float(span.get("opacity", 1.0) or 0.0) == 0.0:
+                continue
+            letters = sum(1 for c in span.get("chars") or () if chr(c[0]).strip())
+            if letters:
+                boxes.append((span["bbox"], letters))
+    except Exception:
+        return []
+    return boxes
+
+
+def _is_background(rect: Any, visible: List[Tuple[Any, int]]) -> bool:
+    """A picture with a page's worth of visible PDF text drawn on top of it
+    is the page background (letterhead, watermark, frame): the text is
+    the PDF's own and is read from the text layer, not from the image."""
+    letters = 0
+    for (x0, y0, x1, y1), count in visible:
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        if rect.x0 <= cx <= rect.x1 and rect.y0 <= cy <= rect.y1:
+            letters += count
+    return letters >= BACKGROUND_TEXT_LETTERS
+
+
 def load_page(data: bytes, number: int, dpi: int = RENDER_DPI) -> dict:
     """One page: {page, image, text_layer, native_text, native_tables,
     picture_share, pictures: [(name, image, (y0, y1))], regions}. Opens the
@@ -167,12 +199,17 @@ def load_page(data: bytes, number: int, dpi: int = RENDER_DPI) -> dict:
         zoom = dpi / 72.0
         image = _decode(page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False).tobytes("png"))
         area = page.rect.width * page.rect.height
-        rects = []
+        rects, backgrounds = [], 0
+        visible = _visible_text_boxes(page)
         for info in page.get_images(full=True):
             for rect in page.get_image_rects(info[0]):
                 rect = rect & page.rect
-                if rect.width * rect.height >= MIN_PICTURE_SHARE * area:
-                    rects.append((rect.x0, rect.y0, rect.x1, rect.y1))
+                if rect.width * rect.height < MIN_PICTURE_SHARE * area:
+                    continue
+                if _is_background(rect, visible):
+                    backgrounds += 1
+                    continue
+                rects.append((rect.x0, rect.y0, rect.x1, rect.y1))
         merged = sorted(_merge_rects(rects, gap=0.01 * page.rect.height), key=lambda r: (r[1], r[0]))
         share = min(1.0, sum((r[2] - r[0]) * (r[3] - r[1]) for r in merged) / area) if area else 0.0
         pictures = []
@@ -186,7 +223,7 @@ def load_page(data: bytes, number: int, dpi: int = RENDER_DPI) -> dict:
     if len(pictures) >= 2 and len(text.split()) < 20:
         regions = [(name, crop) for name, crop, _ in pictures]
     return {"page": number, "image": image, "text_layer": text, "native_text": own, "native_tables": tables,
-            "picture_share": round(share, 3), "pictures": pictures, "regions": regions}
+            "picture_share": round(share, 3), "pictures": pictures, "regions": regions, "backgrounds": backgrounds}
 
 
 def pdf_pages(data: bytes, filename: str = "", pages: Optional[List[int]] = None,
@@ -235,6 +272,23 @@ def route(page: dict) -> str:
     if share >= PICTURE_SHARE_FOR_VLM and page.get("pictures"):
         return "native+vlm"
     return "native"
+
+
+def route_reason(page: dict) -> str:
+    """Why route() chose what it chose, for the logs."""
+    quality = text_layer_quality(page.get("text_layer", ""))
+    share = float(page.get("picture_share") or 0.0)
+    background = f", {page['backgrounds']} background image(s) ignored" if page.get("backgrounds") else ""
+    if quality != "clean" or not page.get("native_text"):
+        return f"text layer {quality}{background}"
+    if share >= PICTURE_SHARE_IS_IMAGE:
+        return f"pictures cover {share:.0%} of the page{background}"
+    damage = ligature_damage(page.get("text_layer", ""))
+    if damage >= ARABIC_DAMAGE_WORDS:
+        return f"{damage} damaged Arabic words{background}"
+    if share >= PICTURE_SHARE_FOR_VLM and page.get("pictures"):
+        return f"text layer clean, pictures cover {share:.0%}{background}"
+    return f"text layer clean{background}"
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +357,7 @@ def _gentle(image: np.ndarray) -> np.ndarray:
     edges lightly sharpened; nothing that could erase a dot or a comma."""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
     letter = it.ink_height(it.text_ink(gray, True)) or 24
-    if letter < 22:
+    if letter < SMALL_LETTER_PX:
         factor = min(3.0, 26 / letter)
         gray = cv2.resize(gray, None, fx=factor, fy=factor, interpolation=cv2.INTER_CUBIC)
     darker = (np.power(gray / 255.0, 1.4) * 255).astype(np.uint8)
@@ -328,7 +382,13 @@ def variants(image: np.ndarray, kind: str, photo_views: int = PHOTO_VIEWS) -> Di
         return out
     if kind == "scan":
         return {"original": image, "cleaned": it.prepare_page(image).read}
-    return {"original": image, "sharpened": _gentle(image)}
+    # A clean digital picture (screenshot, exported image) reads the same in
+    # every view: one reading, enlarged and sharpened only when its letters
+    # are small.
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    if (it.ink_height(it.text_ink(gray, True)) or 24) < SMALL_LETTER_PX:
+        return {"sharpened": _gentle(image)}
+    return {"original": image}
 
 
 def parts(image: np.ndarray, max_pixels: int = MAX_CALL_PIXELS) -> List[np.ndarray]:
@@ -384,6 +444,7 @@ TABLE_RULES = """
 """.strip()
 
 READ_PROMPT = """
+/no_think
 Transcribe ALL text in this image exactly as printed, in reading order
 (Arabic right to left, English left to right). {part}
 
@@ -473,6 +534,7 @@ def read_variant(picture: np.ndarray, vision: VisionCall, context: str) -> Tuple
 
 
 NUMBERS_PROMPT = """
+/no_think
 This image is one band of a financial document page ({band}). Read ONLY the
 lines that contain a date, an amount or a balance, top to bottom, including
 small numbers standing alone at the edge of the page (an opening balance, a
@@ -860,7 +922,7 @@ def process_page(page: dict, vision: VisionCall, text_llm: TextLLM, context: Any
         uncertain.append({"value": value, "readings": [],
                           "reason": "this number appears in none of the readings; check it against the page"})
 
-    out = {"page": page["page"], "route": way, "regions": regions_out, "readings": readings,
+    out = {"page": page["page"], "route": way, "route_reason": route_reason(page), "regions": regions_out, "readings": readings,
            "final_text": final_text, "uncertain": uncertain, "corrections": final["corrections"],
            "document_type": final["document_type"], "headings": final["headings"],
            "has_text_layer": bool(text_layer), "text_layer_quality": quality,

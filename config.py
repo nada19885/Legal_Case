@@ -92,6 +92,10 @@ PDF_PAGE_MAX_CONCURRENT_REQUESTS = 4
 # Vision calls one page may make at the same time (its views are read in
 # parallel); total parallel calls are at most this x the page workers.
 PAGE_READ_PARALLEL_CALLS = 2
+# Vision calls in flight for the whole backend (all pages, all jobs). Keep it
+# at or below the vision connection's "Max parallelism" in Dataiku; calls
+# beyond what the server can take only queue, time out and are resent.
+VISION_MAX_IN_FLIGHT = 6
 FAST_VLM_MAX_ATTEMPTS = 1
 FALLBACK_VLM_MAX_ATTEMPTS = 1
 FAILED_PAGE_RECOVERY_ATTEMPTS = 1
