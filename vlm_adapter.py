@@ -7,14 +7,13 @@ from typing import Any
 
 import dataiku
 
-from .thinking import no_think, report_thinking
+from . import config as _config
+from .thinking import VISION_THINKING, no_think, report_thinking
 from .config import (
     FAILED_PAGE_RECOVERY_ATTEMPTS,
     FAILED_PAGE_RECOVERY_DELAY_SECONDS,
     FALLBACK_OCR_VLM_ID,
     FAST_OCR_VLM_ID,
-    VISION_MAX_IN_FLIGHT,
-    VISION_THINKING,
     FALLBACK_VLM_MAX_ATTEMPTS,
     FAST_VLM_MAX_ATTEMPTS,
     VLM_TEMPERATURE,
@@ -120,7 +119,8 @@ def vlm_transcribe(
 
 # One limit for every vision call of the backend, whatever page or job
 # makes it (see config.VISION_MAX_IN_FLIGHT).
-_IN_FLIGHT = threading.BoundedSemaphore(max(1, int(VISION_MAX_IN_FLIGHT)))
+VISION_MAX_IN_FLIGHT = int(getattr(_config, "VISION_MAX_IN_FLIGHT", 6))   # default if config.py is older
+_IN_FLIGHT = threading.BoundedSemaphore(max(1, VISION_MAX_IN_FLIGHT))
 
 VERSION = "2026-10-13c"
 print(f"[vision adapter loaded] version={VERSION} no_think={'off' if VISION_THINKING else 'on'} "

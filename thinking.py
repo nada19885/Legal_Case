@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import re
 
-from .config import VISION_THINKING
+from . import config
+
+# Read with a default, so an older config.py without the setting still works.
+VISION_THINKING = bool(getattr(config, "VISION_THINKING", False))
 
 NO_THINK = "/no_think"
 _THINK_BLOCK = re.compile(r"<think>(.*?)(?:</think>|$)", re.DOTALL)
