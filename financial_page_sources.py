@@ -21,6 +21,8 @@ class FinancialPageSource:
     page_text: str
     page_image_path: str
     page_image_mime_type: str
+    extraction_method: str = ""
+    document_name: str = ""
 
 
 def load_financial_pages(
@@ -40,6 +42,12 @@ def load_financial_pages(
         wanted = {str(item) for item in case_document_ids}
         pages_df = pages_df[pages_df["case_document_id"].astype(str).isin(wanted)]
 
+    names = {}
+    docs_df = case_rows(CASE_DOCUMENTS_DATASET, case_id)
+    if not docs_df.empty:
+        for doc in docs_df.to_dict(orient="records"):
+            names[str(doc.get("case_document_id", ""))] = str(doc.get("original_filename") or "")
+
     sources: list[FinancialPageSource] = []
     for row in pages_df.to_dict(orient="records"):
         text = str(row.get("page_text", "") or "").strip()
@@ -52,6 +60,8 @@ def load_financial_pages(
             page_text=text,
             page_image_path=str(row.get("page_image_path", "")),
             page_image_mime_type=str(row.get("page_image_mime_type", "") or "image/png"),
+            extraction_method=str(row.get("extraction_method", "") or ""),
+            document_name=names.get(str(row.get("case_document_id", "")), ""),
         ))
 
     sources.sort(key=lambda page: (page.case_document_id, page.page_number))

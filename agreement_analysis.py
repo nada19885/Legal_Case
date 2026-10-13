@@ -7,6 +7,7 @@ from typing import Callable
 from .agreement_retrieval import build_review_units, retrieve_authorities_for_unit
 from .context_budget import make_char_chunks, select_with_char_budget
 from .agreement_llm import agreement_complete_json
+from .arabic_text import use_central_bank_names
 from .config import (
     AGREEMENT_CLAUSE_REVIEW_MAX_WORKERS,
     AGREEMENT_SYNTHESIS_MAX_WORKERS,
@@ -30,16 +31,41 @@ is missing, mark the review provisional. Return JSON only:
  "weaknesses":[], "affected_related_clause_ids":[], "missing_dependencies":[],
  "recommended_change_ar":"", "recommended_change_en":"",
  "proposed_wording_ar":"", "proposed_wording_en":"",
- "client_question_ar":"", "client_question_en":""
+ "client_question_ar":"", "client_question_en":"",
+ "edits":[
+  {"type":"replace|delete|add", "original":"", "replacement":"",
+   "reason_ar":"", "reason_en":""}
+ ]
 }
+proposed_wording_ar / proposed_wording_en: the whole clause AS IT SHOULD READ,
+written as contract text ready to sign (not advice such as "add a sentence",
+"it is recommended", "يُستحسن", "يُعدل النص"; no node_ids; no blanks like ___).
+The one in the contract's own language is shown inside the contract. Leave
+both empty when the clause needs no change.
+edits are the exact changes to the clause wording, shown to the attorney as
+marks on the agreement pages:
+- original: the words to change, copied CHARACTER FOR CHARACTER from the
+  supplied clause wording (full_text of the target clause), in the agreement's
+  own language. Keep it short: one sentence or the phrase that must change.
+  Never paraphrase or translate it.
+- replacement: how it should read instead, in the same language as original.
+- type replace: original -> replacement. type delete: original is removed
+  (replacement empty). type add: replacement is new wording; original is the
+  existing sentence it should follow (or empty).
+- Only changes that protect the represented party; [] when the clause is fine.
 If no supplied authority supports a legal conclusion, say insufficient applicable
 authority was retrieved and do not fill the gap from model memory.
+Name the regulator only as "البنك المركزي السعودي" (Saudi Central Bank); never write
+"سلطة النقد", "مؤسسة النقد" or "Saudi Arabian Monetary Authority".
 """
 
 SYNTHESIS_PROMPT = """
 Synthesize clause reviews into a concise package-level contract review. Use only the
 supplied clause reviews and package map. Do not add new legal propositions. Deduplicate
-repeated risks and recommendations. Return JSON only:
+repeated risks and recommendations.
+Name the regulator only as "البنك المركزي السعودي" (Saudi Central Bank); never write
+"سلطة النقد", "مؤسسة النقد" or "Saudi Arabian Monetary Authority".
+Return JSON only:
 {
  "executive_summary_ar":"", "executive_summary_en":"",
  "critical_points":[], "missing_protections":[], "cross_clause_conflicts":[],
@@ -62,6 +88,35 @@ def _clean_authority_ids(review: dict, allowed: set[str]) -> None:
         review["support_status"] = "unsupported"
         review["legal_finding_ar"] = "لم يتم استرجاع سند نظامي كافٍ من قاعدة المعرفة لهذه النتيجة."
         review["legal_finding_en"] = "Insufficient applicable authority was retrieved from the knowledge base for this conclusion."
+
+
+EDIT_TYPES = ("replace", "delete", "add")
+
+
+def clean_edits(edits, clause_id: str) -> list[dict]:
+    """The usable wording edits of one clause review, each with an id."""
+    out = []
+    for edit in edits if isinstance(edits, list) else []:
+        if not isinstance(edit, dict):
+            continue
+        kind = str(edit.get("type") or "replace").strip().lower()
+        kind = kind if kind in EDIT_TYPES else "replace"
+        original = str(edit.get("original") or "").strip()
+        replacement = str(edit.get("replacement") or "").strip()
+        if (kind in {"replace", "delete"} and not original) or (kind in {"replace", "add"} and not replacement):
+            continue
+        if kind == "replace" and original == replacement:
+            continue
+        out.append({
+            "edit_id": "{}-E{}".format(clause_id, len(out) + 1),
+            "clause_id": clause_id,
+            "type": kind,
+            "original": original,
+            "replacement": "" if kind == "delete" else replacement,
+            "reason_ar": str(edit.get("reason_ar") or "").strip(),
+            "reason_en": str(edit.get("reason_en") or "").strip(),
+        })
+    return out
 
 
 def review_large_agreement(
@@ -90,8 +145,12 @@ def review_large_agreement(
             context,
             operation=f"agreement clause review {clause_id or index}",
         )
+        review = use_central_bank_names(review)
         allowed = {str(x.get("node_id", "") or "") for x in authorities}
         _clean_authority_ids(review, allowed)
+        clause = unit.get("target_clause", {}) or {}
+        review["source_page_ids"] = list(clause.get("source_page_ids", []) or [])
+        review["edits"] = clean_edits(review.get("edits"), clause_id or str(index))
         review["_order"] = index
         return index, review, authorities
 
@@ -121,7 +180,9 @@ def review_large_agreement(
             SYNTHESIS_PROMPT,
             {
                 "package_map": {"package_summary": clause_map.get("package_summary", "")},
-                "clause_reviews": group,
+                # The wording edits are shown on the pages; the summary does not need them.
+                "clause_reviews": [{k: v for k, v in item.items() if k not in {"edits", "source_page_ids"}}
+                                   for item in group],
             },
             operation=f"agreement review synthesis group {index}",
         )
@@ -152,6 +213,7 @@ def review_large_agreement(
         },
         operation="final agreement review synthesis",
     )
+    final = use_central_bank_names(final)
     final["clause_reviews"] = reviews
     return final, list(all_authorities.values())
 

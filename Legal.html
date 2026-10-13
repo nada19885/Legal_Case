@@ -50,14 +50,15 @@
          case list and the create-matter form. Rendered by script.js.
          ============================================================ -->
     <aside class="bsf-sidebar">
-      <h2 class="bsf-sidebar-heading" data-i18n="workspace"></h2>
+      <div class="bsf-user-card" data-region="user-card"></div>
 
-      <div class="bsf-workspace-switch" data-region="workspace-switch">
-        <button type="button" class="bsf-workspace-btn" data-workspace="litigation"
-                data-i18n="workspace_litigation"></button>
-        <button type="button" class="bsf-workspace-btn" data-workspace="agreement_review"
-                data-i18n="workspace_agreements"></button>
-      </div>
+      <nav class="bsf-sidenav">
+        <button type="button" class="bsf-sidenav-btn" data-action="back-to-library" data-i18n="nav_dashboard"></button>
+        <button type="button" class="bsf-sidenav-btn" data-action="new-case" data-workflow="litigation"
+                data-i18n="new_litigation_case"></button>
+        <button type="button" class="bsf-sidenav-btn" data-action="new-case" data-workflow="agreement_review"
+                data-i18n="new_contract_review"></button>
+      </nav>
 
       <!-- Only present while a matter is open -->
       <div data-region="open-matter" hidden>
@@ -65,30 +66,9 @@
           <div class="bsf-case-chip-title" data-region="chip-title"></div>
           <div class="bsf-case-chip-ref" data-region="chip-ref"></div>
           <button type="button" class="bsf-linkbtn" data-action="back-to-library"
-                  data-i18n="back_to_case_library"></button>
+                  data-i18n="back_to_dashboard"></button>
         </div>
       </div>
-
-      <details class="bsf-expander" data-region="create-expander" open>
-        <summary data-region="create-summary"></summary>
-        <div class="bsf-expander-body">
-          <form data-form="create-case">
-            <label class="bsf-field">
-              <span data-region="create-name-label"></span>
-              <input type="text" class="bsf-input" name="case_name" required>
-            </label>
-            <label class="bsf-field">
-              <span data-i18n="preferred_language"></span>
-              <select class="bsf-input" name="language">
-                <option value="ar">العربية</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-            <button type="submit" class="bsf-btn bsf-btn-primary bsf-btn-block"
-                    data-region="create-submit"></button>
-          </form>
-        </div>
-      </details>
     </aside>
 
     <!-- ============================================================
@@ -99,12 +79,47 @@
 
       <!-- ---------- View 1: case library ---------- -->
       <section class="bsf-panel" data-view="library">
-        <h2 class="bsf-view-title" data-region="library-title"></h2>
-        <p class="bsf-view-caption" data-region="library-caption"></p>
+        <div class="bsf-dash-head">
+          <h2 class="bsf-view-title" data-region="dash-title"></h2>
+          <p class="bsf-view-caption" data-i18n="dash_caption"></p>
+        </div>
+        <div class="bsf-dash-metrics" data-region="dash-metrics"></div>
 
-        <input type="search" class="bsf-input bsf-input-lg" id="library-search" autocomplete="off">
+        <section class="bsf-dash-section">
+          <div class="bsf-dash-section-head">
+            <h3 class="bsf-section-title" data-i18n="my_litigation_cases"></h3>
+            <button type="button" class="bsf-btn bsf-btn-primary" data-action="new-case" data-workflow="litigation"
+                    data-i18n="new_litigation_case"></button>
+          </div>
+          <div class="bsf-dash-tools">
+            <input type="search" class="bsf-input" id="library-search" autocomplete="off">
+            <select class="bsf-input" data-action="dash-status-filter" aria-label="Status">
+              <option value="" data-i18n="filter_all_statuses"></option>
+              <option value="new" data-i18n="progress_new"></option>
+              <option value="documents_uploaded" data-i18n="progress_documents_uploaded"></option>
+              <option value="processing" data-i18n="progress_processing"></option>
+              <option value="accounting_review" data-i18n="progress_accounting_review"></option>
+              <option value="legal_analysis" data-i18n="progress_legal_analysis"></option>
+              <option value="attorney_review" data-i18n="progress_attorney_review"></option>
+              <option value="ready_for_pleading" data-i18n="progress_ready_for_pleading"></option>
+              <option value="completed" data-i18n="progress_completed"></option>
+            </select>
+            <label class="bsf-check"><input type="checkbox" data-action="dash-archived"> <span data-i18n="show_archived"></span></label>
+          </div>
+          <div data-region="dash-litigation"></div>
+        </section>
 
-        <div class="bsf-card-grid" data-region="library-grid"></div>
+        <section class="bsf-dash-section">
+          <div class="bsf-dash-section-head">
+            <h3 class="bsf-section-title" data-i18n="my_contract_reviews"></h3>
+            <button type="button" class="bsf-btn bsf-btn-primary" data-action="new-case" data-workflow="agreement_review"
+                    data-i18n="new_contract_review"></button>
+          </div>
+          <div class="bsf-dash-tools">
+            <input type="search" class="bsf-input" id="contract-search" autocomplete="off">
+          </div>
+          <div data-region="dash-contracts"></div>
+        </section>
       </section>
 
       <!-- ---------- View 2: litigation matter ---------- -->
@@ -113,6 +128,7 @@
           <h2 class="bsf-view-title" data-region="case-title"></h2>
           <span class="bsf-matter-ref" data-region="case-ref"></span>
         </div>
+        <div class="bsf-matter-meta" data-region="case-meta"></div>
 
         <div class="bsf-alert bsf-alert-warn" data-region="case-dirty" hidden></div>
         <div data-region="case-attention"></div>
@@ -138,6 +154,7 @@
           <div data-region="stage-strip-documents"></div>
           <h3 class="bsf-section-title" data-i18n="documents_and_evidence"></h3>
           <p class="bsf-caption" data-i18n="documents_caption"></p>
+          <div data-region="documents-overview"></div>
           <div class="bsf-alert bsf-alert-ok" data-region="documents-stored" hidden></div>
 
           <h4 class="bsf-subsection" data-i18n="add_documents_or_evidence"></h4>
@@ -203,12 +220,9 @@
 
           <hr class="bsf-divider">
 
-          <div data-region="accounting-conflicts"></div>
+          <div data-region="accounting-review"></div>
 
           <hr class="bsf-divider">
-
-          <h4 class="bsf-subsection" data-i18n="normalized_ledger"></h4>
-          <div data-region="accounting-ledger"></div>
 
           <h4 class="bsf-subsection" data-i18n="forensic_timeline_discrepancy"></h4>
           <p class="bsf-caption" data-i18n="forensic_timeline_caption"></p>
@@ -246,7 +260,6 @@
                   data-i18n="run_legal_analysis"></button>
           <div data-region="analysis-job"></div>
           <div data-region="analysis-body"></div>
-          <div data-region="strategy-body"></div>
         </div>
 
         <div class="bsf-panel" data-panel="pleading">
@@ -257,6 +270,13 @@
           <label class="bsf-field">
             <span data-i18n="pleading_instructions"></span>
             <textarea class="bsf-input" id="pleading-instructions" rows="3"></textarea>
+          </label>
+          <label class="bsf-field bsf-pleading-lang">
+            <span data-i18n="pleading_language"></span>
+            <select class="bsf-input" id="pleading-language" data-action="select-pleading-lang">
+              <option value="ar">العربية</option>
+              <option value="en">English</option>
+            </select>
           </label>
           <button type="button" class="bsf-btn bsf-btn-primary" data-action="generate-pleading"
                   data-i18n="generate_pleading"></button>

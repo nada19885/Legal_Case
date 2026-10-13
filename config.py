@@ -52,7 +52,7 @@ FINANCIAL_FINDINGS_DATASET = "financial_findings"
 
 # Financial Classification Sampling Limits (Stage 2)
 FINANCIAL_CLASSIFICATION_MAX_PAGES = 10
-FINANCIAL_CLASSIFICATION_MAX_PAGE_CHARS = 1200
+FINANCIAL_CLASSIFICATION_MAX_PAGE_CHARS = 4000
 FINANCIAL_CLASSIFICATION_MAX_CHARS_PER_PAGE = 2000
 FINANCIAL_CLASSIFICATION_MAX_TOTAL_CHARS = 40000
 
@@ -89,11 +89,21 @@ FINANCIAL_CLASSIFICATION_LLM_ID = GENERATION_LLM_ID
 PDF_RENDER_DPI = 200
 
 PDF_PAGE_MAX_CONCURRENT_REQUESTS = 4
+# Vision calls one page may make at the same time (its views are read in
+# parallel); total parallel calls are at most this x the page workers.
+PAGE_READ_PARALLEL_CALLS = 2
+# Vision calls in flight for the whole backend (all pages, all jobs). Keep it
+# at or below the vision connection's "Max parallelism" in Dataiku; calls
+# beyond what the server can take only queue, time out and are resent.
+VISION_MAX_IN_FLIGHT = 6
 FAST_VLM_MAX_ATTEMPTS = 1
 FALLBACK_VLM_MAX_ATTEMPTS = 1
 FAILED_PAGE_RECOVERY_ATTEMPTS = 1
 FAILED_PAGE_RECOVERY_DELAY_SECONDS = 5.0
 VLM_TEMPERATURE = 0.0
+# Reasoning of the VISION model before it answers (thinking.py). Off: every
+# vision call says /no_think. The text model keeps its reasoning.
+VISION_THINKING = False
 
 PAGE_SUMMARY_MAX_WORKERS = 4
 PAGE_SUMMARY_MAX_INPUT_CHARS = 15000

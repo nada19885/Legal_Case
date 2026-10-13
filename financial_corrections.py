@@ -194,6 +194,39 @@ def load_fact_resolutions(case_id: str) -> dict:
     return latest_resolutions(corrections_df.to_dict(orient="records"))
 
 
+def submit_fact_resolutions(case_id: str, decisions: list[dict], decided_by: str = "") -> int:
+    """Record several decisions in ONE dataset write (bulk confirm/ignore).
+
+    decisions: [{"row_id", "action", "fields", "explanation", "summary"}].
+    Like submit_fact_resolution, the extracted facts are never overwritten.
+    The rows in the corrections dataset are the audit trail of each
+    decision (who, when, what); no separate audit_events row is written,
+    so reviewing many facts does not grow the workflow-state dataset."""
+    now = datetime.now(timezone.utc).isoformat()
+    rows = []
+    for decision in decisions:
+        payload = {
+            "action": decision.get("action"),
+            "fields": decision.get("fields") or {},
+            "explanation": decision.get("explanation", ""),
+            "summary": decision.get("summary", ""),
+        }
+        if decision.get("fingerprint"):
+            payload["fingerprint"] = decision["fingerprint"]
+        rows.append({
+            "correction_id": random_id("FACTRES"),
+            "case_id": case_id,
+            "row_id": str(decision.get("row_id", "")),
+            "field_name": RESOLUTION_FIELD,
+            "candidates_json": "[]",
+            "corrected_value": json.dumps(payload, ensure_ascii=False),
+            "corrected_by": decided_by,
+            "corrected_at": now,
+            "correction_note": decision.get("explanation", ""),
+        })
+    return append_rows(FINANCIAL_LINE_ITEM_CORRECTIONS_DATASET, rows)
+
+
 def submit_fact_resolution(
     case_id: str,
     row_id: str,
@@ -202,6 +235,7 @@ def submit_fact_resolution(
     explanation: str = "",
     decided_by: str = "",
     summary: str = "",
+    fingerprint: str = "",
 ) -> str:
     """Record the user's decision on one atomic fact: confirm, correct,
     ignore, or an explanation-based proposal awaiting confirmation.
@@ -209,34 +243,11 @@ def submit_fact_resolution(
     Stored as its own row in the corrections dataset (field_name
     "__resolution__"); the extracted fact itself is never overwritten, so
     the original reading and every decision stay on record."""
-    payload = {
-        "action": action,
-        "fields": fields or {},
-        "explanation": explanation,
-        "summary": summary,
-    }
-    correction_id = random_id("FACTRES")
-    append_rows(FINANCIAL_LINE_ITEM_CORRECTIONS_DATASET, [{
-        "correction_id": correction_id,
-        "case_id": case_id,
-        "row_id": row_id,
-        "field_name": RESOLUTION_FIELD,
-        "candidates_json": "[]",
-        "corrected_value": json.dumps(payload, ensure_ascii=False),
-        "corrected_by": decided_by,
-        "corrected_at": datetime.now(timezone.utc).isoformat(),
-        "correction_note": explanation,
-    }])
-    audit(
-        case_id=case_id,
-        entity_type="financial_fact",
-        entity_id=row_id,
-        action=f"fact_{action}",
-        actor=decided_by,
-        new_value=payload,
-        reason=explanation,
-    )
-    return correction_id
+    submit_fact_resolutions(case_id, [{
+        "row_id": row_id, "action": action, "fields": fields,
+        "explanation": explanation, "summary": summary, "fingerprint": fingerprint,
+    }], decided_by)
+    return row_id
 
 
 def effective_field_value(

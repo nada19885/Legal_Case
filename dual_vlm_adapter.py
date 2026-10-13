@@ -10,6 +10,8 @@ from typing import Any
 import dataiku
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from .thinking import no_think
+
 from .config import (
     PRIMARY_MULTIMODAL_LLM_ID,
     SECONDARY_LLM_ID,
@@ -220,12 +222,12 @@ def _primary_extract(
     completion = llm.new_completion()
 
     message = completion.new_multipart_message(role="user")
-    message.with_text(
+    message.with_text(no_think(
         PAGE_PROMPT.replace(
             '"page_number": 1',
             f'"page_number": {page_number}',
         )
-    )
+    ))
     message.with_inline_image(
         image_bytes,
         mime_type=mime_type,

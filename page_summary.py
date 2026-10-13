@@ -247,6 +247,22 @@ def summarise_page(page: dict) -> dict:
     return _fallback_summary(page, errors)
 
 
+def summary_or_fallback(page: dict) -> dict:
+    """summarise_page that never raises: a failure gives the fallback record.
+    Used to summarise each page as soon as its text is read."""
+    try:
+        return summarise_page(page)
+    except Exception as error:
+        return _fallback_summary(page, [repr(error)])
+
+
+def _settled(future, page: dict) -> dict:
+    try:
+        return future.result()
+    except Exception as error:
+        return _fallback_summary(page, [repr(error)])
+
+
 def summarise_pages(pages: Iterable[dict]) -> dict[str, dict]:
     usable = [page for page in pages if str(page.get("page_text", "") or "").strip()]
     if not usable:
@@ -265,10 +281,6 @@ def summarise_pages(pages: Iterable[dict]) -> dict[str, dict]:
         future_to_page = {executor.submit(summarise_page, page): page for page in usable}
         for future in as_completed(future_to_page):
             page = future_to_page[future]
-            try:
-                result = future.result()
-            except Exception as error:
-                result = _fallback_summary(page, [repr(error)])
-            result_by_id[str(page.get("page_id", ""))] = result
+            result_by_id[str(page.get("page_id", ""))] = _settled(future, page)
 
     return result_by_id

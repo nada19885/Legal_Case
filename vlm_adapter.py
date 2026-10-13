@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 from typing import Any
 
 import dataiku
 
+from . import config as _config
+from .thinking import VISION_THINKING, no_think, report_thinking
 from .config import (
     FAILED_PAGE_RECOVERY_ATTEMPTS,
     FAILED_PAGE_RECOVERY_DELAY_SECONDS,
@@ -98,12 +101,12 @@ def vlm_transcribe(
             pass
 
         completion.with_message(
-            OCR_SYSTEM_PROMPT,
+            no_think(OCR_SYSTEM_PROMPT),
             role="system",
         )
 
         multipart = completion.new_multipart_message(role="user")
-        multipart.with_text("Transcribe/describe this image.")
+        multipart.with_text(no_think("Transcribe/describe this image."))
         multipart.with_inline_image(image_b64, mime)
         multipart.add()
 
@@ -112,6 +115,64 @@ def vlm_transcribe(
 
     except Exception as error:
         return "", str(error)
+
+
+# One limit for every vision call of the backend, whatever page or job
+# makes it (see config.VISION_MAX_IN_FLIGHT).
+VISION_MAX_IN_FLIGHT = int(getattr(_config, "VISION_MAX_IN_FLIGHT", 6))   # default if config.py is older
+_IN_FLIGHT = threading.BoundedSemaphore(max(1, VISION_MAX_IN_FLIGHT))
+
+VERSION = "2026-10-13c"
+print(f"[vision adapter loaded] version={VERSION} no_think={'off' if VISION_THINKING else 'on'} "
+      f"max_in_flight={VISION_MAX_IN_FLIGHT} attempts=1")
+
+
+def vision_call(
+    prompt: str,
+    png_bytes: bytes,
+    model_id: str | None = None,
+    attempts: int = 1,
+    mime: str = "image/png",
+) -> str:
+    """One image and one instruction to the vision model (the page
+    pipeline's reader), without reasoning (/no_think). At most
+    VISION_MAX_IN_FLIGHT calls run at once.
+    One attempt by default: the Dataiku connection already retries a failed
+    call 3 times, and a call that ran past the connection's timeout runs past
+    it again when resent; the page pipeline reads it in halves instead.
+    Raises with the last error when every attempt failed."""
+    import base64
+
+    image_b64 = base64.b64encode(png_bytes).decode("utf-8")
+    last_error = ""
+    for attempt in range(1, int(attempts) + 1):
+        started = time.time()
+        try:
+            project = dataiku.api_client().get_default_project()
+            completion = project.get_llm(model_id or FAST_OCR_VLM_ID).new_completion()
+            try:
+                completion.settings["temperature"] = float(VLM_TEMPERATURE)
+            except Exception:
+                pass
+            multipart = completion.new_multipart_message(role="user")
+            multipart.with_text(no_think(prompt))
+            multipart.with_inline_image(image_b64, mime)
+            multipart.add()
+            waited = time.time()
+            with _IN_FLIGHT:
+                began = time.time()
+                response = completion.execute()
+            report_thinking(getattr(response, "text", "") or "", "vision")
+            text = _response_text(response)
+            print(f"[vision call] seconds={time.time() - began:.1f} queued={began - waited:.1f} "
+                  f"answer_chars={len(text)} image_kb={len(png_bytes) // 1024}")
+            return text
+        except Exception as error:
+            last_error = repr(error)
+            print(f"[vision call failure] attempt={attempt} seconds={time.time() - started:.1f} error={last_error}")
+            if attempt < int(attempts):
+                time.sleep(2.0 * attempt)
+    raise RuntimeError(f"The vision request failed after {attempts} attempts: {last_error}")
 
 
 def _transcribe_once(

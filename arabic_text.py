@@ -99,3 +99,76 @@ def fix_structure(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: fix_structure(item) for key, item in value.items()}
     return value
+
+
+# -----------------------------------------------------------------------------
+# Ligatures stored in the wrong order
+# -----------------------------------------------------------------------------
+# Some PDFs (Word exports with Arabic fonts) store a ligature's letters in
+# the wrong order: "لم" as "مل" (المادة -> املادة), "لا / لأ / لإ / لآ" as
+# "ال / أل / إل / آل" (لا تقل -> ال تقل, الأتعاب -> األتعاب), and "لله" as
+# "هلل". The page then reads wrongly although every glyph is present.
+_NOT_LETTER_BEFORE = r"(?<![ء-يٱ-ۓ])"
+_NOT_LETTER_AFTER = r"(?![ء-يٱ-ۓ])"
+_PREFIX = r"([وفبكل]?)"
+_LIGATURE_REPAIRS = [
+    (re.compile(_NOT_LETTER_BEFORE + _PREFIX + r"امل(?=[ء-ي])"), r"\1الم"),           # املادة -> المادة
+    (re.compile(_NOT_LETTER_BEFORE + _PREFIX + r"ا([إأآ])ل"), r"\1ال\2"),                     # األتعاب -> الأتعاب
+    (re.compile(_NOT_LETTER_BEFORE + _PREFIX + r"اال(?=[ء-ي])"), r"\1الا"),          # االتفاق -> الاتفاق
+    (re.compile(_NOT_LETTER_BEFORE + r"([وف]?)ال" + _NOT_LETTER_AFTER), r"\1لا"),              # ال تقل -> لا تقل
+    (re.compile(_NOT_LETTER_BEFORE + r"هللا" + _NOT_LETTER_AFTER), "الله"),                    # عبد هللا -> عبد الله
+    (re.compile(_NOT_LETTER_BEFORE + r"هلل" + _NOT_LETTER_AFTER), "لله"),                      # الحمد هلل -> الحمد لله
+]
+
+
+def ligature_damage(text: str) -> int:
+    """How many words show a ligature stored in the wrong order (only
+    forms no correct Arabic word has are counted)."""
+    return sum(len(pattern.findall(str(text or ""))) for pattern, _ in _LIGATURE_REPAIRS)
+
+
+def repair_ligatures(text: str) -> str:
+    """Put back the forms ligature_damage counts. Damage inside a word
+    (الخالف for الخلاف) cannot be told apart from correct words (خالد) and
+    is left as it is; a page with damage is read from its image instead."""
+    for pattern, replacement in _LIGATURE_REPAIRS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+# -----------------------------------------------------------------------------
+# The regulator's current name
+# -----------------------------------------------------------------------------
+# The Saudi Arabian Monetary Authority is now the Saudi Central Bank
+# (البنك المركزي السعودي). Text the review writes never uses the old names
+# (سلطة النقد / مؤسسة النقد); the contract's own text is not changed here.
+CENTRAL_BANK_AR = "البنك المركزي السعودي"
+CENTRAL_BANK_EN = "Saudi Central Bank"
+_OLD_NAME_AR = re.compile(
+    _NOT_LETTER_BEFORE + r"(و?)([لبك]?)(?:سلطة|مؤسسة|هيئة)\s+النقد(?:\s+العربي)?(?:\s+السعودي(?:ة)?)?" + _NOT_LETTER_AFTER)
+_OLD_NAME_EN = re.compile(r"\b(?:the\s+)?Saudi\s+Arabian\s+Monetary\s+(?:Authority|Agency)\b", re.IGNORECASE)
+
+
+def _central_bank_ar(match: re.Match) -> str:
+    conjunction, preposition = match.group(1), match.group(2)
+    if preposition == "ل":                      # لسلطة النقد -> للبنك المركزي السعودي
+        return conjunction + "لل" + CENTRAL_BANK_AR[2:]
+    return conjunction + preposition + CENTRAL_BANK_AR
+
+
+def use_central_bank_name(text: str) -> str:
+    """سلطة النقد / مؤسسة النقد (العربي السعودي) -> البنك المركزي السعودي;
+    Saudi Arabian Monetary Authority / Agency -> Saudi Central Bank."""
+    text = _OLD_NAME_AR.sub(_central_bank_ar, str(text))
+    return _OLD_NAME_EN.sub(lambda m: ("the " if m.group(0).lower().startswith("the ") else "") + CENTRAL_BANK_EN, text)
+
+
+def use_central_bank_names(value: Any) -> Any:
+    """use_central_bank_name on every text in a model answer (dicts, lists)."""
+    if isinstance(value, str):
+        return use_central_bank_name(value)
+    if isinstance(value, dict):
+        return {key: use_central_bank_names(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [use_central_bank_names(item) for item in value]
+    return value

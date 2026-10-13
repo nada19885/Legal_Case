@@ -3,12 +3,12 @@
 Financial Evidence-Extraction Pipeline Orchestrator.
 Location: lib/python/legal_platform/financial_extraction_pipeline.py
 
-Per page: Stage 1a (PyMuPDF structural evidence, from the original PDF) +
-the page's existing verbatim OCR transcription (produced once at document
-intake, see extraction.py/vlm_adapter.py) -> Stage 2 (text-LLM
-reconstruction into rows). No dedicated financial VLM pass: the intake OCR
-already transcribes every page verbatim, including tables, at the same DPI
-a financial-specific re-read would use.
+Per financial page: the page's consolidated text (produced once at document
+intake by the page pipeline: the PDF's own text where reliable, the vision
+reading otherwise, tables as markdown) + PyMuPDF structural evidence from
+the original PDF -> one text-LLM call into atomic facts. Each fact records
+its document, page, extraction source (the page's route) and the table
+row(s) it came from.
 """
 
 from __future__ import annotations
@@ -31,11 +31,46 @@ from .financial_facts import build_fact_rows
 from .financial_reconciliation import (
     extract_page_facts,
     persist_reconciled_rows,
+    split_page_output,
 )
 
 ProgressCallback = Callable[[int, int, str], None]
 
 _ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩٫٬", "0123456789.,")
+
+
+# -----------------------------------------------------------------------------
+# Financial claims found in documents (layer 1: what documents SAY about
+# money). Stored per case, apart from the facts: they tell the accountant
+# what to verify and never enter the ledger.
+# -----------------------------------------------------------------------------
+def _claims_path(case_id: str) -> str:
+    return f"/cases/{case_id}/financial_claims.json"
+
+
+def load_document_claims(case_id: str) -> dict:
+    """page_id -> [financial claims] ({} when none were stored)."""
+    import json
+    import dataiku
+    from .config import CASE_DOCUMENT_FOLDER_ID
+    try:
+        with dataiku.Folder(CASE_DOCUMENT_FOLDER_ID).get_download_stream(_claims_path(case_id)) as stream:
+            value = json.loads(stream.read().decode("utf-8"))
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_document_claims(case_id: str, claims_by_page: dict, replace: bool = False) -> None:
+    """Merge the claims of the pages just processed into the stored ones
+    (or replace them all)."""
+    import json
+    import dataiku
+    from .config import CASE_DOCUMENT_FOLDER_ID
+    stored = {} if replace else load_document_claims(case_id)
+    stored.update(claims_by_page)
+    dataiku.Folder(CASE_DOCUMENT_FOLDER_ID).upload_data(
+        _claims_path(case_id), json.dumps(stored, ensure_ascii=False).encode("utf-8"))
 
 
 def _already_extracted_page_ids(case_id: str) -> set[str]:              
@@ -74,7 +109,8 @@ def sanitize_extracted_line_items(raw_items: list[dict]) -> tuple[list[dict], in
 def _process_page(
     page: FinancialPageSource,
     pdf_bytes_by_document: dict[str, Optional[bytes]],
-) -> tuple[list[dict], list[str], int]:
+    page_type: str = "financial",
+) -> tuple[list[dict], list[str], int, list[dict]]:
     failures: list[str] = []
     pdf_bytes = pdf_bytes_by_document.get(page.case_document_id)
 
@@ -87,24 +123,34 @@ def _process_page(
         except Exception as error:
             failures.append(f"PyMuPDF structural extraction failed: {error!r}")
 
-    # Second evidence source: the page's own verbatim OCR transcription,
-    # already produced at document intake (extraction.py) — no fresh VLM call.
+    # The page's consolidated text from document intake (extraction.py).
     transcription_text = page.page_text
+    route = page.extraction_method.split(":", 1)[1] if page.extraction_method.startswith("page_pipeline:") else ""
 
     # Stage 2: one LLM call breaks the page into atomic financial facts,
     # each with a status (extracted / calculated / inferred / uncertain /
     # missing). Calculated facts are recomputed in build_fact_rows.
     try:
-        output = extract_page_facts(structural_evidence, transcription_text, page.page_number)
+        output = extract_page_facts(structural_evidence, transcription_text, page.page_number, route, page_type)
     except Exception as error:
         failures.append(f"Fact extraction failed: {error!r}")
-        return [], failures, 0
+        return [], failures, 0, []
+
+    # Facts only from accounting evidence; what the page asserts about money
+    # is kept apart as financial claims (never in the ledger).
+    output, claims, dropped = split_page_output(output, page_type)
+    for note in dropped:
+        print(f"[financial facts] page={page.page_number} dropped {note}")
+    for claim in claims:
+        claim.update({"page_id": page.page_id, "case_document_id": page.case_document_id,
+                      "page_number": page.page_number, "document_name": page.document_name})
 
     rows = build_fact_rows(
         page.page_id, page.case_document_id, page.page_number, output,
         created_at=datetime.now(timezone.utc).isoformat(),
+        meta={"document_name": page.document_name, "extraction_source": route or "page_text"},
     )
-    return rows, failures, 0
+    return rows, failures, 0, claims
 
 
 def run_financial_extraction(
@@ -113,6 +159,7 @@ def run_financial_extraction(
     actor: str = "",
     progress_callback: Optional[ProgressCallback] = None,
     force_rerun: bool = False,
+    page_types: Optional[dict] = None,
 ) -> dict:
     # Load all pages, then strictly filter to ONLY the requested financial/mixed pages
     all_pages = load_financial_pages(case_id, None)
@@ -149,6 +196,7 @@ def run_financial_extraction(
     }
 
     all_rows: list[dict] = []
+    claims_by_page: dict[str, list[dict]] = {}
     page_failures: list[dict] = []
     discarded_total = 0
     completed = 0
@@ -156,15 +204,17 @@ def run_financial_extraction(
 
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         future_to_page = {
-            executor.submit(_process_page, page, pdf_bytes_by_document): page
+            executor.submit(_process_page, page, pdf_bytes_by_document,
+                            (page_types or {}).get(str(page.page_id), "financial")): page
             for page in pages
         }
         for future in as_completed(future_to_page):
             page = future_to_page[future]
             try:
-                rows, failures, discarded = future.result()
+                rows, failures, discarded, claims = future.result()
             except Exception as error:
-                rows, failures, discarded = [], [f"Page worker failed: {error!r}"], 0
+                rows, failures, discarded, claims = [], [f"Page worker failed: {error!r}"], 0, []
+            claims_by_page[str(page.page_id)] = claims
 
             all_rows.extend(rows)
             discarded_total += discarded
@@ -180,6 +230,10 @@ def run_financial_extraction(
                 progress_callback(completed, len(pages), page.page_id)
 
     persisted_count = persist_reconciled_rows(case_id, all_rows)
+    try:
+        save_document_claims(case_id, claims_by_page)
+    except Exception as error:
+        print(f"[financial claims] could not be saved: {error!r}")
     verified_count = sum(1 for r in all_rows if r.get("row_status") == "verified")
     needs_review_count = sum(1 for r in all_rows if r.get("row_status") == "needs_review")
 
@@ -192,5 +246,6 @@ def run_financial_extraction(
         "page_failures": page_failures,
         "new_rows_appended": len(all_rows),
         "rows_discarded": discarded_total,
+        "financial_claims": sum(len(c) for c in claims_by_page.values()),
     }
 
