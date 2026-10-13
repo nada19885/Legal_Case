@@ -138,14 +138,16 @@ def vision_call(
     prompt: str,
     png_bytes: bytes,
     model_id: str | None = None,
-    attempts: int = 2,
+    attempts: int = 1,
     mime: str = "image/png",
 ) -> str:
     """One image and one instruction to the vision model (the page
     pipeline's reader), without reasoning (/no_think). At most
     VISION_MAX_IN_FLIGHT calls run at once.
-    Retries a failure once (Dataiku's connection retries as well); raises
-    with the last error when every attempt failed."""
+    One attempt by default: the Dataiku connection already retries a failed
+    call 3 times, and a call that ran past the connection's timeout runs past
+    it again when resent; the page pipeline reads it in halves instead.
+    Raises with the last error when every attempt failed."""
     import base64
 
     image_b64 = base64.b64encode(png_bytes).decode("utf-8")

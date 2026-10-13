@@ -517,19 +517,64 @@ def _clean_answer(answer: Any) -> str:
 
 
 def read_variant(picture: np.ndarray, vision: VisionCall, context: str) -> Tuple[str, List[str]]:
-    """The text of one view (its parts joined) and any errors."""
+    """The text of one view (its parts read at the same time, joined) and
+    any errors. A part whose call fails (usually a dense part that ran past
+    the connection's timeout) is read again as two halves: each half has
+    less to write, so it finishes in time."""
     pieces = parts(picture)
-    texts, errors = [], []
-    for number, piece in enumerate(pieces, start=1):
-        note = (f"This is part {number} of {len(pieces)} of a taller image; parts overlap by a line or two."
+
+    def ask(piece: np.ndarray, note: str) -> str:
+        return _clean_answer(vision(READ_PROMPT.format(part=note, context=context, table_rules=TABLE_RULES),
+                                    _png(piece)))
+
+    def read_piece(index: int) -> Tuple[str, List[str]]:
+        piece = pieces[index]
+        note = (f"This is part {index + 1} of {len(pieces)} of a taller image; parts overlap by a line or two."
                 if len(pieces) > 1 else "")
         try:
-            answer = vision(READ_PROMPT.format(part=note, context=context, table_rules=TABLE_RULES), _png(piece))
-            texts.append(_clean_answer(answer))
+            return ask(piece, note), []
         except Exception as error:
-            errors.append(f"part {number}: {type(error).__name__}: {error}")
-            texts.append("")
+            first = f"part {index + 1}: {type(error).__name__}: {error}"
+        halves = split_in_two(piece)
+        if len(halves) < 2:
+            return "", [first]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            answers = list(pool.map(lambda half: _safe(ask, half[1], f"This is the {half[0]} half of an image; "
+                                                                     "the halves overlap by a line or two."),
+                                    zip(("top", "bottom"), halves)))
+        texts = [text for text, _ in answers]
+        problems = [f"part {index + 1} {side} half: {error}" for (side, (_, error)) in zip(("top", "bottom"), answers)
+                    if error]
+        if not any(texts):
+            return "", [first] + problems
+        return "\n\n".join(t for t in texts if t), [f"{first}; read again in two halves"] + problems
+
+    with ThreadPoolExecutor(max_workers=max(1, len(pieces))) as pool:
+        results = list(pool.map(read_piece, range(len(pieces))))
+    errors = [e for _, problems in results for e in problems]
+    texts = [text for text, _ in results]
     return ("\n\n".join(t for t in texts if t), errors) if len(pieces) > 1 else (texts[0], errors)
+
+
+def _safe(ask: Callable[[np.ndarray, str], str], piece: np.ndarray, note: str) -> Tuple[str, str]:
+    try:
+        return ask(piece, note), ""
+    except Exception as error:
+        return "", f"{type(error).__name__}: {error}"
+
+
+def split_in_two(image: np.ndarray, min_height: int = 400) -> List[np.ndarray]:
+    """The image as a top and a bottom half, cut in the emptiest row near the
+    middle, overlapping a little; [image] when it is too short to split."""
+    height = image.shape[0]
+    if height < min_height:
+        return [image]
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    ink = (it.text_ink(gray, it.is_digital(gray)) > 0).sum(axis=1)
+    window = ink[int(height * 0.4):int(height * 0.6)]
+    middle = int(height * 0.4) + int(np.argmin(window)) if len(window) else height // 2
+    overlap = max(10, height // 50)
+    return [image[:min(height, middle + overlap)], image[max(0, middle - overlap):]]
 
 
 NUMBERS_PROMPT = """
@@ -801,12 +846,12 @@ def _native(page: dict, text_llm: TextLLM) -> dict:
 
 
 def needs_word_repair(page: dict) -> bool:
-    """Whether the PDF's Arabic may still hold damaged words after the
-    code's own fixes (reading order, ligatures). A layer with no ligature
-    damage and every line in reading order is used as it is, without the
-    model's word repair; damage inside words comes with ligature damage."""
-    if ligature_damage(page.get("text_layer", "")):
-        return True
+    """Whether the PDF's Arabic still needs the model's word repair. The
+    ligature forms are already put back in code (repair_ligatures) and a page
+    with real damage is read from its image, so only a line still in drawing
+    order (inside a table, where the code leaves cells alone) needs it. The
+    repair rewrites the whole page, which on a long page runs past the
+    connection's timeout."""
     return any(is_visual_order(line) for line in str(page.get("native_text", "")).split("\n"))
 
 

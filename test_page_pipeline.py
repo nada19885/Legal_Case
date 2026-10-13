@@ -211,16 +211,17 @@ check("a number written with other separators or digits is not flagged",
       pp.unsupported_numbers("١٨/١٠/٢٠٢٤ and 1,250.00", ["date 18-10-2024 amount 1250.00"]) == [])
 
 # --- Arabic PDF text: words repaired, numbers untouchable ------------------------------------
-arabic_page = {"page": 1, "text_layer": "صحيفة دعوى املدعي هدى رقم الهوية 1027476025 املبلغ 250 ريال",
-               "native_text": "صحيفة دعوى املدعي هدى رقم الهوية 1027476025 املبلغ 250 ريال",
+# A table row still in drawing order (the code leaves table cells alone) goes to the model.
+arabic_page = {"page": 1, "text_layer": "صحيفة دعوى المدعي هدى\n| 1027476025 | لاير 250 غلبملا |",
+               "native_text": "صحيفة دعوى المدعي هدى\n| 1027476025 | لاير 250 غلبملا |",
                "picture_share": 0.0, "pictures": [], "regions": []}
 fixed = pp.process_page(arabic_page, vision, lambda p, x: {
-    "text": "صحيفة دعوى المدعي هدى رقم الهوية 1027476025 المبلغ 250 ريال",
-    "corrections": [{"from": "املدعي", "to": "المدعي", "why": "export swap"}], "document_type": "statement of claim",
+    "text": "صحيفة دعوى المدعي هدى\n| 1027476025 | المبلغ 250 ريال |",
+    "corrections": [{"from": "غلبملا", "to": "المبلغ", "why": "drawing order"}], "document_type": "statement of claim",
     "headings": []})
-check("Arabic PDF text gets its swapped words repaired by the text model",
-      "المدعي" in fixed["final_text"] and fixed["llm_calls"] == 1 and fixed["vision_calls"] == 0)
-kept = pp.process_page(arabic_page, vision, lambda p, x: {"text": "صحيفة دعوى المدعي رقم الهوية 1027476026 المبلغ 250",
+check("an Arabic table row left in drawing order is repaired by the text model",
+      "المبلغ 250 ريال" in fixed["final_text"] and fixed["llm_calls"] == 1 and fixed["vision_calls"] == 0)
+kept = pp.process_page(arabic_page, vision, lambda p, x: {"text": "صحيفة دعوى المدعي | 1027476026 | المبلغ 250 ريال |",
                                                           "corrections": []})
 check("a repair that changes any number is rejected and the PDF text kept",
       "1027476025" in kept["final_text"] and any("changed a number" in e for e in kept["errors"]))
@@ -230,8 +231,36 @@ check("an English PDF page needs no model call at all", english["llm_calls"] == 
 clean_ar = "صحيفة دعوى المدعي هدى ضد البنك، رقم الهوية 1027476025 والمبلغ المطالب به 250 ريال"
 clean = pp.process_page({**arabic_page, "native_text": clean_ar, "text_layer": clean_ar}, vision, broken_llm)
 check("clean Arabic PDF text needs no word repair call", clean["llm_calls"] == 0 and clean["final_text"] == clean_ar)
-check("damaged Arabic PDF text still gets the word repair", pp.needs_word_repair(arabic_page)
-      and not pp.needs_word_repair({"text_layer": clean_ar, "native_text": clean_ar}))
+swapped = "صحيفة دعوى املدعي هدى رقم الهوية 1027476025 املبلغ 250 ريال"
+repaired_in_code = pp.process_page({**arabic_page, "text_layer": swapped, "native_text": pp.repair_ligatures(swapped)},
+                                   vision, broken_llm)
+check("ligature forms the code already put back need no model call",
+      repaired_in_code["llm_calls"] == 0 and "المدعي" in repaired_in_code["final_text"]
+      and "المبلغ" in repaired_in_code["final_text"])
+check("only text still in drawing order gets the model's word repair", pp.needs_word_repair(arabic_page)
+      and not pp.needs_word_repair({"text_layer": swapped, "native_text": pp.repair_ligatures(swapped)}))
+
+# --- a part that times out is read again in two halves ------------------------------------------
+calls = []
+
+
+def slow_on_whole_page(prompt, png_bytes):
+    calls.append(len(png_bytes))
+    if "half of an image" not in prompt:
+        raise RuntimeError("The LLM request failed.")
+    return "top text" if "top half" in prompt else "bottom text"
+
+
+tall = np.full((1200, 900, 3), 255, np.uint8)
+for row in range(60, 1150, 40):
+    cv2.putText(tall, "Line of text 1250.00", (40, row), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
+halves_text, halves_errors = pp.read_variant(tall, slow_on_whole_page, "")
+check("a part whose call fails is read again as a top and a bottom half",
+      halves_text == "top text\n\nbottom text" and len(calls) == 3
+      and any("read again in two halves" in e for e in halves_errors))
+top, bottom = pp.split_in_two(tall)
+check("the halves cover the whole picture and overlap a little",
+      top.shape[0] + bottom.shape[0] > tall.shape[0] and top.shape[0] < tall.shape[0] and bottom.shape[0] < tall.shape[0])
 
 # --- markdown tables: wrapped rows joined back ----------------------------------------------
 split_table = """التاريخ | البيان / التفاصيل | المبلغ | الرصيد
