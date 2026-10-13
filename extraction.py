@@ -221,7 +221,8 @@ def extract_pdf_page_by_page(
     base_context = dict(case_context or {}, document_name=document_name or case_document_id)
     workers = min(int(max_concurrent_requests), total_pages)
     print(f"[document extraction] document={document_name} pages={total_pages} "
-          f"page_workers={workers} summary_workers={PAGE_SUMMARY_MAX_WORKERS} pipeline=page_pipeline")
+          f"page_workers={workers} summary_workers={PAGE_SUMMARY_MAX_WORKERS} "
+          f"reader={getattr(pp, 'VERSION', 'old')} vision={_vision_version()}")
 
     spent = {"render_seconds": 0.0, "read_seconds": 0.0, "summary_seconds": 0.0}
     lock = threading.Lock()
@@ -320,6 +321,15 @@ def extract_pdf_page_by_page(
     if timings is not None:
         timings.update(clock)
     return rows
+
+
+def _vision_version() -> str:
+    """The vision adapter's version, so the log shows which file is deployed."""
+    try:
+        from . import vlm_adapter
+        return getattr(vlm_adapter, "VERSION", "old")
+    except Exception as error:                                            # noqa: BLE001
+        return f"unavailable ({type(error).__name__})"
 
 
 def _has_text(result: dict) -> bool:

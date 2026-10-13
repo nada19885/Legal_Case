@@ -6,7 +6,6 @@ from typing import Any
 
 import dataiku
 
-from .thinking import no_think, report_thinking
 from .config import TEXT_STRUCTURING_LLM_ID
 
 _JSON_BLOCK = re.compile(r"\{.*\}", flags=re.DOTALL)
@@ -399,8 +398,8 @@ def _execute(llm, llm_id: str, messages: list, temperature: float) -> str:
         completion.settings["temperature"] = float(temperature)
     except Exception:
         pass
-    for index, (text, role) in enumerate(messages):
-        completion.with_message(no_think(text) if index == 0 else text, role=role)
+    for text, role in messages:
+        completion.with_message(text, role=role)
     response = completion.execute()
     success = getattr(response, "success", True)
     if not success:
@@ -419,9 +418,7 @@ def _execute(llm, llm_id: str, messages: list, temperature: float) -> str:
             )
         )
         raise RuntimeError(str(error_message))
-    text = _extract_text(response)
-    report_thinking(text, llm_id)
-    return text
+    return _extract_text(response)
 
 
 def complete_json(

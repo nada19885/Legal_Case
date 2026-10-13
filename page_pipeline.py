@@ -71,6 +71,9 @@ SMALL_LETTER_PX = 22               # a screenshot with smaller letters is read e
 
 _ARABIC = re.compile(r"[ء-ي]")
 
+VERSION = "2026-10-13c"
+print(f"[page reader loaded] version={VERSION} views=one-for-clean halves_on_failure=on word_repair=drawing-order-only")
+
 
 # ---------------------------------------------------------------------------
 # 1. Pages

@@ -14,6 +14,7 @@ from .config import (
     FALLBACK_OCR_VLM_ID,
     FAST_OCR_VLM_ID,
     VISION_MAX_IN_FLIGHT,
+    VISION_THINKING,
     FALLBACK_VLM_MAX_ATTEMPTS,
     FAST_VLM_MAX_ATTEMPTS,
     VLM_TEMPERATURE,
@@ -106,7 +107,7 @@ def vlm_transcribe(
         )
 
         multipart = completion.new_multipart_message(role="user")
-        multipart.with_text(_without_thinking("Transcribe/describe this image."))
+        multipart.with_text(no_think("Transcribe/describe this image."))
         multipart.with_inline_image(image_b64, mime)
         multipart.add()
 
@@ -117,21 +118,13 @@ def vlm_transcribe(
         return "", str(error)
 
 
-NO_THINK = "/no_think"
-
-
-def _without_thinking(prompt: str) -> str:
-    """Every vision call asks the model not to reason before it answers:
-    a transcription needs no reasoning, and the reasoning made calls run
-    past the connection's 60 s timeout. Only the vision model is affected;
-    the text model keeps its reasoning where its prompts allow it."""
-    text = str(prompt or "")
-    return text if text.lstrip().startswith(NO_THINK) else f"{NO_THINK}\n{text}"
-
-
 # One limit for every vision call of the backend, whatever page or job
 # makes it (see config.VISION_MAX_IN_FLIGHT).
 _IN_FLIGHT = threading.BoundedSemaphore(max(1, int(VISION_MAX_IN_FLIGHT)))
+
+VERSION = "2026-10-13c"
+print(f"[vision adapter loaded] version={VERSION} no_think={'off' if VISION_THINKING else 'on'} "
+      f"max_in_flight={VISION_MAX_IN_FLIGHT} attempts=1")
 
 
 def vision_call(
@@ -151,7 +144,6 @@ def vision_call(
     import base64
 
     image_b64 = base64.b64encode(png_bytes).decode("utf-8")
-    prompt = _without_thinking(prompt)
     last_error = ""
     for attempt in range(1, int(attempts) + 1):
         started = time.time()

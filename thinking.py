@@ -1,30 +1,29 @@
 """
-Model reasoning ("thinking") switch for every model call of the backend.
+Reasoning ("thinking") switch for the VISION model.
 Location: lib/python/legal_platform/thinking.py
 
 The Qwen models reason before they answer unless the request says
-/no_think. Reasoning makes a call several times slower (a page reading
+/no_think. A transcription needs no reasoning, and with it a page reading
 that should take 15 s takes 60 s or more and runs into the connection's
-timeout), and none of our tasks needs it: transcribing, summarising and
-filling a JSON schema are done better without it. Every completion in the
-code passes its instruction through no_think(); MODEL_THINKING in config
-turns reasoning back on everywhere.
+60 s timeout. Every vision call (an image in the request) passes its
+instruction through no_think(); VISION_THINKING in config turns reasoning
+back on. Text-model calls are not changed here: they keep their reasoning.
 """
 
 from __future__ import annotations
 
 import re
 
-from .config import MODEL_THINKING
+from .config import VISION_THINKING
 
 NO_THINK = "/no_think"
 _THINK_BLOCK = re.compile(r"<think>(.*?)(?:</think>|$)", re.DOTALL)
 
 
 def no_think(text: str) -> str:
-    """The instruction with /no_think at its start (once)."""
+    """A vision instruction with /no_think at its start (once)."""
     text = str(text or "")
-    if MODEL_THINKING or text.lstrip().startswith(NO_THINK):
+    if VISION_THINKING or text.lstrip().startswith(NO_THINK):
         return text
     return f"{NO_THINK}\n{text}"
 

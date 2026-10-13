@@ -16,7 +16,6 @@ from typing import Any, Callable, Optional
 import dataiku
 import pandas as pd
 
-from .thinking import no_think
 from .config import (
     FINANCIAL_FINDINGS_DATASET,
     FINANCIAL_TIMELINE_DATASET,
@@ -141,7 +140,7 @@ def _call_text_llm(prompt: str, attempts: int = 2) -> dict:
             completion.settings["temperature"] = 0.0
         except Exception:
             pass
-        completion.with_message(no_think(prompt), role="user")
+        completion.with_message(prompt, role="user")
         try:
             response = completion.execute()
         except Exception as error:
