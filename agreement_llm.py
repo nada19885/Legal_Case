@@ -13,6 +13,7 @@ from typing import Any
 
 import dataiku
 
+from .thinking import no_think, report_thinking
 from .config import (
     AGREEMENT_REQUEST_MAX_ATTEMPTS,
     AGREEMENT_RETRY_DELAY_SECONDS,
@@ -27,6 +28,7 @@ def _extract_text(response: Any) -> str:
     text = getattr(response, "text", None)
     if not isinstance(text, str) or not text.strip():
         raise RuntimeError("The completion returned no usable text.")
+    report_thinking(text, "agreement")
     return strip_think(text)
 
 
@@ -54,7 +56,7 @@ def agreement_complete_json(
             except Exception:
                 pass
 
-            completion.with_message(system_prompt, role="system")
+            completion.with_message(no_think(system_prompt), role="system")
             completion.with_message(payload_text, role="user")
 
             print(

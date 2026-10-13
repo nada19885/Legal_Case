@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 import dataiku
 import pandas as pd
 
+from .thinking import no_think
 from .audit import audit
 from .config import (
     APPROVALS_DATASET,
@@ -187,7 +188,7 @@ def _call_text_model(prompt: str) -> dict:
     except Exception:
         pass
 
-    completion.with_message(prompt, role="user")
+    completion.with_message(no_think(prompt), role="user")
     response = completion.execute()
 
     if getattr(response, "success", None) is False:

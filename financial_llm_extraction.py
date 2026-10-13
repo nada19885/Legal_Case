@@ -11,6 +11,7 @@ from typing import Any
 import fitz  # PyMuPDF
 import dataiku
 
+from .thinking import no_think
 from .config import (
     FINANCIAL_DPI_LEVELS,
     FINANCIAL_EXTRACTION_PASS_COUNT,
@@ -98,7 +99,7 @@ def _call_vlm(
     except Exception:
         pass
 
-    completion.with_message(FINANCIAL_FULL_PAGE_REWRITE_PROMPT, role="system")
+    completion.with_message(no_think(FINANCIAL_FULL_PAGE_REWRITE_PROMPT), role="system")
 
     message = completion.new_multipart_message(role="user")
     message.with_text(

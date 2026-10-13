@@ -7,6 +7,7 @@ from typing import Any
 
 import dataiku
 
+from .thinking import no_think, report_thinking
 from .config import (
     FAILED_PAGE_RECOVERY_ATTEMPTS,
     FAILED_PAGE_RECOVERY_DELAY_SECONDS,
@@ -100,7 +101,7 @@ def vlm_transcribe(
             pass
 
         completion.with_message(
-            OCR_SYSTEM_PROMPT,
+            no_think(OCR_SYSTEM_PROMPT),
             role="system",
         )
 
@@ -146,13 +147,14 @@ def vision_call(
             except Exception:
                 pass
             multipart = completion.new_multipart_message(role="user")
-            multipart.with_text(prompt)
+            multipart.with_text(no_think(prompt))
             multipart.with_inline_image(image_b64, mime)
             multipart.add()
             waited = time.time()
             with _IN_FLIGHT:
                 began = time.time()
                 response = completion.execute()
+            report_thinking(getattr(response, "text", "") or "", "vision")
             text = _response_text(response)
             print(f"[vision call] seconds={time.time() - began:.1f} queued={began - waited:.1f} "
                   f"answer_chars={len(text)} image_kb={len(png_bytes) // 1024}")

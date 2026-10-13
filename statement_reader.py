@@ -29,6 +29,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import image_tables as it
+from .thinking import no_think
 
 VisionCall = Callable[[str, bytes], str]
 
@@ -302,7 +303,7 @@ def dataiku_vision(model_id: Optional[str] = None, temperature: float = 0.0) -> 
             except Exception:
                 pass
             message = completion.new_multipart_message(role="user")
-            message.with_text(prompt)
+            message.with_text(no_think(prompt))
             message.with_inline_image(base64.b64encode(png).decode("ascii"), "image/png")
             message.add()
             try:
